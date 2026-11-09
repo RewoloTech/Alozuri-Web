@@ -1,0 +1,39 @@
+{
+  "name": "voyaspan",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "dev": "npm run dev -w @voyaspan/web",
+    "dev:api": "npm run dev -w @voyaspan/api",
+    "build": "npm run build -w @voyaspan/web && npm run build -w @voyaspan/api",
+    "build:web": "npm run build -w @voyaspan/web",
+    "test": "node --experimental-strip-types --test packages/shared/test/*.test.ts && npm test -w @voyaspan/api",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "build:hosting": "node scripts/build-hosting.mjs",
+    "deploy:hosting": "firebase deploy --only hosting:voyaspan-cf6b7"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "@types/node": "^22.0.0",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "16.4.6",
+    "prettier": "^3.5.0"
+  },
+  "overrides": {
+    "@grpc/grpc-js": "1.14.7",
+    "minimatch@>=7 <11.0.1": "11.0.5",
+    "glob@>=9 <14.0.2": "14.0.4",
+    "@firebase/app": "0.16.2",
+    "@firebase/app-compat": "0.5.18"
+  }
+}

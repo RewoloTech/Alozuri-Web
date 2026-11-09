@@ -1,0 +1,16 @@
+node_modules/
+.next/
+dist/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+!.env.*.example
+*service-account*.json
+.DS_Store
+.firebase/
+coverage/
+
+# Next.js static Hosting export and CLI logs
+apps/web/out/
+firebase-debug*.log

@@ -1,0 +1,9 @@
+# Draft configuration. Connect the app with root directory apps/web.
+runConfig:
+  minInstances: 0
+  maxInstances: 5
+  concurrency: 80
+  cpu: 1
+  memoryMiB: 512
+# Configure NEXT_PUBLIC_FIREBASE_* and NEXT_PUBLIC_API_URL in the hosting
+# environment before building. Keep NEXT_PUBLIC_DEMO_MODE=true for preview.

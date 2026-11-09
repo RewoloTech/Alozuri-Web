@@ -1,0 +1,78 @@
+'use client';
+import Link from 'next/link';
+import { useEffect, useState } from 'react';
+import type { CustomerOrder } from '@voyaspan/shared';
+import { useAuth } from './auth-provider';
+import { api, demoMode } from '@/lib/api';
+export function OrderDetails({ id }: { id: string }) {
+  const { user } = useAuth();
+  return <AccountOrder key={`${user?.uid ?? 'signed-out'}:${id}`} id={id} />;
+}
+function AccountOrder({ id }: { id: string }) {
+  const { user, loading } = useAuth();
+  const [order, setOrder] = useState<CustomerOrder | null>(null);
+  const [pending, setPending] = useState(true);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    if (!user || demoMode) return;
+    let active = true;
+    api<{ order: CustomerOrder }>(`/v1/orders/${encodeURIComponent(id)}`, {}, true)
+      .then((r) => {
+        if (active) setOrder(r.order);
+      })
+      .catch(() => {
+        if (active) setError('This order is unavailable or does not belong to your account.');
+      })
+      .finally(() => {
+        if (active) setPending(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [id, user]);
+  return (
+    <section className="container section">
+      <Link className="text-link" href="/dashboard">
+        ← My eSIMs
+      </Link>
+      <div className="page-intro">
+        <h1>Your eSIM</h1>
+      </div>
+      {loading ? (
+        <p role="status">Checking your account…</p>
+      ) : !user ? (
+        <Link
+          className="button primary"
+          href={`/login?next=${encodeURIComponent(`/dashboard/orders?id=${encodeURIComponent(id)}`)}`}
+        >
+          Sign in to view this order
+        </Link>
+      ) : demoMode ? (
+        <div className="notice">
+          No purchased eSIM exists in this preview. Installation codes are only available after a
+          real order is fulfilled.
+        </div>
+      ) : pending ? (
+        <p role="status">Loading order…</p>
+      ) : error ? (
+        <p role="alert" className="error-message">
+          {error}
+        </p>
+      ) : (
+        order && (
+          <div className="surface">
+            <h2>{order.plan.name}</h2>
+            <p>Status: {order.status.replaceAll('_', ' ')}</p>
+            <p>Order reference: {order.id}</p>
+            <div className="notice">
+              {order.status === 'ready'
+                ? 'Contact support to retrieve installation details. Secure activation retrieval is not connected in this draft.'
+                : 'Your installation details will become available after provisioning is confirmed.'}
+            </div>
+            <Link href="/help">Installation guidance →</Link>
+          </div>
+        )
+      )}
+    </section>
+  );
+}

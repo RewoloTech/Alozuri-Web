@@ -1,0 +1,13 @@
+{
+  "name": "@voyaspan/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./demo": "./src/demo.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
+}
