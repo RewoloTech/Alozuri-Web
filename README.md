@@ -2,6 +2,8 @@
 
 Next.js storefront + independent Fastify API for an itinerary-based travel eSIM service.
 
+Published draft: https://voyaspan-cf6b7.web.app (Firebase project `voyaspan`).
+
 **This is a functional preview, not a live shop.** All included plans and prices are clearly labelled samples. Payments, supplier orders and activation credentials are not created. Firebase accounts are real when configured. Do not enable sales until the payment/fulfilment milestones in CODEX_IMPLEMENTATION_BRIEF.md are completed and reviewed.
 
 ## Run locally
@@ -84,10 +86,10 @@ firebase projects:list
 npm run deploy:hosting -- --project YOUR_FIREBASE_PROJECT_ID
 ```
 
-Use the owning Firebase **project ID**, which is not necessarily the Hosting **site ID**. `predeploy` automatically runs the sample export build. This command does not deploy Firestore rules, the API, or supplier/payment integrations. Add `voyaspan-cf6b7.web.app` and `voyaspan-cf6b7.firebaseapp.com` to the Firebase Authentication authorized domains before testing accounts there. Google/email provider setup must also be completed.
+Use the owning Firebase **project ID**, which is not necessarily the Hosting **site ID**. `predeploy` automatically runs the sample export build. This command does not deploy Firestore rules, the API, or supplier/payment integrations. The Hosting build includes the verified public Firebase web configuration so fresh GitHub checkouts can build the authentication UI without a local environment file; Admin, supplier and payment credentials are never included. Add `voyaspan-cf6b7.web.app` and `voyaspan-cf6b7.firebaseapp.com` to the Firebase Authentication authorized domains before testing accounts there. Google/email provider setup must also be completed.
 
 Firebase App Hosting remains the target for a future server-rendered frontend, with app root `apps/web`. The normal `npm run build:web` preserves the Next.js server build. Use App Hosting or expand the static build's plan manifest before serving live supplier SKUs; the current Hosting build deliberately exports only the sample plan IDs. See `apps/web/apphosting.yaml` for the draft server hosting settings. The Docker container recipe is included but has not been Docker-built in this environment.
 
 Backend: Cloud Run using the root Dockerfile. Build from the repository root; set `GOOGLE_CLOUD_PROJECT`, exact frontend `CORS_ORIGINS`, and `DEMO_MODE=true` for preview. Cloud Run must permit public HTTP access for catalogue/customer endpoints; protected routes validate Firebase Bearer tokens themselves. Attach a least-privilege service account for Firestore reads. Do not grant supplier/Stripe access until their implementation is complete.
 
-Deploy Firestore rules separately with Firebase CLI after reviewing the target project. Keep staging and production in separate projects. No cloud services or rules have been deployed by this draft.
+Deploy Firestore rules separately with Firebase CLI after reviewing the target project. Keep staging and production in separate projects. The static storefront has been deployed to Firebase Hosting. The API and Firestore rules have not been deployed. GitHub currently has CI validation only; automatic Hosting deployment still needs `firebase init hosting:github` with an account able to write the repository and its Actions secrets.

@@ -2,7 +2,7 @@
 
 ## First draft delivered
 
-- Firebase Hosting sample export and site configuration for `voyaspan-cf6b7`; actual publication requires access to the owning Firebase project.
+- Firebase Hosting sample export and site configuration for `voyaspan-cf6b7`; published successfully to https://voyaspan-cf6b7.web.app using the owning Firebase account.
 - Independent npm workspace install and lockfile; Next.js App Router frontend and Fastify TypeScript API.
 - Requested blue/ink/soft-white/lime palette, Inter and Manrope, responsive existing storefront.
 - Redux itinerary state, full-country matching and best-value/price/data sort, four initial results.
@@ -30,4 +30,5 @@
 - Client checkout payload cannot set pricing.
 - Auth identity is verified by the API, not accepted from frontend flags.
 - Google Analytics is not initialized.
-- No deployment, charge, test account creation or supplier purchase has been performed.
+- Static Firebase Hosting storefront deployed. No API deployment, charge, test customer creation or supplier purchase has been performed.
+- GitHub push and automatic Hosting deployment still require repository write access; local source is committed.
