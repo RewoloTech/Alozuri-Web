@@ -60,3 +60,16 @@ test('order transition rules prevent direct checkout-to-ready and refunded issua
   assert.equal(canTransition('provision_wait', 'ready'), true);
   assert.equal(canTransition('refunded', 'fulfilling'), false);
 });
+
+test('account names accept international and compound names and reject invalid input', async () => {
+  const { accountName, nameFields } = await import('../src/index.ts');
+  assert.equal(accountName('  María José ', 'O’Neill-Smith '), 'María José O’Neill-Smith');
+  assert.equal(accountName('李', '王'), '李 王');
+  for (const value of ['', '   ', null, '<script>', 'a\u0000b', 'a'.repeat(51)])
+    assert.throws(() => accountName(value, 'Smith'));
+  assert.deepEqual(nameFields(null), { firstName: '', lastName: '' });
+  assert.deepEqual(nameFields('Alex van der Meer'), {
+    firstName: 'Alex',
+    lastName: 'van der Meer',
+  });
+});

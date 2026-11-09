@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { sendEmailVerification, updateProfile } from 'firebase/auth';
 import { Globe2, ShieldCheck, Receipt, ArrowRight } from 'lucide-react';
-import { money, type CustomerOrder } from '@voyaspan/shared';
+import { money, accountName, nameFields, type CustomerOrder } from '@voyaspan/shared';
 import { useAuth } from './auth-provider';
 import { api, demoMode } from '@/lib/api';
 export function Dashboard() {
@@ -212,22 +212,31 @@ function AccountDashboard() {
                   className="settings-form"
                   onSubmit={(e) => {
                     e.preventDefault();
-                    const name = String(new FormData(e.currentTarget).get('name')).trim();
-                    if (name)
-                      void accountAction(
-                        () => updateProfile(user, { displayName: name }),
-                        'Your name has been updated.',
-                      );
+                    const data = new FormData(e.currentTarget);
+                    void accountAction(async () => {
+                      const displayName = accountName(data.get('firstName'), data.get('lastName'));
+                      await updateProfile(user, { displayName });
+                    }, 'Your name has been updated.');
                   }}
                 >
                   <label>
-                    Full name
+                    First name
                     <input
-                      name="name"
-                      defaultValue={user.displayName || ''}
+                      name="firstName"
+                      defaultValue={nameFields(user.displayName).firstName}
                       required
-                      maxLength={100}
-                      autoComplete="name"
+                      maxLength={50}
+                      autoComplete="given-name"
+                    />
+                  </label>
+                  <label>
+                    Last name
+                    <input
+                      name="lastName"
+                      defaultValue={nameFields(user.displayName).lastName}
+                      required
+                      maxLength={50}
+                      autoComplete="family-name"
                     />
                   </label>
                   <button className="button small" disabled={busy}>

@@ -37,6 +37,18 @@ For real API reads use Application Default Credentials (`gcloud auth application
 
 Firestore collection shapes: `packages` stores the shared `StoredPlan`; `orders` stores `{ uid, plan: StoredPlan, status, createdAt: ISO8601, amountCents, currency }`. Direct client reads/writes are denied by `infra/firestore.rules`. The Admin SDK uses IAM and does not rely on these client rules. These rules are provided locally and have not been deployed to your project.
 
+## Account and data validation audit (9 November 2026)
+
+Signup is available next to Log in in the header and at `/register`. Email/password login, Google sign-in, password reset, verification email/resend, sign-out and name editing are implemented. Signup and account settings collect first and last name separately, validate them, and combine them into Firebase Auth's `displayName`. There is no separate first/last-name database record; existing and Google display names are split into editable suggestions, which may need correction for compound given names.
+
+Authentication requests go directly to Firebase Authentication, not the Fastify API or Firestore. Firebase validates credentials; browser name/terms/password-length checks are user experience checks and can be bypassed. Enforce the desired password policy in Firebase Authentication settings. Terms acceptance is currently not recorded as an auditable backend consent record.
+
+The backend currently has **no Firestore write endpoint**. Checkout validates the verified user's request, rejects additional fields such as client prices, and returns 503 without writing or charging. Package queries validate country codes and bounds; document routes validate IDs; customer order queries use the UID from a revocation-checked Firebase ID token, never a supplied customer UID. Admin routes require the verified admin claim. Unsupported filters are rejected. CORS is a browser policy, not authorization.
+
+Firestore reads now validate runtime schemas, not just TypeScript casts. Invalid, inactive, stale or future-dated catalogue records are excluded. Invalid owned orders fail with a generic service error, and public responses strip supplier/activation fields. Future supplier sync, payment webhook and order writers must validate their own inputs before every Admin SDK write; that write pipeline is not implemented yet.
+
+`infra/firestore.rules` denies all direct client document reads/writes. Admin SDK operations bypass these rules and rely on backend validation and IAM. This code audit does not verify the rules currently deployed, live provider/domain/password-policy settings, email delivery or actual customer accounts. The Hosting preview forces sample mode and does not call the order API; empty orders there do not demonstrate a Firebase query failure. API deployment and a real catalogue writer are still pending.
+
 ## Routes
 
 - `/`, `/destinations`, `/destinations/[code]`: storefront and itinerary matching.

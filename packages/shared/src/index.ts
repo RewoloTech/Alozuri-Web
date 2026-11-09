@@ -162,3 +162,21 @@ export type CustomerOrder = {
 };
 export const money = (cents: number, currency = 'USD') =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(cents / 100);
+
+// Firebase Auth exposes a single displayName; validate both form fields before combining them.
+export function accountName(firstName: unknown, lastName: unknown): string {
+  const parts = [firstName, lastName].map((part) => {
+    if (typeof part !== 'string') throw new Error('Enter your first and last name.');
+    const value = part.trim().replace(/\s+/g, ' ');
+    if (!value || value.length > 50 || /[\p{Cc}\p{Cf}<>]/u.test(part))
+      throw new Error('Enter a valid first and last name, up to 50 characters each.');
+    return value;
+  });
+  return parts.join(' ');
+}
+
+// Existing and Google accounts only have displayName. Suggested parts remain editable.
+export function nameFields(displayName: string | null) {
+  const [firstName = '', ...rest] = (displayName || '').trim().split(/\s+/);
+  return { firstName, lastName: rest.join(' ') };
+}

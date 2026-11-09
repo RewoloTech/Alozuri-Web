@@ -12,6 +12,7 @@ import {
   signInWithPopup,
   updateProfile,
 } from 'firebase/auth';
+import { accountName } from '@voyaspan/shared';
 import { authClient, firebaseConfigured } from '@/lib/firebase';
 const errors: Record<string, string> = {
   'auth/invalid-credential': 'The email or password is incorrect.',
@@ -63,8 +64,16 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' | 'reset' }) {
         await sendPasswordResetEmail(authClient(), email);
         setSuccess('If an account exists for that email, you’ll receive a password reset link.');
       } else if (mode === 'register') {
+        const displayName = accountName(data.get('firstName'), data.get('lastName'));
         const credential = await createUserWithEmailAndPassword(authClient(), email, password);
-        await updateProfile(credential.user, { displayName: String(data.get('name')).trim() });
+        try {
+          await updateProfile(credential.user, { displayName });
+        } catch {
+          setSuccess(
+            'Your account was created, but your name could not be saved. You can update it in account details.',
+          );
+          return;
+        }
         try {
           await sendEmailVerification(credential.user);
         } catch {
@@ -146,16 +155,28 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' | 'reset' }) {
         )}
         <form onSubmit={submit}>
           {mode === 'register' && (
-            <label>
-              Full name
-              <input
-                name="name"
-                autoComplete="name"
-                required
-                maxLength={100}
-                placeholder="Your name"
-              />
-            </label>
+            <div className="name-fields">
+              <label>
+                First name
+                <input
+                  name="firstName"
+                  autoComplete="given-name"
+                  required
+                  maxLength={50}
+                  placeholder="First name"
+                />
+              </label>
+              <label>
+                Last name
+                <input
+                  name="lastName"
+                  autoComplete="family-name"
+                  required
+                  maxLength={50}
+                  placeholder="Last name"
+                />
+              </label>
+            </div>
           )}
           <label>
             Email address
@@ -223,6 +244,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' | 'reset' }) {
         {success && (
           <p role="status" className="success-message">
             {success}
+            {mode === 'register' && <Link href={destination}> Continue to your account →</Link>}
           </p>
         )}
         <p className="auth-switch">

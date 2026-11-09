@@ -5,19 +5,22 @@ import { z } from 'zod';
 import { countries, matchPlans } from '../../../packages/shared/src/index.ts';
 import { createRepository, type Repository, type Principal } from './lib/repository.js';
 import { verifyToken } from './lib/firebase.js';
+import { documentId } from './lib/validation.js';
 const code = z
   .string()
   .regex(/^[A-Z]{2}$/)
   .refine((value) => countries.some((c) => c.code === value));
-const matchQuery = z.object({
-  countries: z
-    .string()
-    .max(200)
-    .transform((s) => s.split(',').map((c) => c.trim().toUpperCase()))
-    .pipe(z.array(code).min(1).max(50)),
-  minGb: z.coerce.number().finite().min(0).max(10000).default(0),
-});
-const idSchema = z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/);
+const matchQuery = z
+  .object({
+    countries: z
+      .string()
+      .max(200)
+      .transform((s) => s.split(',').map((c) => c.trim().toUpperCase()))
+      .pipe(z.array(code).min(1).max(50)),
+    minGb: z.coerce.number().finite().min(0).max(10000).default(0),
+  })
+  .strict();
+const idSchema = documentId;
 export async function createApp(
   options: {
     repository?: Repository;
@@ -49,8 +52,12 @@ export async function createApp(
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof z.ZodError)
       return reply.code(400).send({ error: 'Invalid request parameters.' });
-    if (error instanceof Error && 'statusCode' in error && error.statusCode === 429)
-      return reply.code(429).send({ error: 'Too many requests. Please wait and try again.' });
+    if (error instanceof Error && 'statusCode' in error) {
+      if (error.statusCode === 429)
+        return reply.code(429).send({ error: 'Too many requests. Please wait and try again.' });
+      if (error.statusCode === 400 || error.statusCode === 413 || error.statusCode === 415)
+        return reply.code(error.statusCode).send({ error: 'Invalid request body.' });
+    }
     return reply.code(503).send({ error: 'The service is temporarily unavailable.' });
   });
   async function identity(header: string | undefined, reply: import('fastify').FastifyReply) {
@@ -71,7 +78,7 @@ export async function createApp(
     paymentsEnabled: false,
   }));
   app.get('/v1/packages', async (request) => {
-    const query = z.object({ country: code.optional() }).parse(request.query);
+    const query = z.object({ country: code.optional() }).strict().parse(request.query);
     const plans = await repository.plans();
     return {
       plans: query.country ? plans.filter((p) => p.countries.includes(query.country!)) : plans,
@@ -82,6 +89,7 @@ export async function createApp(
     return { plans: matchPlans(await repository.plans(), query.countries, query.minGb) };
   });
   app.get<{ Params: { id: string } }>('/v1/packages/:id', async (request, reply) => {
+    z.object({}).strict().parse(request.query);
     const id = idSchema.parse(request.params.id);
     const plan = (await repository.plans()).find((p) => p.id === id);
     return plan ? { plan } : reply.code(404).send({ error: 'Plan unavailable.' });
@@ -89,11 +97,13 @@ export async function createApp(
   app.get('/v1/orders', async (request, reply) => {
     const user = await identity(request.headers.authorization, reply);
     if (!user) return;
+    z.object({}).strict().parse(request.query);
     return { orders: await repository.orders(user.uid) };
   });
   app.get<{ Params: { id: string } }>('/v1/orders/:id', async (request, reply) => {
     const user = await identity(request.headers.authorization, reply);
     if (!user) return;
+    z.object({}).strict().parse(request.query);
     const id = idSchema.parse(request.params.id);
     const order = await repository.order(user.uid, id);
     return order ? { order } : reply.code(404).send({ error: 'Order not found.' });
@@ -106,6 +116,7 @@ export async function createApp(
       if (!user) return;
       if (!user.verified)
         return reply.code(403).send({ error: 'Verify your email before purchasing.' });
+      z.object({}).strict().parse(request.query);
       z.object({ planId: idSchema }).strict().parse(request.body);
       return reply
         .code(503)

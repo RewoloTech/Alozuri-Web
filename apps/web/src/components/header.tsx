@@ -38,6 +38,11 @@ export function Header() {
           <Link href={user ? '/dashboard' : '/login'} className="nav-login">
             {user ? 'My account' : 'Log in'} <ArrowUpRight size={16} />
           </Link>
+          {!user && (
+            <Link href="/register" className="nav-login nav-signup">
+              Sign up
+            </Link>
+          )}
           <button
             className="mobile-toggle"
             aria-label={open ? 'Close menu' : 'Open menu'}
