@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: VoyaSpan eSIM Access webhook
+  title: Alozuri eSIM Access webhook
   version: 1.0.0
   description: Receives notifications into a validated private inbox. Does not issue eSIMs or alter customer orders.
 paths:

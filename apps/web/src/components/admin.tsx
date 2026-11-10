@@ -42,7 +42,7 @@ function AccountAdmin() {
   return (
     <section className="container section">
       <div className="page-intro">
-        <span className="eyebrow">VOYASPAN OPERATIONS</span>
+        <span className="eyebrow">ALOZURI OPERATIONS</span>
         <h1>Launch overview</h1>
         <p>Server-verified administrator access is required.</p>
       </div>

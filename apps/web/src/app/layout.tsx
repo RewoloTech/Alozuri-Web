@@ -9,8 +9,10 @@ const preview =
   process.env.NEXT_PUBLIC_DEMO_MODE !== 'false' ||
   process.env.NEXT_PUBLIC_PAYMENT_MODE !== 'live';
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://voyaspan.com'),
-  title: { default: 'VoyaSpan — One eSIM. Every stop.', template: '%s | VoyaSpan' },
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_SITE_URL || 'https://voyaspan--voyaspan.europe-west4.hosted.app',
+  ),
+  title: { default: 'Alozuri — One eSIM. Every stop.', template: '%s | Alozuri' },
   description:
     'Find a travel eSIM for your whole itinerary. Choose your countries, compare coverage and stay connected along the way.',
   robots: { index: !preview, follow: !preview },

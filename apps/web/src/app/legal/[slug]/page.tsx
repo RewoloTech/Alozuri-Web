@@ -3,14 +3,14 @@ const drafts: Record<string, { title: string; body: string[] }> = {
   privacy: {
     title: 'Privacy policy',
     body: [
-      'VoyaSpan’s draft service uses Firebase Authentication for account access. The planned order service will retain customer and order records on the server. Payment details will be handled by Stripe, not stored by VoyaSpan.',
+      'Alozuri’s draft service uses Firebase Authentication for account access. The planned order service will retain customer and order records on the server. Payment details will be handled by Stripe, not stored by Alozuri.',
       'Google Analytics is not initialized in this draft. Retention periods, data rights contacts, international transfers and the legal entity must be confirmed before launch.',
     ],
   },
   terms: {
     title: 'Terms of service',
     body: [
-      'VoyaSpan is an intended reseller of travel eSIM data plans. Sample plans shown in this preview are illustrative and cannot be purchased.',
+      'Alozuri is an intended reseller of travel eSIM data plans. Sample plans shown in this preview are illustrative and cannot be purchased.',
       'Final terms must identify the selling entity and address, describe availability and device requirements, payment and taxes, activation rules, complaints, statutory rights and governing law.',
     ],
   },

@@ -257,7 +257,7 @@ export function Home() {
             },
             {
               q: 'Can I keep my WhatsApp and phone number?',
-              a: 'Yes. Keep your existing SIM for calls and your usual WhatsApp number. Select VoyaSpan for mobile data, and disable data roaming on your home SIM to avoid carrier charges.',
+              a: 'Yes. Keep your existing SIM for calls and your usual WhatsApp number. Select Alozuri for mobile data, and disable data roaming on your home SIM to avoid carrier charges.',
             },
             {
               q: 'When does my plan start?',

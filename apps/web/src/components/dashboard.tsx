@@ -73,7 +73,7 @@ function AccountDashboard() {
     <section className="container section">
       <div className="dashboard-heading">
         <div className="page-intro">
-          <span className="eyebrow">YOUR VOYASPAN</span>
+          <span className="eyebrow">YOUR ALOZURI</span>
           <h1>
             {user
               ? `Hi, ${user.displayName?.split(' ')[0] || 'traveller'}.`

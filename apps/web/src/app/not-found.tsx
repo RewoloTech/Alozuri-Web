@@ -7,7 +7,7 @@ export default function NotFound() {
         <h1>This stop isn’t on the map.</h1>
         <p>We couldn’t find this page. Let’s get you back to your trip.</p>
         <Link className="button primary" href="/">
-          Back to VoyaSpan →
+          Back to Alozuri →
         </Link>
       </div>
     </section>

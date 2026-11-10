@@ -21,14 +21,14 @@ export function Footer() {
           <Link href="/help">Help centre</Link>
         </div>
         <div>
-          <span className="eyebrow">YOUR VOYASPAN</span>
+          <span className="eyebrow">YOUR ALOZURI</span>
           <Link href="/dashboard">My eSIMs</Link>
           <Link href="/register">Create an account</Link>
           <Link href="/help#compatibility">Device compatibility</Link>
         </div>
       </div>
       <div className="container footer-bottom">
-        <span>© {new Date().getFullYear()} VoyaSpan. Made for the journey.</span>
+        <span>© {new Date().getFullYear()} Alozuri. Made for the journey.</span>
         <div>
           <Link href="/legal/privacy">Privacy</Link>
           <Link href="/legal/terms">Terms</Link>

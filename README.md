@@ -1,6 +1,10 @@
-# VoyaSpan — first draft
+# Alozuri — first draft
 
 Next.js storefront + independent Fastify API for an itinerary-based travel eSIM service.
+
+Repository: [RewoloTech/Alozuri-Web](https://github.com/RewoloTech/Alozuri-Web).
+
+The product is now Alozuri. Existing Firebase project ID `voyaspan`, Hosting site IDs, service URLs, internal `@voyaspan/*` workspace names and payment metadata keys are retained for compatibility. A Firebase display-name change does not rename these resources.
 
 Published draft: https://voyaspan-cf6b7.web.app (Firebase project `voyaspan`).
 
@@ -35,7 +39,7 @@ The API listens on http://localhost:8080, in sample mode by default. `/health` r
 
 Public web configuration belongs in `apps/web/.env.local`; it is not an Admin credential. Never place a service-account key or supplier/payment secret in a `NEXT_PUBLIC_*` variable.
 
-Enable Email/Password and Google providers in the Firebase console for the VoyaSpan project. Set the Google provider's support email, authorize `localhost` and your eventual frontend domain, and configure verification/reset email templates. The app supports email registration, verification sending and resending, email login, Google popup login/signup, password reset, sign-out and display-name updates. Verification is checked on the API purchase boundary. Google provider configuration and real-account email delivery must be tested in the Firebase project; no test customer was created automatically.
+Enable Email/Password and Google providers in the Firebase console for the Alozuri project. Set the Google provider's support email, authorize `localhost` and your eventual frontend domain, and configure verification/reset email templates. The app supports email registration, verification sending and resending, email login, Google popup login/signup, password reset, sign-out and display-name updates. Verification is checked on the API purchase boundary. Google provider configuration and real-account email delivery must be tested in the Firebase project; no test customer was created automatically.
 
 For real API reads use Application Default Credentials (`gcloud auth application-default login` locally) and set `GOOGLE_CLOUD_PROJECT=voyaspan`. The API verifies Firebase ID tokens including revocation, checks ownership and explicitly serializes customer responses. `DEMO_MODE=false` switches the API to server-side Firestore catalogue/order reads. It only returns active packages with `syncedAt` within 12 hours; a live catalogue writer/sync job is still required. Customer order list is limited to the latest fetched 100 records; pagination is a later milestone. No wholesale or activation secrets are returned.
 

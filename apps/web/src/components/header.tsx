@@ -5,11 +5,11 @@ import { useState } from 'react';
 import { useAuth } from './auth-provider';
 export function Brand() {
   return (
-    <Link href="/" className="brand" aria-label="VoyaSpan home">
+    <Link href="/" className="brand" aria-label="Alozuri home">
       <span className="brand-icon">
         <Globe2 size={22} />
       </span>
-      voya<span className="brand-span">span</span>
+      alo<span className="brand-span">zuri</span>
     </Link>
   );
 }
