@@ -66,18 +66,21 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' | 'reset' }) {
       } else if (mode === 'register') {
         const displayName = accountName(data.get('firstName'), data.get('lastName'));
         const credential = await createUserWithEmailAndPassword(authClient(), email, password);
+        let profileWarning = '';
         try {
           await updateProfile(credential.user, { displayName });
         } catch {
-          setSuccess(
-            'Your account was created, but your name could not be saved. You can update it in account details.',
-          );
-          return;
+          profileWarning =
+            'Your account was created, but your name could not be saved. You can update it in account details.';
         }
         try {
           await sendEmailVerification(credential.user);
         } catch {
           /* Dashboard offers resend if delivery fails. */
+        }
+        if (profileWarning) {
+          setSuccess(profileWarning);
+          return;
         }
         router.push(destination);
       } else {

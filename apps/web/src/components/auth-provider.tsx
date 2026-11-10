@@ -8,13 +8,16 @@ const AuthContext = createContext<{
   logout: () => Promise<void>;
 }>({ user: null, loading: true, logout: async () => {} });
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(firebaseConfigured);
+  const [{ user, loading }, setSession] = useState<{ user: User | null; loading: boolean }>({
+    user: null,
+    loading: firebaseConfigured,
+  });
   useEffect(() => {
     if (!firebaseConfigured) return;
     return onIdTokenChanged(authClient(), (u) => {
-      setUser(u);
-      setLoading(false);
+      // Firebase can mutate and re-emit the same User after token refresh.
+      // Publish a fresh session so email verification updates every consumer.
+      setSession({ user: u, loading: false });
     });
   }, []);
   return (

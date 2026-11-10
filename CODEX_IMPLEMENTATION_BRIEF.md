@@ -31,7 +31,7 @@
 - Auth identity is verified by the API, not accepted from frontend flags.
 - Google Analytics is not initialized.
 - Static Firebase Hosting storefront deployed. The eSIM webhook API and deny-all Firestore rules are deployed and verified in europe-west4. No charge, test customer creation or supplier purchase has been performed.
-- GitHub push and automatic Hosting deployment still require repository write access; local source is committed.
+- GitHub write access is configured. App Hosting and the eSIM webhook API have been deployed; see docs/readiness-review-2026-11-10.md for current launch blockers.
 
 ## eSIM webhook receiver
 

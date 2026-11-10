@@ -37,6 +37,8 @@ For real API reads use Application Default Credentials (`gcloud auth application
 
 Firestore collection shapes: `packages` stores the shared `StoredPlan`; `orders` stores `{ uid, plan: StoredPlan, status, createdAt: ISO8601, amountCents, currency }`. Direct client reads/writes are denied by `infra/firestore.rules`. The Admin SDK uses IAM and does not rely on these client rules. These rules are provided locally and have not been deployed to your project.
 
+Live account configuration and launch blockers were reviewed on **10 November 2026**. See [the readiness review](docs/readiness-review-2026-11-10.md): the storefront is still a preview, and payment and automatic delivery remain unfinished.
+
 ## Account and data validation audit (9 November 2026)
 
 Signup is available next to Log in in the header and at `/register`. Email/password login, Google sign-in, password reset, verification email/resend, sign-out and name editing are implemented. Signup and account settings collect first and last name separately, validate them, and combine them into Firebase Auth's `displayName`. There is no separate first/last-name database record; existing and Google display names are split into editable suggestions, which may need correction for compound given names.

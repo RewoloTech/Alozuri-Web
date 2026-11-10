@@ -6,7 +6,9 @@ import { countryName, money, type Plan } from '@voyaspan/shared';
 import { demoPlans } from '@voyaspan/shared/demo';
 import { api, demoMode } from '@/lib/api';
 import type { RootState } from '@/lib/store';
+import { useAuth } from './auth-provider';
 export function PlanDetails({ id, review = false }: { id: string; review?: boolean }) {
+  const { user, loading: authLoading } = useAuth();
   const [plan, setPlan] = useState<Plan | null>(() =>
     demoMode ? (demoPlans.find((p) => p.id === id) ?? null) : null,
   );
@@ -124,6 +126,32 @@ export function PlanDetails({ id, review = false }: { id: string; review?: boole
             <div className="notice">
               First draft preview. Supplier availability, network coverage and pricing have not been
               verified. Purchases are disabled.
+            </div>
+          )}
+          {review && !authLoading && !user && (
+            <div className="notice">
+              <Link
+                href={`/login?next=${encodeURIComponent(`/checkout/${id}`)}`}
+                className="text-link"
+              >
+                Log in
+              </Link>{' '}
+              or{' '}
+              <Link
+                href={`/register?next=${encodeURIComponent(`/checkout/${id}`)}`}
+                className="text-link"
+              >
+                create an account
+              </Link>{' '}
+              to keep your plans in one place. Email verification is required before purchasing.
+            </div>
+          )}
+          {review && user && !user.emailVerified && (
+            <div className="notice">
+              Verify your email before purchasing.{' '}
+              <Link href="/dashboard" className="text-link">
+                Open your account to resend the email or check verification.
+              </Link>
             </div>
           )}
           <label className="checkbox-label">
