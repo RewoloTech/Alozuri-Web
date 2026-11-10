@@ -50,7 +50,7 @@ Store these values in Google Secret Manager and map them to the API service. Nev
 | `ORDER_ACCESS_SECRET`   | Stable random guest-link signing secret, at least 32 characters  |
 | `RESEND_API_KEY`        | Resend API key authorised to send from the verified domain       |
 
-The live Stripe and supplier credential secret names already exist in project `alozuri`; `ORDER_ACCESS_SECRET` was created without revealing its value. Preserve it across deployments so existing guest links keep working. At the last check, `STRIPE_WEBHOOK_SECRET` and `RESEND_API_KEY` were missing.
+The live Stripe and supplier credential secret names already exist in project `alozuri`; `ORDER_ACCESS_SECRET` was created without revealing its value. Preserve it across deployments so existing guest links keep working. The `STRIPE_WEBHOOK_SECRET` and `RESEND_API_KEY` secret names now exist; the signing secret must match the actual live endpoint before activation. The Resend sending domain was verified.
 
 Use `infra/production-api.env.example.yaml` for runtime values, including:
 
@@ -110,6 +110,6 @@ npm run test:stripe
 
 The Stripe sandbox browser test completes a declined card followed by successful retry on the same PaymentIntent and checks the paid receipt. It uses Stripe's real Payment Element/API; the harness forwards a locally signed webhook after observing Stripe's status, so production webhook transport is not exercised. Firestore integration tests cover multi-unit allocations, replay, failed/test payment isolation, private retrieval, mocked delivery/email and cart merge/version conflicts. Browser tests cover destination state, cart persistence/mobile widths, guest validation, card retry and mocked eligible Apple/Google wallet callbacks.
 
-Still unverified: actual Apple Pay/Google Pay transactions on eligible hardware, deployed production webhook delivery, production worker invocation, Resend delivery, a real charged supplier purchase and QR installation. No live charge or supplier purchase was made. Live operation also needs the deployed API, missing secrets, verified sending domain, fresh catalogue, tax treatment and final business/legal content.
+Still unverified: actual Apple Pay/Google Pay transactions on eligible hardware, deployed production webhook delivery, production worker invocation, Resend delivery, a real charged supplier purchase and QR installation. No live charge or supplier purchase was made. A catalogue-only API and daily sync are now deployed (see [catalogue status](catalogue-and-filters.md)). Live payments still need secret mappings, the production webhook/fulfilment worker, payment/delivery verification, tax treatment and final business/legal content.
 
 References: [Stripe Express Checkout](https://docs.stripe.com/elements/express-checkout-element), [Stripe payment domains](https://docs.stripe.com/payments/payment-methods/pmd-registration), [Stripe webhooks](https://docs.stripe.com/webhooks), [eSIM Access API](https://docs.esimaccess.com/).

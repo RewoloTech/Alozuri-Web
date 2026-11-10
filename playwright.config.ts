@@ -16,7 +16,7 @@ export default defineConfig({
     timeout: 90000,
     env: {
       NEXT_PUBLIC_DEMO_MODE: 'false',
-      NEXT_PUBLIC_API_URL: 'http://127.0.0.1:8189',
+      NEXT_PUBLIC_API_URL: process.env.E2E_API_URL || 'http://127.0.0.1:8189',
       NEXT_PUBLIC_PAYMENT_MODE: 'test',
       NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:
         process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || 'pk_test_browser_fixture',

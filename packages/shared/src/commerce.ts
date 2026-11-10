@@ -64,5 +64,8 @@ export function readSearch(params: URLSearchParams): SearchState | null {
   const trip = (params.get('trip') || selected.join(',')).split(',').filter(valid);
   const single = params.get('single') || (selected.length === 1 ? selected[0] : null);
   const mode = selected.length > 1 ? 'trip' : params.get('mode') === 'trip' ? 'trip' : 'country';
-  return searchState(single && valid(single) ? single : null, trip, mode);
+  const state = searchState(single && valid(single) ? single : null, trip, mode);
+  state.chooseTrip = params.get('intent') === 'trip' && state.countries.length < 2;
+  state.chooseSingle = params.get('intent') === 'country' && state.mode === 'trip';
+  return state;
 }

@@ -30,6 +30,7 @@ test('unlimited filter includes speed-reduced daily plans, excludes cutoff plans
 });
 test('allowance labels distinguish total GB, per-day high-speed limits and unlimited data', () => {
   assert.equal(dataLabel(plans[1]), '50 GB');
+  assert.equal(dataLabel({ ...plans[0], dataGb: 500 / 1024 }), '500 MB');
   assert.equal(dataLabel(plans[3]), 'Unlimited · 2 GB/day high-speed');
   assert.equal(dataLabel(plans[4]), '3 GB/day');
   assert.equal(dataLabel(plans[5]), 'Unlimited');

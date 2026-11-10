@@ -52,11 +52,14 @@ export function Planner({
   const dispatch = useDispatch();
   const saved = useSelector((s: RootState) => s.itinerary);
   const [error, setError] = useState('');
-  const mode = saved.mode;
-  const selected = saved.countries;
+  // Tabs show the user's choice immediately; draft validation stays in the shared state.
+  const mode = saved.chooseSingle ? 'country' : saved.chooseTrip ? 'trip' : saved.mode;
+  const selected = saved.chooseSingle ? [] : saved.countries;
+  const [includeRegional, setIncludeRegional] = useState(false);
   const initialKey = initialCountries.join(',');
   useEffect(() => {
     const restore = () => {
+      setIncludeRegional(new URLSearchParams(window.location.search).get('coverage') === 'all');
       const parsed = readSearch(new URLSearchParams(window.location.search));
       if (parsed) dispatch(restoreSearch(parsed));
     };
@@ -71,6 +74,7 @@ export function Planner({
     url.searchParams.set('countries', saved.countries.join(','));
     url.searchParams.set('single', saved.single || '');
     url.searchParams.set('trip', saved.trip.join(','));
+    url.searchParams.set('intent', saved.chooseSingle ? 'country' : saved.chooseTrip ? 'trip' : '');
     window.history.pushState({}, '', url);
   }
   useEffect(() => {
@@ -81,6 +85,7 @@ export function Planner({
     next.set('countries', saved.countries.join(','));
     next.set('single', saved.single || '');
     next.set('trip', saved.trip.join(','));
+    next.set('intent', saved.chooseSingle ? 'country' : saved.chooseTrip ? 'trip' : '');
     if (next.toString() !== url.searchParams.toString()) {
       url.search = next.toString();
       window.history.pushState({}, '', url);
@@ -98,20 +103,23 @@ export function Planner({
   }, []);
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
+  const [results, setResults] = useState<Plan[] | null>(null);
+  const [loading, setLoading] = useState(false);
   const [allowance, setAllowance] = useState<DataAllowance>('all');
+  const requestVersion = useRef(0);
   useEffect(() => {
     const restore = () => {
       const value = new URLSearchParams(window.location.search).get('allowance');
       setAllowance(DATA_ALLOWANCES.find((v) => v === value) || 'all');
+      requestVersion.current++;
+      setResults(null);
+      setLoading(false);
     };
     restore();
     window.addEventListener('popstate', restore);
     return () => window.removeEventListener('popstate', restore);
   }, []);
-  const requestVersion = useRef(0);
   const selectionKey = selected.join(',');
-  const [results, setResults] = useState<Plan[] | null>(null);
-  const [loading, setLoading] = useState(false);
   const [sort, setSort] = useState('recommended');
   const picker = useRef<HTMLDivElement>(null);
   const resultRef = useRef<HTMLDivElement>(null);
@@ -136,11 +144,9 @@ export function Planner({
             sort === 'price' || sort === 'recommended'
               ? a.priceCents - b.priceCents
               : sort === 'data'
-                ? a.dataType === 'unlimited'
-                  ? -1
-                  : b.dataType === 'unlimited'
-                    ? 1
-                    : b.dataGb - a.dataGb
+                ? Number(b.dataType === 'unlimited') - Number(a.dataType === 'unlimited') ||
+                  b.dataGb - a.dataGb ||
+                  a.priceCents - b.priceCents
                 : comparePlanValue(a, b),
           )
         : null,
@@ -158,12 +164,13 @@ export function Planner({
     setResults(null);
     setLoading(false);
   }, [selectionKey, mode]);
-  async function search(value: DataAllowance = allowance) {
+  async function search(value: DataAllowance = allowance, regional = includeRegional) {
     const { minGb, dataType } = allowanceFilter(value);
     const version = ++requestVersion.current;
     syncUrl();
     const url = new URL(window.location.href);
     url.searchParams.set('allowance', value);
+    url.searchParams.set('coverage', regional ? 'all' : 'local');
     window.history.replaceState({}, '', url);
     if (saved.chooseTrip) {
       setError('Add at least two destinations for a multi-country search.');
@@ -184,10 +191,12 @@ export function Planner({
     setError('');
     try {
       const plans = demoMode
-        ? matchPlans(demoPlans, selected, minGb, dataType)
+        ? matchPlans(demoPlans, selected, minGb, dataType).filter(
+            (p) => mode === 'trip' || regional || p.countries.length === 1,
+          )
         : (
             await api<{ plans: Plan[] }>(
-              `/v1/packages/match?countries=${selected.join(',')}&minGb=${minGb}&dataType=${dataType}`,
+              `/v1/packages/match?countries=${selected.join(',')}&minGb=${minGb}&dataType=${dataType}&coverage=${mode === 'country' && !regional ? 'local' : 'all'}`,
             )
           ).plans;
       if (version !== requestVersion.current) return;
@@ -347,7 +356,7 @@ export function Planner({
                   onChange={(e) => {
                     const value = e.target.value as DataAllowance;
                     setAllowance(value);
-                    if (results !== null) void search(value);
+                    if (results !== null || loading) void search(value);
                   }}
                 >
                   <option value="all">All data plans</option>
@@ -372,6 +381,19 @@ export function Planner({
               <ArrowRight size={18} />
             </button>
           </div>
+          {mode === 'country' && (
+            <label className="checkbox-label" style={{ marginTop: 16 }}>
+              <input
+                type="checkbox"
+                checked={includeRegional}
+                onChange={(e) => {
+                  setIncludeRegional(e.target.checked);
+                  if (results !== null || loading) void search(allowance, e.target.checked);
+                }}
+              />
+              Include regional and global plans covering this country
+            </label>
+          )}
           <div className="planner-note">
             <span>
               <ShieldCheck size={14} />
@@ -398,13 +420,19 @@ export function Planner({
                 <span className="eyebrow">MATCHED TO YOUR ITINERARY</span>
                 <h2>
                   {sorted.length
-                    ? `${sorted.length} plans. Every stop covered.`
+                    ? mode === 'country'
+                      ? `${sorted.length} ${includeRegional ? 'matching' : 'local'} plans for ${selected.map(countryName).join(', ')}.`
+                      : `${sorted.length} plans. Every stop covered.`
                     : 'No complete match for this itinerary'}
                 </h2>
                 <p>
                   {sorted.length
-                    ? `Covers all your selected countries: ${selected.map(countryName).join(', ')}.`
-                    : 'No plans match every selected country and this allowance. Try another allowance or destination combination.'}
+                    ? mode === 'country' && !includeRegional
+                      ? 'These plans cover only your selected country. Enable regional plans to compare broader coverage.'
+                      : `Covers all your selected countries: ${selected.map(countryName).join(', ')}.`
+                    : mode === 'country' && !includeRegional
+                      ? 'No local plan matches this allowance. Enable regional and global plans to compare other options covering this country.'
+                      : 'No plans match every selected country and this allowance. Try another allowance or destination combination.'}
                 </p>
               </div>
               {sorted.length > 0 && (
@@ -424,7 +452,7 @@ export function Planner({
               )}
             </div>
             <div className="plan-grid">
-              {(showAll
+              {(showAll || sorted.length <= 4
                 ? sorted
                 : sort === 'recommended'
                   ? suggestedPlans(sorted)
@@ -466,14 +494,13 @@ export function PlanCard({ plan, highlight = false }: { plan: Plan; highlight?: 
       </p>
       <div className="plan-data">
         {plan.dataType === 'fixed' ? (
-          <>
-            {plan.dataGb}
-            <span>GB</span>
-          </>
+          <span className="plan-fixed-allowance">{dataLabel(plan)}</span>
         ) : (
           <span className="plan-allowance">{dataLabel(plan)}</span>
         )}
-        <span className="plan-days">{plan.days} days</span>
+        <span className="plan-days">
+          {plan.days} {plan.days === 1 ? 'day' : 'days'}
+        </span>
       </div>
       {plan.dataType !== 'fixed' && <p className="muted">{plan.fairUse}</p>}
       <div className="plan-coverage">

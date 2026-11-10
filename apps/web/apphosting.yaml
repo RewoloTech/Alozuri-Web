@@ -6,15 +6,17 @@ runConfig:
   cpu: 1
   memoryMiB: 512
 # Configure NEXT_PUBLIC_FIREBASE_* and NEXT_PUBLIC_API_URL in the hosting
-# environment before building. Keep NEXT_PUBLIC_DEMO_MODE=true for preview.
+# environment before building. The catalogue is live; payments stay disabled pending activation.
 env:
   - variable: NEXT_PUBLIC_DEMO_MODE
-    value: 'true'
+    value: 'false'
+  - variable: NEXT_PUBLIC_API_URL
+    value: https://alozuri-api-rnm3hsyqia-ez.a.run.app
   - variable: NEXT_PUBLIC_SITE_URL
-    value: https://alozuri.web.app
+    value: https://alozuri.com
 
   - variable: NEXT_PUBLIC_PAYMENT_MODE
-    value: test
+    value: disabled
 
   # Public browser configuration for the Alozuri Firebase web app.
   - variable: NEXT_PUBLIC_FIREBASE_API_KEY

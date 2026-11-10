@@ -15,6 +15,7 @@ describe('destination search', () => {
     selectCountry('France');
     button('Single destination').should('have.class', 'active');
     button('Multi-country trip').click();
+    button('Multi-country trip').should('have.class', 'active');
     selectCountry('Switzerland');
     selectCountry('Italy');
     button('Multi-country trip').should('have.class', 'active');
@@ -23,6 +24,7 @@ describe('destination search', () => {
     cy.contains('1 plans. Every stop covered.').should('be.visible');
     cy.contains(localPlan.name).should('not.exist');
     button('Single destination').click();
+    button('Single destination').should('have.class', 'active');
     cy.contains('Choose one country for a single-destination').should('be.visible');
     cy.get('input[aria-label="Search countries"]').type('France');
     cy.contains('button', '🇫🇷 France').click();
@@ -147,5 +149,67 @@ describe('data allowance filters', () => {
     button('Find my eSIM').click();
     cy.wait('@dataFilter');
     cy.contains('h3', daily.name).should('be.visible');
+  });
+});
+
+describe('allowance request ordering', () => {
+  beforeEach(mockCommerce);
+  it('does not let a slow 50 GB response overwrite a newer unlimited selection', () => {
+    cy.intercept('GET', 'http://127.0.0.1:8189/v1/packages/match*', (req) => {
+      const unlimited = new URL(req.url).searchParams.get('dataType') === 'unlimited';
+      req.alias = unlimited ? 'newUnlimited' : 'oldFifty';
+      req.reply({
+        delay: unlimited ? 0 : 800,
+        headers: { 'access-control-allow-origin': 'http://localhost:3100' },
+        body: {
+          plans: [
+            {
+              ...plan,
+              id: unlimited ? 'new' : 'old',
+              name: unlimited ? 'Latest unlimited result' : 'Stale 50 GB result',
+              dataGb: unlimited ? 2 : 50,
+              dataType: unlimited ? 'daily' : 'fixed',
+              ...(unlimited ? { dailyPolicy: 'reduced' } : {}),
+            },
+          ],
+        },
+      });
+    });
+    cy.visit('/?mode=trip&countries=FR,CH,IT');
+    cy.contains('label', 'DATA ALLOWANCE').find('select').select('50');
+    button('Find my eSIM').click();
+    cy.contains('label', 'DATA ALLOWANCE').find('select').select('unlimited');
+    cy.wait('@newUnlimited');
+    cy.wait('@oldFifty');
+    cy.contains('h3', 'Latest unlimited result').should('be.visible');
+    cy.contains('h3', 'Stale 50 GB result').should('not.exist');
+  });
+});
+
+describe('single-country plans', () => {
+  beforeEach(mockCommerce);
+  it('shows local plans first and includes regional bundles only when requested', () => {
+    cy.intercept('GET', 'http://127.0.0.1:8189/v1/packages/match*', (req) => {
+      const localOnly = new URL(req.url).searchParams.get('coverage') === 'local';
+      req.alias = localOnly ? 'localOnly' : 'includeRegions';
+      req.reply({
+        headers: { 'access-control-allow-origin': 'http://localhost:3100' },
+        body: { plans: localOnly ? [localPlan] : [localPlan, plan] },
+      });
+    });
+    cy.visit('/');
+    button('Multi-country trip').click();
+    button('Multi-country trip').should('have.class', 'active');
+    button('Single destination').click();
+    button('Single destination').should('have.class', 'active');
+    selectCountry('France');
+    button('Find my eSIM').click();
+    cy.wait('@localOnly');
+    cy.contains('h3', localPlan.name).should('be.visible');
+    cy.contains('h3', plan.name).should('not.exist');
+    cy.contains('label', 'Include regional and global plans').find('input').check();
+    cy.wait('@includeRegions');
+    cy.contains('h3', plan.name).should('be.visible');
+    cy.contains('Multi-country coverage').should('be.visible');
   });
 });

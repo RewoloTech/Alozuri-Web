@@ -2351,3 +2351,8 @@ h1 {
     transition-duration: 0.01ms !important;
   }
 }
+
+.plan-data .plan-fixed-allowance {
+  font-size: 34px;
+  font-weight: 700;
+}

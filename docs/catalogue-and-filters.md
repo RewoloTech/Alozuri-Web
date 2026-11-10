@@ -27,3 +27,11 @@ Implement `CatalogueProvider` in `apps/api/src/lib/catalogue-provider.ts`: a sta
 A second catalogue adapter alone does **not** enable that supplier's purchases. Add and test provider-specific repricing, ordering, timeout reconciliation, refund and allocation routing before opening checkout. Current checkout explicitly rejects another provider ID to prevent sending its package code to eSIM Access. Supply its credentials through separate secret grants and schedule its sync independently.
 
 References: [eSIM Access API](https://docs.esimaccess.com/), [Google workload identity for deployment pipelines](https://cloud.google.com/iam/docs/workload-identity-federation-with-deployment-pipelines).
+
+## Verified deployment
+
+The first manual cloud run succeeded on 2026-11-10 at 23:08 UTC: 3,283 fetched, 3,283 active, zero unsupported. [Workflow run](https://github.com/RewoloTech/Alozuri-Web/actions/runs/42920743881).
+
+The catalogue API is deployed in the Netherlands (`europe-west4`) at `https://alozuri-api-rnm3hsyqia-ez.a.run.app`. Its health, country list and 50 GB/unlimited country-match endpoints were checked against the real Firestore catalogue. Both local frontend configuration and App Hosting now point there with demo mode off. Payments remain disabled; this deployment does not activate real charges or supplier issuance.
+
+The API runs as `alozuri-api@alozuri.iam.gserviceaccount.com` with Firestore access and Firebase Auth read access for token revocation checks. It has no supplier, Stripe or mail secret mappings in this catalogue deployment. The Docker image was built from commit `bf73259` in Artifact Registry repository `alozuri-api`. The API source is still the shared Fastify backend; no second catalogue gateway was introduced.

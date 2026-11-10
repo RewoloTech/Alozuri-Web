@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cartView, itemsSchema, priceCart } from '../src/lib/commerce.js';
+import { cartView, itemsSchema, priceCart, checkSupplierCapacity } from '../src/lib/commerce.js';
 import { demoPlans } from '../../../packages/shared/src/demo.ts';
 import type { StoredPlan } from '../../../packages/shared/src/index.ts';
 import type { Repository } from '../src/lib/repository.js';
@@ -121,4 +121,26 @@ test('available cart items use the current catalogue rather than a cached price'
   });
   assert.equal(result[0].plan.priceCents, 1234);
   assert.equal(result[0].unavailable, undefined);
+});
+
+test('supplier balance must cover every purchased unit before a live payment can start', async () => {
+  const items = [
+    { wholesaleUnits: 1000, quantity: 2 },
+    { wholesaleUnits: 500, quantity: 3 },
+  ];
+  await assert.rejects(
+    checkSupplierCapacity(items, async () => 0),
+    /temporarily unavailable/,
+  );
+  await assert.rejects(
+    checkSupplierCapacity(items, async () => 3499),
+    /temporarily unavailable/,
+  );
+  await checkSupplierCapacity(items, async () => 3500);
+  await assert.rejects(
+    checkSupplierCapacity(items, async () => {
+      throw new Error('private provider detail');
+    }),
+    /Purchases are temporarily unavailable/,
+  );
 });

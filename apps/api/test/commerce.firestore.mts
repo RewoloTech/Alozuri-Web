@@ -14,7 +14,10 @@ const app = initializeApp({ projectId: 'demo-alozuri' }),
   db = getFirestore(app),
   signer = new Stripe('sk_test_fixture');
 let serial = 0;
-function fixture(testMode = false) {
+function fixture(
+  testMode = false,
+  capacity?: (items: { wholesaleUnits: number; quantity: number }[]) => Promise<void>,
+) {
   const plans: StoredPlan[] = demoPlans
     .slice(0, 2)
     .map((p) => ({ ...p, demo: false, active: true, supplierCode: p.id, wholesaleUnits: 1000 }));
@@ -67,6 +70,7 @@ function fixture(testMode = false) {
         emails.push(input);
       },
     },
+    capacity,
   );
   const input = {
     items: [
@@ -288,6 +292,15 @@ test('authenticated carts merge once, isolate owners, retain unavailable items f
   } finally {
     await api.close();
   }
+});
+test('an unfunded supplier blocks checkout before creating a Stripe intent or purchase record', async () => {
+  const f = fixture(false, async () => {
+    throw new Error('Supplier balance unavailable');
+  });
+  const before = (await db.collection('purchases').get()).size;
+  await assert.rejects(f.service.checkout(f.input, null), /Supplier balance unavailable/);
+  assert.equal(f.getCreates(), 0);
+  assert.equal((await db.collection('purchases').get()).size, before);
 });
 test.after(async () => {
   await db.terminate();

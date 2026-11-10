@@ -110,3 +110,16 @@ test('cart merging does not mutate inputs and accepts exactly ten units', () => 
   for (const quantity of [0, -1, 1.5, NaN, Infinity])
     assert.throws(() => mergeCartItems([], [{ planId: 'a', quantity }]));
 });
+
+test('draft tab intent survives URL restoration without discarding a saved itinerary', () => {
+  const tripDraft = readSearch(
+    new URLSearchParams('mode=country&countries=FR&single=FR&trip=FR&intent=trip'),
+  )!;
+  assert.equal(tripDraft.chooseTrip, true);
+  assert.deepEqual(tripDraft.countries, ['FR']);
+  const singleDraft = readSearch(
+    new URLSearchParams('mode=trip&countries=FR,CH,IT&trip=FR,CH,IT&intent=country'),
+  )!;
+  assert.equal(singleDraft.chooseSingle, true);
+  assert.deepEqual(singleDraft.trip, ['FR', 'CH', 'IT']);
+});

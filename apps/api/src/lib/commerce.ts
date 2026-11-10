@@ -3,6 +3,7 @@ import Stripe from 'stripe';
 import { z } from 'zod';
 import type { Firestore } from 'firebase-admin/firestore';
 import { database } from './firebase.js';
+import { SupplierClient } from './supplier.js';
 import { currentCheckoutPlan, type PaymentMode } from './payments.js';
 import type { Principal, Repository } from './repository.js';
 import { planSchema } from './validation.js';
@@ -153,6 +154,8 @@ export class CommerceService {
     private loadPlan: (id: string) => Promise<StoredPlan> = currentCheckoutPlan,
     private db: Firestore = database(),
     private mailer: OrderMailer | null = null,
+    private capacity:
+      ((items: { wholesaleUnits: number; quantity: number }[]) => Promise<void>) | null = null,
   ) {
     const url = new URL(site);
     if (
@@ -202,6 +205,7 @@ export class CommerceService {
       ref = this.db.collection('purchases').doc(id),
       accessToken = this.token(id);
     const { quote, snapshots } = await priceCart(input.items, this.loadPlan);
+    await this.capacity?.(snapshots);
     if (input.expectedTotalCents !== quote.totalCents)
       throw new CommerceError('The price changed. Review the updated total before paying.', 409);
     const proposed = {
@@ -455,7 +459,7 @@ export class CommerceService {
           status: 'paid',
           paidAt: new Date().toISOString(),
           paymentIntentId: intent.id,
-          emailDueAt: Date.now(),
+          ...(p.test ? {} : { emailDueAt: Date.now() }),
         });
       } else if (!p.paidAt)
         t.update(ref, {
@@ -587,6 +591,23 @@ export class CommerceService {
     return { sent };
   }
 }
+export async function checkSupplierCapacity(
+  items: { wholesaleUnits: number; quantity: number }[],
+  getBalance = () => new SupplierClient().balance(),
+) {
+  let balance: number;
+  try {
+    balance = await getBalance();
+  } catch {
+    throw new CommerceError('Purchases are temporarily unavailable. Please try again later.', 503);
+  }
+  const required = items.reduce((sum, line) => sum + line.wholesaleUnits * line.quantity, 0);
+  if (!Number.isSafeInteger(balance) || balance < required)
+    throw new CommerceError(
+      'This plan is temporarily unavailable for purchase. Please try again later.',
+      503,
+    );
+}
 export function configuredCommerce() {
   const mode = process.env.PAYMENTS_MODE,
     key = process.env.STRIPE_SECRET_KEY,
@@ -625,6 +646,7 @@ export function configuredCommerce() {
     process.env.RESEND_API_KEY && process.env.ORDER_EMAIL_FROM
       ? new ResendOrderMailer(process.env.RESEND_API_KEY, process.env.ORDER_EMAIL_FROM)
       : null,
+    mode === 'live' ? checkSupplierCapacity : null,
   );
 }
 export async function cartView(

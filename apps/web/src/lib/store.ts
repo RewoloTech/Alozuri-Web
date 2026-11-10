@@ -21,6 +21,7 @@ const itinerary = createSlice({
       return action.payload;
     },
     switchSearch(state, action: PayloadAction<'country' | 'trip'>) {
+      state.initialized = true;
       state.chooseTrip = false;
       if (action.payload === 'country' && state.mode === 'trip' && state.countries.length > 1) {
         state.chooseSingle = true;

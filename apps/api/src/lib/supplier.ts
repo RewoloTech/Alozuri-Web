@@ -1,6 +1,10 @@
 import { createHmac, randomUUID, createHash } from 'node:crypto';
 import { z } from 'zod';
-import { priceRetail, type StoredPlan } from '../../../../packages/shared/src/index.ts';
+import {
+  priceRetail,
+  dataSizeLabel,
+  type StoredPlan,
+} from '../../../../packages/shared/src/index.ts';
 import { storedPlanSchema } from './validation.js';
 const sourcePackage = z.object({
   packageCode: z.string().min(1).max(200),
@@ -70,9 +74,9 @@ export function adaptPackage(input: unknown, syncedAt: string): StoredPlan | nul
     networks: networks.slice(0, 250),
     fairUse:
       p.dataType === 2
-        ? `${p.volume / 1073741824} GB high-speed per day, then reduced speed${p.fupPolicy ? ' (' + p.fupPolicy + ')' : ' according to the supplier fair-use policy'}.`
+        ? `${dataSizeLabel(p.volume / 1073741824)} high-speed per day, then reduced speed${p.fupPolicy ? ' (' + p.fupPolicy + ')' : ' according to the supplier fair-use policy'}.`
         : p.dataType === 3
-          ? `${p.volume / 1073741824} GB per day. Service stops at the daily limit. ${p.fupPolicy || ''}`
+          ? `${dataSizeLabel(p.volume / 1073741824)} per day. Service stops at the daily limit. ${p.fupPolicy || ''}`
           : p.fupPolicy ||
             (p.dataType === 4 || /\bunlimited\b/i.test(p.name)
               ? 'Supplier describes this plan as unlimited. Check plan name and supplier conditions for speed restrictions.'
@@ -148,6 +152,12 @@ export class SupplierClient {
       );
     }
     return result.obj;
+  }
+  async balance(): Promise<number> {
+    const result = await this.request('balance/query', {});
+    return z
+      .object({ balance: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER) })
+      .parse(result).balance;
   }
   async order(
     transactionId: string,

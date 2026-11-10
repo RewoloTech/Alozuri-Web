@@ -11,7 +11,7 @@ test('real Stripe Payment Element declines a test card, retries the same intent 
   page.on('request', (r) => {
     if (r.url().endsWith('/v2/checkout') && r.method() === 'POST') requests++;
   });
-  await page.goto('/plans/esim-stripe-integration');
+  await page.goto('/plans/' + (process.env.STRIPE_PLAN_ID || 'esim-stripe-integration'));
   await page.getByRole('button', { name: 'Add to cart', exact: true }).click();
   await expect(page.getByRole('link', { name: 'Shopping cart, 1 item' })).toBeVisible();
   await page.goto('/checkout');

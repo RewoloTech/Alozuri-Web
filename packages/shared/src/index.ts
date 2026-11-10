@@ -122,13 +122,17 @@ export function allowanceFilter(value: DataAllowance): { minGb: number; dataType
     ? { minGb: 0, dataType: value }
     : { minGb: Number(value), dataType: 'fixed' };
 }
+export function dataSizeLabel(dataGb: number): string {
+  return dataGb < 1
+    ? `${Number((dataGb * 1024).toFixed(2))} MB`
+    : `${Number(dataGb.toFixed(2))} GB`;
+}
 export function dataLabel(plan: Plan): string {
+  const size = dataSizeLabel(plan.dataGb);
   if (plan.dataType === 'unlimited') return 'Unlimited';
   if (plan.dataType === 'daily')
-    return plan.dailyPolicy === 'reduced'
-      ? `Unlimited · ${plan.dataGb} GB/day high-speed`
-      : `${plan.dataGb} GB/day`;
-  return `${plan.dataGb} GB`;
+    return plan.dailyPolicy === 'reduced' ? `Unlimited · ${size}/day high-speed` : `${size}/day`;
+  return size;
 }
 export function comparePlanValue(a: Plan, b: Plan): number {
   const cost = (p: Plan) =>

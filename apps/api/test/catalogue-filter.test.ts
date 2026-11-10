@@ -60,6 +60,7 @@ test('API applies 50 GB/unlimited filters and rejects unknown filter types', asy
       at,
     )!,
     adaptPackage({ ...source, packageCode: 'partial', dataType: 2, location: 'FR,IT' }, at)!,
+    adaptPackage({ ...source, packageCode: 'local', location: 'FR' }, at)!,
   ];
   const app = await createApp({
     demo: false,
@@ -69,6 +70,10 @@ test('API applies 50 GB/unlimited filters and rejects unknown filter types', asy
     repository: { plans: async () => plans, orders: async () => [], order: async () => null },
   });
   try {
+    const local = await app.inject('/v1/packages/match?countries=FR&coverage=local');
+    assert.equal(local.statusCode, 200);
+    assert.equal(local.json().plans.length, 1);
+    assert.ok(local.json().plans.every((p: { countries: string[] }) => p.countries.length === 1));
     const fixed = await app.inject('/v1/packages/match?countries=FR,CH,IT&minGb=50&dataType=fixed');
     assert.equal(fixed.statusCode, 200);
     assert.equal(fixed.json().plans.length, 1);
