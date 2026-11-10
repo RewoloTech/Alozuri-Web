@@ -1,0 +1,98 @@
+openapi: 3.0.3
+info:
+  title: VoyaSpan eSIM Access webhook
+  version: 1.0.0
+  description: Receives notifications into a validated private inbox. Does not issue eSIMs or alter customer orders.
+paths:
+  /v1/webhooks/esim-access:
+    post:
+      operationId: receiveEsimAccessNotification
+      security:
+        - webhookToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Notification'
+      responses:
+        '200':
+          description: Health check passed, or notification persisted/already received.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum: [true]
+        '400':
+          description: Invalid event envelope or content.
+        '401':
+          description: Missing or incorrect URL token.
+        '409':
+          description: Notify ID was already used with a different payload.
+        '413':
+          description: Body exceeds 32 KB.
+        '429':
+          description: Rate limit exceeded.
+        '503':
+          description: Receiver unconfigured or event storage unavailable. Receipt is not acknowledged.
+components:
+  securitySchemes:
+    webhookToken:
+      type: apiKey
+      in: query
+      name: token
+  schemas:
+    Notification:
+      type: object
+      required: [notifyType, notifyId, eventGenerateTime, content]
+      properties:
+        notifyType:
+          type: string
+          enum: [CHECK_HEALTH, ORDER_STATUS, ESIM_STATUS, SMDP_EVENT, DATA_USAGE, VALIDITY_USAGE]
+        notifyId:
+          type: string
+          pattern: '^[a-zA-Z0-9_-]{1,100}$'
+        eventGenerateTime:
+          type: string
+          format: date-time
+        content:
+          type: object
+          required: [orderNo]
+          description: Known event fields are validated; unknown fields are discarded. CHECK_HEALTH and ORDER_STATUS require orderStatus. ESIM_STATUS requires esimStatus. SMDP_EVENT requires iccid, esimStatus, smdpStatus. DATA_USAGE requires totalVolume, orderUsage, remain. VALIDITY_USAGE requires remain, totalDuration, durationUnit, expiredTime.
+          properties:
+            orderNo:
+              type: string
+              minLength: 1
+              maxLength: 200
+            transactionId:
+              type: string
+            orderStatus:
+              type: string
+            esimTranNo:
+              type: string
+            iccid:
+              type: string
+            esimStatus:
+              type: string
+            smdpStatus:
+              type: string
+            totalVolume:
+              type: number
+              minimum: 0
+            orderUsage:
+              type: number
+              minimum: 0
+            remain:
+              type: number
+              minimum: 0
+            totalDuration:
+              type: number
+              minimum: 0
+            durationUnit:
+              type: string
+            expiredTime:
+              type: string
+              format: date-time

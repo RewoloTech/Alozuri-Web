@@ -6,6 +6,7 @@ import { countries, matchPlans } from '../../../packages/shared/src/index.ts';
 import { createRepository, type Repository, type Principal } from './lib/repository.js';
 import { verifyToken } from './lib/firebase.js';
 import { documentId } from './lib/validation.js';
+import { registerEsimWebhook, type EsimWebhookInbox } from './lib/esim-webhook.js';
 const code = z
   .string()
   .regex(/^[A-Z]{2}$/)
@@ -28,6 +29,7 @@ export async function createApp(
     demo?: boolean;
     logger?: boolean;
     origins?: string[];
+    esimWebhook?: { token?: string; inbox?: EsimWebhookInbox };
   } = {},
 ) {
   const demo = options.demo ?? process.env.DEMO_MODE !== 'false';
@@ -36,7 +38,14 @@ export async function createApp(
   const app = Fastify({
     bodyLimit: 64 * 1024,
     logger: options.logger
-      ? { redact: ['req.headers.authorization', 'req.headers.cookie', 'res.headers.set-cookie'] }
+      ? {
+          redact: [
+            'req.url',
+            'req.headers.authorization',
+            'req.headers.cookie',
+            'res.headers.set-cookie',
+          ],
+        }
       : false,
   });
   await app.register(cors, {
@@ -72,6 +81,7 @@ export async function createApp(
       return null;
     }
   }
+  registerEsimWebhook(app, options.esimWebhook);
   app.get('/health', async () => ({
     status: 'ok',
     mode: demo ? 'preview' : 'catalogue',
