@@ -16,7 +16,7 @@
     "build": "npm run build -w @voyaspan/web && npm run build -w @voyaspan/api",
     "build:web": "npm run build -w @voyaspan/web",
     "test:firestore": "firebase emulators:exec --only firestore --project demo-alozuri --config infra/production-emulator.json \"node --import tsx --test --test-concurrency=1 apps/api/test/production.firestore.mts apps/api/test/commerce.firestore.mts\"",
-    "test": "node --experimental-strip-types --test packages/shared/test/*.test.ts && npm test -w @voyaspan/api",
+    "test": "npm run test:unit",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "eslint .",
     "format": "prettier --write .",
@@ -24,14 +24,22 @@
     "deploy:hosting": "firebase deploy --only hosting:alozuri",
     "build:apphosting": "turbo run build --filter=@voyaspan/web",
     "test:e2e": "playwright test",
-    "test:stripe": "firebase emulators:exec --only firestore --project demo-alozuri --config infra/production-emulator.json \"node --import tsx scripts/run-stripe-e2e.mts\""
+    "test:stripe": "firebase emulators:exec --only firestore --project demo-alozuri --config infra/production-emulator.json \"node --import tsx scripts/run-stripe-e2e.mts\"",
+    "test:unit": "node --experimental-strip-types --test packages/shared/test/*.test.ts && npm test -w @voyaspan/api",
+    "cypress:server": "node scripts/run-cypress-server.mjs",
+    "cypress:run": "node scripts/run-cypress.mjs run --e2e --browser electron",
+    "test:cypress": "start-server-and-test cypress:server http://localhost:3100 cypress:run",
+    "test:cypress:open": "start-server-and-test cypress:server http://localhost:3100 \"node scripts/run-cypress.mjs open --e2e\"",
+    "typecheck:tests": "tsc -p tests/cypress/tsconfig.json"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.0",
     "@types/node": "^22.0.0",
+    "cypress": "^16.3.0",
     "eslint": "^9.39.4",
     "eslint-config-next": "16.4.6",
     "prettier": "^3.5.0",
+    "start-server-and-test": "^3.0.13",
     "turbo": "2.11.10",
     "typescript": "5.9.3"
   },

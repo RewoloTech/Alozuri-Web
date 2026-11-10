@@ -12,5 +12,24 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
-      - run: npm test
+      - run: npm run typecheck:tests
+      - run: npm run test:unit
       - run: npm run build
+
+  cypress:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:cypress
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: cypress-failures
+          path: test-results/cypress
+          if-no-files-found: ignore

@@ -42,6 +42,7 @@ export function searchState(
   trip: string[] = [],
   mode: 'country' | 'trip' = trip.length > 1 ? 'trip' : 'country',
 ): SearchState {
+  trip = [...new Set(trip)];
   if (mode === 'trip' && trip.length < 2) {
     mode = 'country';
     single = trip[0] ?? single;

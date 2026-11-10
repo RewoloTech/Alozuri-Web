@@ -92,11 +92,13 @@ Configure `CORS_ORIGINS` as a comma-separated exact origin list. Request rate li
 ```sh
 npm run lint
 npm run typecheck
-npm test
+npm run test:unit
+npm run typecheck:tests
+npm run test:cypress
 npm run build
 ```
 
-Tests cover complete-country containment, pricing units/margin, safe public serialization, state transition rules, API parameter validation, owner-only order access, denied unauthenticated requests, admin claims, CORS and disabled checkout. They do not prove Stripe/supplier fulfilment; neither integration is connected.
+See [testing instructions](docs/testing.md) for unit/API tests, Cypress, Playwright, Firestore emulator checks and the real Stripe sandbox test. Cypress runs locally and in CI with mocked providers; it does not charge real customers or issue eSIMs. Live integration limits and configuration are documented in [production checkout](docs/production-checkout.md).
 
 Dependency overrides pin patched transitive gRPC, glob and minimatch versions, plus Node 22 compatible Firebase app packages. Recheck these overrides against upstream dependencies during upgrades.
 
