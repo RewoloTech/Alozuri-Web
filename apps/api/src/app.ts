@@ -12,6 +12,11 @@ import {
   registerStripeWebhook,
   type PaymentService,
 } from './lib/payments.js';
+import {
+  configuredFulfillment,
+  verifyFulfillmentIdentity,
+  type FulfillmentService,
+} from './lib/fulfillment.js';
 import { documentId } from './lib/validation.js';
 import { registerEsimWebhook, type EsimWebhookInbox } from './lib/esim-webhook.js';
 const code = z
@@ -37,6 +42,7 @@ export async function createApp(
     logger?: boolean;
     origins?: string[];
     payments?: PaymentService | null;
+    fulfillment?: FulfillmentService | null;
     esimWebhook?: { token?: string; inbox?: EsimWebhookInbox };
   } = {},
 ) {
@@ -44,6 +50,8 @@ export async function createApp(
   const repository = options.repository ?? createRepository(demo);
   const verify = options.verify ?? verifyToken;
   const payments = options.payments === undefined ? configuredPayments() : options.payments;
+  const fulfillment =
+    options.fulfillment === undefined ? configuredFulfillment() : options.fulfillment;
   const app = Fastify({
     bodyLimit: 64 * 1024,
     logger: options.logger
@@ -99,9 +107,9 @@ export async function createApp(
   registerEsimWebhook(app, options.esimWebhook);
   await registerStripeWebhook(app, payments);
   app.get('/v1/config', async () => ({
-    paymentMode: payments ? 'test' : 'disabled',
+    paymentMode: payments?.mode ?? 'disabled',
     catalogueMode: demo ? 'preview' : 'live',
-    fulfillmentMode: 'test_no_issuance',
+    fulfillmentMode: payments?.mode === 'live' ? 'esim_access' : 'test_no_issuance',
   }));
   app.post('/internal/catalogue/sync', async (request, reply) => {
     if (!(await verifySyncIdentity(request.headers.authorization)))
@@ -112,6 +120,33 @@ export async function createApp(
     const result = await syncCatalogue();
     repository.invalidate?.();
     return result;
+  });
+  app.post('/internal/fulfillment/run', async (request, reply) => {
+    if (!(await verifyFulfillmentIdentity(request.headers.authorization)))
+      return reply.code(401).send({ error: 'Worker authentication required.' });
+    z.object({})
+      .strict()
+      .parse(request.body ?? {});
+    z.object({}).strict().parse(request.query);
+    if (!fulfillment) return reply.code(503).send({ error: 'Delivery is not configured.' });
+    const result = await fulfillment.run();
+    if (result.failed) {
+      app.log.error({ failed: result.failed }, 'Delivery reconciliation failed.');
+      return reply.code(503).send(result);
+    }
+    return result;
+  });
+  app.get<{ Params: { id: string } }>('/v1/orders/:id/activation', async (request, reply) => {
+    const user = await identity(request.headers.authorization, reply);
+    if (!user) return;
+    const id = idSchema.parse(request.params.id);
+    z.object({}).strict().parse(request.query);
+    if (!fulfillment)
+      return reply.code(503).send({ error: 'Installation details are unavailable.' });
+    const activation = await fulfillment.activation(user.uid, id);
+    return activation
+      ? { activation }
+      : reply.code(404).send({ error: 'Installation details are not available for this order.' });
   });
   app.get('/v1/countries', async () => {
     const codes = [...new Set((await repository.plans()).flatMap((p) => p.countries))];
@@ -131,7 +166,7 @@ export async function createApp(
     status: 'ok',
     mode: demo ? 'preview' : 'catalogue',
     paymentsEnabled: Boolean(payments),
-    paymentMode: payments ? 'test' : 'disabled',
+    paymentMode: payments?.mode ?? 'disabled',
   }));
   app.get('/v1/packages', async (request) => {
     const query = z.object({ country: code.optional() }).strict().parse(request.query);
@@ -178,6 +213,7 @@ export async function createApp(
           planId: idSchema,
           requestId: z.string().uuid().optional(),
           compatible: z.literal(true).optional(),
+          ui: z.enum(['hosted', 'embedded']).default('hosted'),
         })
         .strict()
         .parse(request.body);
@@ -186,11 +222,41 @@ export async function createApp(
           return reply
             .code(400)
             .send({ error: 'Confirm device compatibility and provide a checkout request ID.' });
-        return payments.checkout(user, input.planId, input.requestId);
+        return payments.checkout(user, input.planId, input.requestId, input.ui);
       }
       return reply
         .code(503)
         .send({ error: 'Purchases are not available yet. No payment has been taken.' });
+    },
+  );
+  app.post<{ Params: { id: string } }>(
+    '/v1/orders/:id/payment-status',
+    { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } },
+    async (request, reply) => {
+      const user = await identity(request.headers.authorization, reply);
+      if (!user) return;
+      const id = idSchema.parse(request.params.id);
+      z.object({}).strict().parse(request.query);
+      z.object({})
+        .strict()
+        .parse(request.body ?? {});
+      if (!payments) return reply.code(503).send({ error: 'Payments are not configured.' });
+      return payments.status(user, id);
+    },
+  );
+  app.post<{ Params: { id: string } }>(
+    '/v1/orders/:id/resume-checkout',
+    { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } },
+    async (request, reply) => {
+      const user = await identity(request.headers.authorization, reply);
+      if (!user) return;
+      const id = idSchema.parse(request.params.id);
+      z.object({}).strict().parse(request.query);
+      z.object({})
+        .strict()
+        .parse(request.body ?? {});
+      if (!payments) return reply.code(503).send({ error: 'Payments are not configured.' });
+      return payments.resume(user, id);
     },
   );
   app.get('/v1/admin/status', async (request, reply) => {
@@ -200,7 +266,7 @@ export async function createApp(
     return {
       mode: demo ? 'preview' : 'catalogue',
       paymentsEnabled: Boolean(payments),
-      paymentMode: payments ? 'test' : 'disabled',
+      paymentMode: payments?.mode ?? 'disabled',
       supplierConnected: !demo,
       catalogueCount: (await repository.plans()).length,
     };

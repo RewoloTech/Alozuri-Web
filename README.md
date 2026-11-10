@@ -10,9 +10,13 @@ Configured Hosting target: https://alozuri.web.app (Firebase project and site ID
 
 **This is a functional preview, not a live shop.** All included plans and prices are clearly labelled samples. Payments, supplier orders and activation credentials are not created. Firebase accounts are real when configured. Do not enable sales until the payment/fulfilment milestones in CODEX_IMPLEMENTATION_BRIEF.md are completed and reviewed.
 
+## Production checkout
+
+The implementation now supports live Stripe Embedded Checkout, durable eSIM Access delivery, private QR/manual installation details and refunds after definite supplier rejection. The committed environment remains in preview mode. See [production setup, deployment requirements and verification limits](docs/production-checkout.md). A production deployment and real purchase have not been verified in this environment.
+
 ## Live catalogue and Stripe test checkout
 
-The current implementation supports daily live fixed-plan syncing, single-destination recommendations, email verification before account access, Google sign-in, Firebase password reset, and Stripe hosted **test checkout** with eligible Apple Pay and Google Pay wallets. Test payments never order real eSIMs. See [commerce testing and setup](docs/commerce-testing.md). Earlier draft/readiness sections below describe the earlier release and are superseded by this implementation for those features. Real supplier issuance and live sales remain disabled.
+The current implementation supports daily live fixed-plan syncing, single-destination recommendations, email verification before account access, Google sign-in, Firebase password reset, and Stripe embedded **test checkout** with eligible Apple Pay and Google Pay wallets. Test payments never order real eSIMs. See [commerce testing and setup](docs/commerce-testing.md). Earlier draft/readiness sections below describe the earlier release and are superseded by this implementation for those features. Real supplier issuance and live sales remain disabled.
 
 ## Run locally
 

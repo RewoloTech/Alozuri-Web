@@ -62,11 +62,118 @@ export function adaptPackage(input: unknown, syncedAt: string): StoredPlan | nul
   if (!storedPlanSchema.safeParse(publicFields).success) return null;
   return { ...publicFields, supplierCode: p.packageCode, wholesaleUnits: p.price };
 }
+export class SupplierError extends Error {
+  constructor(
+    readonly code: string,
+    readonly rejected: boolean = false,
+  ) {
+    super('Supplier request failed (' + code + ').');
+  }
+}
+export const activationSchema = z.object({
+  ac: z
+    .string()
+    .min(10)
+    .max(2000)
+    .regex(/^LPA:1\$[a-zA-Z0-9.-]+\$[^\s$]+(?:\$[^\s$]*)?$/),
+  iccid: z.string().regex(/^[0-9]{15,25}$/),
+  esimTranNo: z.string().min(1).max(200),
+});
+export type Activation = z.infer<typeof activationSchema>;
 export class SupplierClient {
   constructor(
     private access = process.env.ESIM_ACCESS_CODE || '',
     private secret = process.env.ESIM_SECRET_KEY || '',
   ) {}
+  private async request(path: string, input: object): Promise<unknown> {
+    if (!this.access || !this.secret) throw new Error('Supplier credentials unavailable.');
+    const body = JSON.stringify(input),
+      timestamp = String(Date.now()),
+      requestId = randomUUID();
+    const signature = createHmac('sha256', this.secret)
+      .update(timestamp + requestId + this.access + body)
+      .digest('hex');
+    const response = await fetch('https://api.esimaccess.com/api/v1/open/' + path, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'RT-AccessCode': this.access,
+        'RT-RequestID': requestId,
+        'RT-Timestamp': timestamp,
+        'RT-Signature': signature,
+      },
+      body,
+      signal: AbortSignal.timeout(20000),
+    });
+    if (!response.ok) throw new SupplierError('http_' + response.status);
+    const result = z
+      .object({
+        success: z.boolean(),
+        errorCode: z.union([z.string(), z.number()]).nullish(),
+        obj: z.unknown(),
+      })
+      .parse(await response.json());
+    if (!result.success) {
+      const code = String(result.errorCode ?? 'unknown');
+      throw new SupplierError(
+        code,
+        path === 'esim/order' &&
+          ['200005', '200006', '200007', '200011', '310241', '310243', '310251'].includes(code),
+      );
+    }
+    return result.obj;
+  }
+  async order(transactionId: string, packageCode: string, wholesaleUnits: number): Promise<string> {
+    z.string().min(1).max(50).parse(transactionId);
+    z.string().min(1).max(200).parse(packageCode);
+    z.number().int().positive().max(Number.MAX_SAFE_INTEGER).parse(wholesaleUnits);
+    const result = await this.request('esim/order', {
+      transactionId,
+      amount: wholesaleUnits,
+      packageInfoList: [{ packageCode, count: 1, price: wholesaleUnits }],
+    });
+    return z.object({ orderNo: z.string().min(1).max(200) }).parse(result).orderNo;
+  }
+  async profile(
+    orderNo: string,
+    transactionId: string,
+    packageCode: string,
+  ): Promise<Activation | null> {
+    let result: unknown;
+    try {
+      result = await this.request('esim/query', { orderNo, pager: { pageNum: 1, pageSize: 5 } });
+    } catch (e) {
+      if (e instanceof SupplierError && e.code === '200010') return null;
+      throw e;
+    }
+    const profiles = z
+      .object({
+        esimList: z
+          .array(
+            z.object({
+              orderNo: z.string(),
+              transactionId: z.string().optional(),
+              ac: z.string().nullish(),
+              iccid: z.string().nullish(),
+              esimTranNo: z.string(),
+              smdpStatus: z.string(),
+              packageList: z.array(z.object({ packageCode: z.string() })),
+            }),
+          )
+          .max(1),
+      })
+      .parse(result).esimList;
+    if (!profiles.length || !profiles[0].ac) return null;
+    const p = profiles[0];
+    if (
+      p.orderNo !== orderNo ||
+      (p.transactionId && p.transactionId !== transactionId) ||
+      !p.packageList.some((item) => item.packageCode === packageCode) ||
+      p.smdpStatus !== 'RELEASED'
+    )
+      throw new Error('Supplier profile does not match the order.');
+    return activationSchema.parse(p);
+  }
   async packages(
     filters: { packageCode?: string; locationCode?: string } = {},
   ): Promise<unknown[]> {

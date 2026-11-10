@@ -82,8 +82,8 @@ function AccountAdmin() {
             </div>
           </dl>
           <div className="notice">
-            Order operations, finance exports and supplier fulfilment are not connected in this
-            draft.
+            Live delivery runs through the fulfilment worker. Monitor pending deliveries, refunds
+            and disputes in the API and Stripe dashboard.
           </div>
         </div>
       ) : (

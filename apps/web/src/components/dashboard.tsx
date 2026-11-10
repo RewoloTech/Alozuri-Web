@@ -79,7 +79,7 @@ function AccountDashboard() {
               ? `Hi, ${user.displayName?.split(' ')[0] || 'traveller'}.`
               : 'Every adventure, in one place.'}
           </h1>
-          <p>Your plans and order history. Stripe test payments do not issue real eSIMs.</p>
+          <p>Your plans, payment status and eSIM installation details.</p>
         </div>
         {user && (
           <button

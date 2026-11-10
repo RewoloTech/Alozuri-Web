@@ -15,3 +15,7 @@ coverage/
 # Next.js static Hosting export and CLI logs
 apps/web/out/
 firebase-debug*.log
+
+# Local Firestore emulator logs
+firestore-debug*.log
+ui-debug*.log

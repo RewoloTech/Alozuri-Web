@@ -33,3 +33,7 @@ env:
     value: '1:259378235356:web:c0ed788084546d350ff119'
   - variable: NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
     value: 'G-ZVWR8NWVWF'
+
+  # Set the matching Stripe publishable key in the backend build environment.
+  # NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_... (test) or pk_live_... (live)
+  # Live deployment values are documented in docs/production-checkout.md.

@@ -8,6 +8,7 @@ import { demoPlans } from '@voyaspan/shared/demo';
 import { api, demoMode } from '@/lib/api';
 import type { RootState } from '@/lib/store';
 import { useAuth } from './auth-provider';
+import { StripeCheckout, stripeCheckoutConfigured, stripeCheckoutMode } from './stripe-checkout';
 export function PlanDetails({ id, review = false }: { id: string; review?: boolean }) {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
@@ -16,12 +17,17 @@ export function PlanDetails({ id, review = false }: { id: string; review?: boole
   );
   const [loading, setLoading] = useState(!demoMode);
   const [error, setError] = useState('');
-  const [paymentMode, setPaymentMode] = useState<'test' | 'disabled'>('disabled');
+  const [paymentMode, setPaymentMode] = useState<'test' | 'live' | 'disabled'>('disabled');
   const [paying, setPaying] = useState(false);
   const requestId = useRef('');
+  const [session, setSession] = useState<{
+    clientSecret: string;
+    orderId: string;
+    uid: string;
+  } | null>(null);
   useEffect(() => {
     if (!demoMode)
-      void api<{ paymentMode: 'test' | 'disabled' }>('/v1/config')
+      void api<{ paymentMode: 'test' | 'live' | 'disabled' }>('/v1/config')
         .then((c) => setPaymentMode(c.paymentMode))
         .catch(() => {});
   }, []);
@@ -38,18 +44,24 @@ export function PlanDetails({ id, review = false }: { id: string; review?: boole
     setError('');
     try {
       requestId.current ||= crypto.randomUUID();
-      const result = await api<{ url: string }>(
+      if (!stripeCheckoutConfigured || paymentMode !== stripeCheckoutMode)
+        throw new Error('Checkout is not configured for this payment environment yet.');
+      const result = await api<{ clientSecret: string; orderId: string }>(
         '/v1/checkout',
         {
           method: 'POST',
-          body: JSON.stringify({ planId: id, requestId: requestId.current, compatible: true }),
+          body: JSON.stringify({
+            planId: id,
+            requestId: requestId.current,
+            compatible: true,
+            ui: 'embedded',
+          }),
         },
         true,
       );
-      const target = new URL(result.url);
-      if (target.protocol !== 'https:' || target.hostname !== 'checkout.stripe.com')
-        throw new Error('Invalid checkout URL.');
-      window.location.assign(result.url);
+      if (!result.clientSecret || !result.orderId) throw new Error('Could not initialize payment.');
+      setSession({ ...result, uid: user.uid });
+      setPaying(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not open checkout.');
       if (e instanceof Error && /closed|changed|no longer|unavailable/i.test(e.message)) {
@@ -98,6 +110,32 @@ export function PlanDetails({ id, review = false }: { id: string; review?: boole
         </Link>
       </section>
     );
+  if (session && user?.uid === session.uid && user.emailVerified) {
+    return (
+      <section className="container section">
+        <button className="text-link" onClick={() => setSession(null)}>
+          ← Back to plan
+        </button>
+        <div className="page-intro">
+          <span className="eyebrow">
+            {paymentMode === 'test' ? 'SECURE TEST CHECKOUT' : 'SECURE CHECKOUT'}
+          </span>
+          <h1>Complete your payment</h1>
+          <p>
+            {plan.name} · {money(plan.priceCents)} USD
+          </p>
+        </div>
+        <div className="notice">
+          {paymentMode === 'test'
+            ? 'Test mode: no real money will be charged and no eSIM will be issued. '
+            : 'Your eSIM will appear in your account after payment and provisioning. '}
+          Apple Pay and Google Pay appear when supported by your device and wallet.
+        </div>
+        <StripeCheckout clientSecret={session.clientSecret} orderId={session.orderId} />
+        <p className="fine-print">Payment details are securely handled by Stripe.</p>
+      </section>
+    );
+  }
   const covered = itinerary.length > 0 && itinerary.every((c) => plan.countries.includes(c));
   return (
     <section className="container section">
@@ -224,7 +262,10 @@ export function PlanDetails({ id, review = false }: { id: string; review?: boole
               )}
               <button
                 disabled={
-                  paymentMode !== 'test' ||
+                  paymentMode === 'disabled' ||
+                  paymentMode !== stripeCheckoutMode ||
+                  !stripeCheckoutConfigured ||
+                  Boolean(plan.demo) ||
                   !compatible ||
                   paying ||
                   authLoading ||
@@ -234,9 +275,12 @@ export function PlanDetails({ id, review = false }: { id: string; review?: boole
                 className="button primary full-width"
               >
                 {paying
-                  ? 'Opening Stripe…'
-                  : paymentMode === 'test'
-                    ? 'Continue to Stripe test checkout'
+                  ? 'Preparing payment…'
+                  : paymentMode !== 'disabled' &&
+                      paymentMode === stripeCheckoutMode &&
+                      stripeCheckoutConfigured &&
+                      !plan.demo
+                    ? 'Continue to payment'
                     : 'Checkout unavailable'}
               </button>
               {error && (
