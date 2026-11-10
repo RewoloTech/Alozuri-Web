@@ -126,6 +126,40 @@ test('a crashed worker loses its lease and cannot overwrite a newer worker resul
   await delivery.finish(second, { status: 'ready' }, activation);
   assert.deepEqual(await delivery.activation('alice', order.id), activation);
 });
+test('pending refunds stay pending and late paid events cannot restart delivery', async () => {
+  const store = firestorePaymentStore('live');
+  const order = await store.reserve('alice', crypto.randomUUID(), plan);
+  const session = {
+    id: 'cs_live_refund',
+    mode: 'payment',
+    livemode: true,
+    payment_status: 'paid',
+    payment_intent: 'pi_refund',
+    amount_total: order.amountCents,
+    currency: 'usd',
+    client_reference_id: order.id,
+    metadata: { voyaspanOrderId: order.id, voyaspanUid: 'alice' },
+  } as Stripe.Checkout.Session;
+  await store.apply('evt_refund_order_paid', session, 'paid');
+  const charge = {
+    id: 'ch_refund',
+    livemode: true,
+    amount: order.amountCents,
+    currency: 'usd',
+    payment_intent: 'pi_refund',
+    refunded: true,
+    amount_refunded: order.amountCents,
+    disputed: false,
+  } as Stripe.Charge;
+  await store.adjust('evt_refund_pending', charge, false, true);
+  assert.equal((await store.find('alice', order.id))?.status, 'refund_pending');
+  assert.equal((await db.collection('fulfillmentJobs').doc(order.id).get()).exists, false);
+  await store.adjust('evt_refund_succeeded', charge, false, false);
+  assert.equal((await store.find('alice', order.id))?.status, 'refunded');
+  await store.apply('evt_refund_paid_replay', session, 'paid');
+  assert.equal((await store.find('alice', order.id))?.status, 'refunded');
+  assert.equal((await db.collection('fulfillmentJobs').doc(order.id).get()).exists, false);
+});
 test.after(async () => {
   await db.terminate();
   await deleteApp(app);

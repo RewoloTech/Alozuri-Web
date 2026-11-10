@@ -68,6 +68,8 @@ function fixture(mode: 'test' | 'live' = 'test') {
   let order: PaymentOrder | undefined;
   let creates = 0;
   const processed = new Set<string>();
+  const adjustments: Array<{ failed: boolean; pending: boolean | undefined }> = [];
+  const refund = { status: 'pending' };
   const session = {
     id: 'cs_test_1',
     livemode: mode === 'live',
@@ -83,7 +85,9 @@ function fixture(mode: 'test' | 'live' = 'test') {
     metadata: { voyaspanOrderId: 'order_' + 'a'.repeat(48), voyaspanUid: 'alice' },
   } as unknown as Stripe.Checkout.Session;
   const store: PaymentStore = {
-    async adjust() {},
+    async adjust(_id, _charge, failed, pending) {
+      adjustments.push({ failed, pending });
+    },
     async find(uid, id) {
       return order?.uid === uid && order.id === id ? order : null;
     },
@@ -138,6 +142,15 @@ function fixture(mode: 'test' | 'live' = 'test') {
       },
     },
     webhooks: real.webhooks,
+    charges: {
+      retrieve: async () => ({
+        id: 'ch_fixture',
+        livemode: mode === 'live',
+        amount_refunded: plan.priceCents,
+        refunded: true,
+      }),
+    },
+    refunds: { retrieve: async () => refund, list: async () => ({ data: [refund] }) },
   } as unknown as Stripe;
   const service = new PaymentService(
     stripe,
@@ -147,7 +160,15 @@ function fixture(mode: 'test' | 'live' = 'test') {
     'https://example.com',
     mode,
   );
-  return { service, session, plan, getOrder: () => order, getCreates: () => creates };
+  return {
+    service,
+    session,
+    plan,
+    refund,
+    adjustments,
+    getOrder: () => order,
+    getCreates: () => creates,
+  };
 }
 test('test checkout uses server prices and a repeat request reuses the existing session', async () => {
   const f = fixture(),
@@ -418,4 +439,30 @@ test('live checkout reports live mode, accepts live payment confirmation and rej
   } finally {
     await app.close();
   }
+});
+
+test('refund webhooks reconcile current Stripe status rather than trusting stale event status', async () => {
+  const f = fixture('live'),
+    signer = new Stripe('sk_test_fixture');
+  async function send(type: string, status: string) {
+    const payload = JSON.stringify({
+      id: 'evt_refund_fixture_' + status,
+      object: 'event',
+      livemode: true,
+      type,
+      data: { object: { id: 're_fixture', charge: 'ch_fixture', status } },
+    });
+    await f.service.webhook(
+      Buffer.from(payload),
+      signer.webhooks.generateTestHeaderString({ payload, secret: 'whsec_test' }),
+    );
+  }
+  await send('refund.updated', 'pending');
+  assert.deepEqual(f.adjustments[0], { failed: false, pending: true });
+  f.refund.status = 'succeeded';
+  await send('refund.failed', 'failed');
+  assert.deepEqual(f.adjustments[1], { failed: false, pending: false });
+  f.refund.status = 'failed';
+  await send('refund.updated', 'pending');
+  assert.deepEqual(f.adjustments[2], { failed: true, pending: false });
 });
