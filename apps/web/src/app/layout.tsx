@@ -12,9 +12,11 @@ export const metadata: Metadata = {
   robots: { index: process.env.VOYASPAN_STATIC_EXPORT !== 'true', follow: true },
 };
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  // Extensions such as ColorZilla can add body attributes before React hydrates.
+  // Suppression is limited to this element; descendant checks stay enabled.
   return (
     <html lang="en" data-scroll-behavior="smooth">
-      <body>
+      <body suppressHydrationWarning>
         <StoreProvider>
           <AuthProvider>
             <a className="skip-link" href="#main">
