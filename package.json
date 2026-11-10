@@ -20,7 +20,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "build:hosting": "node scripts/build-hosting.mjs",
-    "deploy:hosting": "firebase deploy --only hosting:voyaspan-cf6b7",
+    "deploy:hosting": "firebase deploy --only hosting:alozuri",
     "build:apphosting": "turbo run build --filter=@voyaspan/web"
   },
   "devDependencies": {

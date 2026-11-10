@@ -3,7 +3,7 @@
     "rules": "infra/firestore.rules"
   },
   "hosting": {
-    "site": "voyaspan-cf6b7",
+    "site": "alozuri",
     "public": "apps/web/out",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     "cleanUrls": true,

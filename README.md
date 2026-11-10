@@ -4,9 +4,9 @@ Next.js storefront + independent Fastify API for an itinerary-based travel eSIM 
 
 Repository: [RewoloTech/Alozuri-Web](https://github.com/RewoloTech/Alozuri-Web).
 
-The product is now Alozuri. Existing Firebase project ID `voyaspan`, Hosting site IDs, service URLs, internal `@voyaspan/*` workspace names and payment metadata keys are retained for compatibility. A Firebase display-name change does not rename these resources.
+The product and Firebase project are now Alozuri (`alozuri`). Local browser configuration, the static preview build and App Hosting configuration use the new Firebase web app. Internal `@voyaspan/*` workspace names and payment metadata keys are retained for compatibility.
 
-Published draft: https://voyaspan-cf6b7.web.app (Firebase project `voyaspan`).
+Configured Hosting target: https://alozuri.web.app (Firebase project and site ID `alozuri`). Deployment to the new project has not been verified.
 
 **This is a functional preview, not a live shop.** All included plans and prices are clearly labelled samples. Payments, supplier orders and activation credentials are not created. Firebase accounts are real when configured. Do not enable sales until the payment/fulfilment milestones in CODEX_IMPLEMENTATION_BRIEF.md are completed and reviewed.
 
@@ -41,7 +41,7 @@ Public web configuration belongs in `apps/web/.env.local`; it is not an Admin cr
 
 Enable Email/Password and Google providers in the Firebase console for the Alozuri project. Set the Google provider's support email, authorize `localhost` and your eventual frontend domain, and configure verification/reset email templates. The app supports email registration, verification sending and resending, email login, Google popup login/signup, password reset, sign-out and display-name updates. Verification is checked on the API purchase boundary. Google provider configuration and real-account email delivery must be tested in the Firebase project; no test customer was created automatically.
 
-For real API reads use Application Default Credentials (`gcloud auth application-default login` locally) and set `GOOGLE_CLOUD_PROJECT=voyaspan`. The API verifies Firebase ID tokens including revocation, checks ownership and explicitly serializes customer responses. `DEMO_MODE=false` switches the API to server-side Firestore catalogue/order reads. It only returns active packages with `syncedAt` within 12 hours; a live catalogue writer/sync job is still required. Customer order list is limited to the latest fetched 100 records; pagination is a later milestone. No wholesale or activation secrets are returned.
+For real API reads use Application Default Credentials (`gcloud auth application-default login` locally) and set `GOOGLE_CLOUD_PROJECT=alozuri`. The API verifies Firebase ID tokens including revocation, checks ownership and explicitly serializes customer responses. `DEMO_MODE=false` switches the API to server-side Firestore catalogue/order reads. It only returns active packages with `syncedAt` within 12 hours; a live catalogue writer/sync job is still required. Customer order list is limited to the latest fetched 100 records; pagination is a later milestone. No wholesale or activation secrets are returned.
 
 Firestore collection shapes: `packages` stores the shared `StoredPlan`; `orders` stores `{ uid, plan: StoredPlan, status, createdAt: ISO8601, amountCents, currency }`. Direct client reads/writes are denied by `infra/firestore.rules`. The Admin SDK uses IAM and does not rely on these client rules. These rules are provided locally and have not been deployed to your project.
 
@@ -98,7 +98,7 @@ Dependency overrides pin patched transitive gRPC, glob and minimatch versions, p
 
 ## Deployment targets
 
-Frontend preview: Firebase Hosting site `voyaspan-cf6b7`. Run `npm run build:hosting` to create `apps/web/out`; `firebase.json` publishes that folder, not a default `public` folder. The Hosting build forces sample mode and disables indexing. Public plan/destination/legal routes are pre-rendered; private order IDs are read from the URL only in the browser and never enumerated at build time. Security/cache headers are configured in Hosting. The private order summary uses a query parameter so each customer order can be opened without a server-rendered route or public order snapshots.
+Frontend preview: Firebase Hosting site `alozuri`. Run `npm run build:hosting` to create `apps/web/out`; `firebase.json` publishes that folder, not a default `public` folder. The Hosting build forces sample mode and disables indexing. Public plan/destination/legal routes are pre-rendered; private order IDs are read from the URL only in the browser and never enumerated at build time. Security/cache headers are configured in Hosting. The private order summary uses a query parameter so each customer order can be opened without a server-rendered route or public order snapshots.
 
 Once signed into the owning Google account, deploy only the frontend:
 
@@ -108,11 +108,11 @@ firebase projects:list
 npm run deploy:hosting -- --project YOUR_FIREBASE_PROJECT_ID
 ```
 
-Use the owning Firebase **project ID**, which is not necessarily the Hosting **site ID**. `predeploy` automatically runs the sample export build. This command does not deploy Firestore rules, the API, or supplier/payment integrations. The Hosting build includes the verified public Firebase web configuration so fresh GitHub checkouts can build the authentication UI without a local environment file; Admin, supplier and payment credentials are never included. Add `voyaspan-cf6b7.web.app` and `voyaspan-cf6b7.firebaseapp.com` to the Firebase Authentication authorized domains before testing accounts there. Google/email provider setup must also be completed.
+Use the owning Firebase **project ID**, which is not necessarily the Hosting **site ID**. `predeploy` automatically runs the sample export build. This command does not deploy Firestore rules, the API, or supplier/payment integrations. The Hosting build includes the supplied public Firebase web configuration so fresh GitHub checkouts can build the authentication UI without a local environment file; Admin, supplier and payment credentials are never included. Add `alozuri.web.app` and `alozuri.firebaseapp.com` to the Firebase Authentication authorized domains before testing accounts there. Google/email provider setup must also be completed.
 
 Firebase App Hosting uses app root `apps/web`. The root `turbo.json`, pinned `turbo` dependency and `packageManager` declaration enable supported monorepo detection, using the repository lockfile and the shared package. Test the targeted web build with `npm run build:apphosting`. In the Firebase App Hosting backend settings, set **App root directory** to `apps/web`; do not target `/`, which runs the combined web/API build and makes the Next.js adapter look for a nonexistent root `.next/routes-manifest.json`. A plain npm workspace without `turbo.json` instead fails looking for a lockfile inside `apps/web`. Keep the single lockfile at the repository root.
 
-`apps/web/apphosting.yaml` supplies the server hosting settings and defaults to sample mode; Console environment overrides take precedence. Set the `NEXT_PUBLIC_FIREBASE_*` values in that App Hosting backend before building and trigger a new rollout after changing them. The static Hosting preview and App Hosting are separate deployments. Use App Hosting or expand the static build's plan manifest before serving live supplier SKUs; the current static Hosting build deliberately exports only the sample plan IDs. The Docker container recipe is included but has not been Docker-built in this environment.
+`apps/web/apphosting.yaml` supplies the server hosting settings and defaults to sample mode; Console environment overrides take precedence. The public `NEXT_PUBLIC_FIREBASE_*` values are configured for Alozuri. Set `NEXT_PUBLIC_SITE_URL` to the actual deployed frontend URL and `NEXT_PUBLIC_API_URL` to an API configured for project `alozuri` before enabling API mode. Trigger a new rollout after changing environment values. The static Hosting preview and App Hosting are separate deployments. Use App Hosting or expand the static build's plan manifest before serving live supplier SKUs; the current static Hosting build deliberately exports only the sample plan IDs. The Docker container recipe is included but has not been Docker-built in this environment.
 
 Backend: Cloud Run using the root Dockerfile. Build from the repository root; set `GOOGLE_CLOUD_PROJECT`, exact frontend `CORS_ORIGINS`, and `DEMO_MODE=true` for preview. Cloud Run must permit public HTTP access for catalogue/customer endpoints; protected routes validate Firebase Bearer tokens themselves. Attach a least-privilege service account for Firestore reads. Do not grant supplier/Stripe access until their implementation is complete.
 
@@ -120,7 +120,7 @@ Deploy Firestore rules separately with Firebase CLI after reviewing the target p
 
 ## eSIM Access webhook
 
-Deployed API: https://voyaspan-api-g74tu22y5q-ez.a.run.app (Cloud Run, `europe-west4`). Firestore is provisioned in the same region. The complete private callback URL is saved locally in the Git-ignored `apps/api/.env.webhook` file; it must not be committed. The deployed receiver was verified with health, authorization, validation, persistence, duplicate and conflict checks. Direct unauthenticated database access was also denied. The API remains in preview mode with payments disabled.
+Legacy VoyaSpan API (not connected to the new Alozuri frontend): https://voyaspan-api-g74tu22y5q-ez.a.run.app (Cloud Run, `europe-west4`). Firestore is provisioned in the same region. The complete private callback URL is saved locally in the Git-ignored `apps/api/.env.webhook` file; it must not be committed. The deployed receiver was verified with health, authorization, validation, persistence, duplicate and conflict checks. Direct unauthenticated database access was also denied. The API remains in preview mode with payments disabled.
 
 The API accepts `POST /v1/webhooks/esim-access?token=YOUR_WEBHOOK_TOKEN`. Use a separately generated `ESIM_WEBHOOK_TOKEN` of at least 32 characters, stored in Google Secret Manager and attached to the API service. This is not the eSIM Access SecretKey or a Stripe credential. The supplier must be given the complete private URL including its query token. Application request URLs are redacted; Cloud Run infrastructure request logs can still contain the URL, so restrict access to those logs and rotate the token if disclosed.
 
@@ -129,3 +129,9 @@ The receiver follows the envelope documented at https://docs.esimaccess.com/: `n
 Inbox records have `processingStatus: awaiting_reconciliation` and a 30-day `expireAt` timestamp. Firestore TTL is enabled on that field for automatic cleanup. Notifications only prove possession of the callback URL; they are not proof of payment or supplier provisioning. The future fulfilment worker must query the authenticated supplier API before changing any customer state. This receiver does not purchase eSIMs, generate QR codes, or process Stripe payments.
 
 The API runs separately from the website, using a dedicated Cloud Run service account. It needs Firestore data access, Firebase Auth read access for revocation checks on customer endpoints, and Secret Manager access to its webhook token. Direct browser Firestore access remains denied by `infra/firestore.rules`. Local API development now loads `apps/api/.env` automatically through the Node.js environment-file flag. See `docs/esim-webhook.openapi.yaml` for the webhook request/response contract.
+
+## Alozuri Firebase setup
+
+The CLI default project is `alozuri`; the Hosting site target is `alozuri` and must be confirmed in the Firebase console before deploying. The current CLI account returned a 403 permission error when listing Hosting sites. No cloud resources or data were migrated by this configuration change.
+
+Enable the required Authentication providers and authorize localhost and the deployed frontend domains in the new project. Configure Firestore, rules, backend credentials and service permissions for `alozuri` before using real API data. Existing users, orders, secrets and integrations from VoyaSpan remain in the old project until migrated separately. App Hosting defaults to sample mode with no remote API configured; local development continues to use localhost. Analytics is not initialized; the measurement ID is reserved for a consent-aware integration.
