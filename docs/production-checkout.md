@@ -122,6 +122,8 @@ References: [Stripe Express Checkout](https://docs.stripe.com/elements/express-c
 - The live publishable/secret key pair was verified through Stripe.js on `alozuri.com` using an unconfirmed verification intent, which was cancelled without collecting money.
 - `alozuri-fulfillment` runs every minute using the dedicated scheduler identity. A real scheduled invocation returned HTTP 200; an unsigned request returned 401. Firestore deny-by-default rules were deployed.
 - Local browser checks confirmed immediate tabs, 19 France-only plans versus 82 including regional coverage, and a usable contact/review checkout. The old configuration notice is gone.
-- Supplier balance was zero at the last pre-payment check. Checkout returned a clear temporary-unavailability response before creating a charge. The owner is topping up the account; sufficient balance will be rechecked on each checkout. This guard does not require another deployment after funding.
+- The initial zero supplier balance correctly blocked checkout before payment creation. After the owner funded the account, a live checkout on `https://alozuri.com` passed the capacity check, created a live PaymentIntent matching the exact server total, and displayed the real Stripe card form. That verification intent was cancelled without collecting money; its signed webhook updated the saved order to cancelled. Balance is rechecked on every live checkout.
 
-No live customer charge or supplier purchase has been performed in this session. A funded, real purchase and installation remain the final operational verification.
+The frontend rollout `build-2026-11-10-017` succeeded for commit `2351505`. Hosted browser checks confirmed immediate tabs, 19 France-only plans, two local 50 GB plans, nine local unlimited options and 18 unlimited trip matches for France/Switzerland/Italy, with no browser exceptions.
+
+No live customer charge or supplier purchase was made by the agent. The owner-controlled charged purchase, actual eSIM allocation, delivery email and installation remain the final operational verification.
