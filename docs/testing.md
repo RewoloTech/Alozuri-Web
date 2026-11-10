@@ -57,3 +57,11 @@ npm run build
 ```
 
 Run Prettier checks on the changed supported source/config files. Do not include local secret files or generated screenshots in commits.
+
+For Stripe's actual webhook transport against the deployed sandbox API:
+
+```sh
+STRIPE_SANDBOX_API_URL=https://YOUR_TEST_API npm run test:stripe:deployed
+```
+
+This runner refuses a backend unless `/v1/config` reports test checkout mode. It uses a verified catalogue product and real Stripe test cards, waits for the deployed signed webhook to mark the order paid, and does not simulate webhook delivery. Keep `STRIPE_TEST_PUBLISHABLE_KEY` in the ignored local API environment file when the local storefront uses a live publishable key. Test payments never create real supplier delivery jobs or delivery-email jobs.

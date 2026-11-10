@@ -16,7 +16,7 @@ The implementation now supports live Stripe Embedded Checkout, durable eSIM Acce
 
 ## Live catalogue and Stripe test checkout
 
-The current implementation supports daily live fixed-plan syncing, single-destination recommendations, email verification before account access, Google sign-in, Firebase password reset, and Stripe embedded **test checkout** with eligible Apple Pay and Google Pay wallets. Test payments never order real eSIMs. See [commerce testing and setup](docs/commerce-testing.md). Earlier draft/readiness sections below describe the earlier release and are superseded by this implementation for those features. Real supplier issuance and live sales remain disabled.
+The implementation includes supplier-backed fixed, daily and unlimited catalogues; immediate destination tabs; local-only single-country results with optional regional coverage; persistent carts; guest checkout with Stripe Payment/Express Checkout Elements; signed payment webhooks; and per-eSIM fulfilment. See [catalogue and daily sync](docs/catalogue-and-filters.md), [testing](docs/testing.md), and [production payment activation](docs/production-checkout.md) for the verified deployment status and remaining limits. Historical draft sections below are superseded by those documents.
 
 ## Run locally
 

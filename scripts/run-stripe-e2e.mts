@@ -29,7 +29,7 @@ function envFile(file: string) {
 const serverEnv = envFile('apps/api/.env'),
   webEnv = envFile('apps/web/.env.local');
 const secret = serverEnv.STRIPE_SECRET_KEY,
-  publishable = webEnv.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+  publishable = serverEnv.STRIPE_TEST_PUBLISHABLE_KEY || webEnv.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
 if (!secret?.startsWith('sk_test_') || !publishable?.startsWith('pk_test_'))
   throw new Error('Matching local Stripe TEST keys are required.');
 const firebase = initializeApp({ projectId: 'demo-alozuri' }),

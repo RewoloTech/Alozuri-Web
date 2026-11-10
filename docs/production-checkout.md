@@ -34,7 +34,7 @@ NEXT_PUBLIC_API_URL=https://YOUR_ALOZURI_API
 NEXT_PUBLIC_SITE_URL=https://alozuri.com
 ```
 
-Set the `NEXT_PUBLIC_FIREBASE_*` browser configuration for project `alozuri` too. Public variables require a rebuild. Keep the preview in demo mode until the backend is configured; do not mix test and live Stripe keys.
+Set the `NEXT_PUBLIC_FIREBASE_*` browser configuration for project `alozuri` too. Public variables require a rebuild. The active storefront uses the live catalogue and matching live Stripe configuration. Keep separate previews in demo/test mode; do not mix test and live Stripe keys.
 
 ## API secrets and runtime
 
@@ -110,6 +110,18 @@ npm run test:stripe
 
 The Stripe sandbox browser test completes a declined card followed by successful retry on the same PaymentIntent and checks the paid receipt. It uses Stripe's real Payment Element/API; the harness forwards a locally signed webhook after observing Stripe's status, so production webhook transport is not exercised. Firestore integration tests cover multi-unit allocations, replay, failed/test payment isolation, private retrieval, mocked delivery/email and cart merge/version conflicts. Browser tests cover destination state, cart persistence/mobile widths, guest validation, card retry and mocked eligible Apple/Google wallet callbacks.
 
-Still unverified: actual Apple Pay/Google Pay transactions on eligible hardware, deployed production webhook delivery, production worker invocation, Resend delivery, a real charged supplier purchase and QR installation. No live charge or supplier purchase was made. A catalogue-only API and daily sync are now deployed (see [catalogue status](catalogue-and-filters.md)). Live payments still need secret mappings, the production webhook/fulfilment worker, payment/delivery verification, tax treatment and final business/legal content.
+Still unverified: actual Apple Pay/Google Pay transactions on eligible hardware, Resend delivery, a real charged supplier purchase and QR installation. The deployed sandbox test now verifies actual Stripe webhook delivery, and the production worker has returned HTTP 200 with its scheduled OIDC identity. No live charge or supplier purchase was made. A catalogue-only API and daily sync are now deployed (see [catalogue status](catalogue-and-filters.md)). Live Stripe/supplier/email secrets and the minute fulfilment worker are now mapped. Supplier credit and real payment-to-installation verification are required; tax treatment and final business/legal content still need owner review.
 
 References: [Stripe Express Checkout](https://docs.stripe.com/elements/express-checkout-element), [Stripe payment domains](https://docs.stripe.com/payments/payment-methods/pmd-registration), [Stripe webhooks](https://docs.stripe.com/webhooks), [eSIM Access API](https://docs.esimaccess.com/).
+
+## Activation verification on 2026-11-10
+
+- Production API: `https://alozuri-api-rnm3hsyqia-ez.a.run.app`; its config reports live catalogue, live cart checkout and eSIM Access fulfilment.
+- Live webhook: `https://alozuri-api-rnm3hsyqia-ez.a.run.app/v1/webhooks/stripe`; its own signing secret is stored in Secret Manager.
+- Sandbox API: `https://alozuri-api-sandbox-rnm3hsyqia-ez.a.run.app`, with separate test Stripe secrets and endpoint. A real test card decline and retry succeeded against that service; Stripe itself delivered the signed webhook and the receipt became paid. No webhook simulation was used. Test orders create neither supplier jobs nor delivery-email jobs.
+- The live publishable/secret key pair was verified through Stripe.js on `alozuri.com` using an unconfirmed verification intent, which was cancelled without collecting money.
+- `alozuri-fulfillment` runs every minute using the dedicated scheduler identity. A real scheduled invocation returned HTTP 200; an unsigned request returned 401. Firestore deny-by-default rules were deployed.
+- Local browser checks confirmed immediate tabs, 19 France-only plans versus 82 including regional coverage, and a usable contact/review checkout. The old configuration notice is gone.
+- Supplier balance was zero at the last pre-payment check. Checkout returned a clear temporary-unavailability response before creating a charge. The owner is topping up the account; sufficient balance will be rechecked on each checkout. This guard does not require another deployment after funding.
+
+No live customer charge or supplier purchase has been performed in this session. A funded, real purchase and installation remain the final operational verification.
