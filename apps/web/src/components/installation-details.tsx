@@ -4,7 +4,15 @@ import { QRCodeSVG } from 'qrcode.react';
 import { api } from '@/lib/api';
 
 type Activation = { ac: string; iccid: string; esimTranNo: string };
-export function InstallationDetails({ orderId }: { orderId: string }) {
+export function InstallationDetails({
+  orderId,
+  purchaseId,
+  accessToken,
+}: {
+  orderId: string;
+  purchaseId?: string;
+  accessToken?: string;
+}) {
   const [activation, setActivation] = useState<Activation | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -13,9 +21,11 @@ export function InstallationDetails({ orderId }: { orderId: string }) {
     setError('');
     try {
       const result = await api<{ activation: Activation }>(
-        `/v1/orders/${encodeURIComponent(orderId)}/activation`,
-        {},
-        true,
+        purchaseId
+          ? `/v2/orders/${encodeURIComponent(purchaseId)}/units/${encodeURIComponent(orderId)}/activation`
+          : `/v1/orders/${encodeURIComponent(orderId)}/activation`,
+        { headers: accessToken ? { 'X-Order-Access': accessToken } : {} },
+        !accessToken,
       );
       setActivation(result.activation);
     } catch {

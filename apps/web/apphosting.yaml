@@ -10,8 +10,6 @@ runConfig:
 env:
   - variable: NEXT_PUBLIC_DEMO_MODE
     value: 'true'
-  - variable: NEXT_PUBLIC_API_URL
-    value: ''
   - variable: NEXT_PUBLIC_SITE_URL
     value: https://alozuri.web.app
 

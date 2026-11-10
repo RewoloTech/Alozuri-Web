@@ -15,16 +15,19 @@
     "dev:api": "npm run dev -w @voyaspan/api",
     "build": "npm run build -w @voyaspan/web && npm run build -w @voyaspan/api",
     "build:web": "npm run build -w @voyaspan/web",
-    "test:firestore": "firebase emulators:exec --only firestore --project demo-alozuri --config infra/production-emulator.json \"node --import tsx --test apps/api/test/production.firestore.mts\"",
+    "test:firestore": "firebase emulators:exec --only firestore --project demo-alozuri --config infra/production-emulator.json \"node --import tsx --test --test-concurrency=1 apps/api/test/production.firestore.mts apps/api/test/commerce.firestore.mts\"",
     "test": "node --experimental-strip-types --test packages/shared/test/*.test.ts && npm test -w @voyaspan/api",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "eslint .",
     "format": "prettier --write .",
     "build:hosting": "node scripts/build-hosting.mjs",
     "deploy:hosting": "firebase deploy --only hosting:alozuri",
-    "build:apphosting": "turbo run build --filter=@voyaspan/web"
+    "build:apphosting": "turbo run build --filter=@voyaspan/web",
+    "test:e2e": "playwright test",
+    "test:stripe": "firebase emulators:exec --only firestore --project demo-alozuri --config infra/production-emulator.json \"node --import tsx scripts/run-stripe-e2e.mts\""
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.0",
     "@types/node": "^22.0.0",
     "eslint": "^9.39.4",
     "eslint-config-next": "16.4.6",

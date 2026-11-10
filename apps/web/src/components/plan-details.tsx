@@ -1,91 +1,30 @@
 'use client';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useSelector } from 'react-redux';
-import { countryName, money, type Plan } from '@voyaspan/shared';
+import { useDispatch, useSelector } from 'react-redux';
+import { countryName, money, coverageLabel, type Plan } from '@voyaspan/shared';
 import { demoPlans } from '@voyaspan/shared/demo';
 import { api, demoMode } from '@/lib/api';
-import type { RootState } from '@/lib/store';
-import { useAuth } from './auth-provider';
-import { StripeCheckout, stripeCheckoutConfigured, stripeCheckoutMode } from './stripe-checkout';
-export function PlanDetails({ id, review = false }: { id: string; review?: boolean }) {
-  const { user, loading: authLoading } = useAuth();
-  const router = useRouter();
+import { addToCart, type RootState } from '@/lib/store';
+export function PlanDetails({ id }: { id: string; review?: boolean }) {
+  const dispatch = useDispatch(),
+    cart = useSelector((s: RootState) => s.cart);
   const [plan, setPlan] = useState<Plan | null>(() =>
-    demoMode ? (demoPlans.find((p) => p.id === id) ?? null) : null,
-  );
-  const [loading, setLoading] = useState(!demoMode);
-  const [error, setError] = useState('');
-  const [paymentMode, setPaymentMode] = useState<'test' | 'live' | 'disabled'>('disabled');
-  const [paying, setPaying] = useState(false);
-  const requestId = useRef('');
-  const [session, setSession] = useState<{
-    clientSecret: string;
-    orderId: string;
-    uid: string;
-  } | null>(null);
-  useEffect(() => {
-    if (!demoMode)
-      void api<{ paymentMode: 'test' | 'live' | 'disabled' }>('/v1/config')
-        .then((c) => setPaymentMode(c.paymentMode))
-        .catch(() => {});
-  }, []);
-  async function checkout() {
-    if (!user) {
-      router.push('/login?next=' + encodeURIComponent('/checkout/' + id));
-      return;
-    }
-    if (!user.emailVerified) {
-      router.push('/verify-email?next=' + encodeURIComponent('/checkout/' + id));
-      return;
-    }
-    setPaying(true);
-    setError('');
-    try {
-      requestId.current ||= crypto.randomUUID();
-      if (!stripeCheckoutConfigured || paymentMode !== stripeCheckoutMode)
-        throw new Error('Checkout is not configured for this payment environment yet.');
-      const result = await api<{ clientSecret: string; orderId: string }>(
-        '/v1/checkout',
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            planId: id,
-            requestId: requestId.current,
-            compatible: true,
-            ui: 'embedded',
-          }),
-        },
-        true,
-      );
-      if (!result.clientSecret || !result.orderId) throw new Error('Could not initialize payment.');
-      setSession({ ...result, uid: user.uid });
-      setPaying(false);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not open checkout.');
-      if (e instanceof Error && /closed|changed|no longer|unavailable/i.test(e.message)) {
-        requestId.current = '';
-        setCompatible(false);
-      }
-      setPaying(false);
-      if (!demoMode)
-        void api<{ plan: Plan }>(`/v1/packages/${encodeURIComponent(id)}`)
-          .then((r) => setPlan(r.plan))
-          .catch(() => {});
-    }
-  }
-  const [compatible, setCompatible] = useState(false);
-  const itinerary = useSelector((s: RootState) => s.itinerary.countries);
+      demoMode ? (demoPlans.find((p) => p.id === id) ?? null) : null,
+    ),
+    [loading, setLoading] = useState(!demoMode),
+    [adding, setAdding] = useState(false),
+    [added, setAdded] = useState(false),
+    [error, setError] = useState('');
   useEffect(() => {
     if (demoMode) return;
     let active = true;
-    api<{ plan: Plan }>(`/v1/packages/${encodeURIComponent(id)}`)
+    void api<{ plan: Plan }>('/v1/packages/' + encodeURIComponent(id))
       .then((r) => {
         if (active) setPlan(r.plan);
       })
       .catch(() => {
-        if (active) setError('This plan is unavailable. Please search again.');
+        if (active) setError('This plan is no longer available. Search again.');
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -94,6 +33,23 @@ export function PlanDetails({ id, review = false }: { id: string; review?: boole
       active = false;
     };
   }, [id]);
+  async function add() {
+    if (!plan || plan.demo) return;
+    setAdding(true);
+    setAdded(false);
+    setError('');
+    try {
+      const fresh = await api<{ plan: Plan }>('/v1/packages/' + encodeURIComponent(id));
+      if (fresh.plan.demo) throw new Error('Sample plans cannot be purchased.');
+      setPlan(fresh.plan);
+      dispatch(addToCart(fresh.plan));
+      setAdded(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not add this plan.');
+    } finally {
+      setAdding(false);
+    }
+  }
   if (loading)
     return (
       <div className="loading-page" role="status">
@@ -103,67 +59,36 @@ export function PlanDetails({ id, review = false }: { id: string; review?: boole
   if (!plan)
     return (
       <section className="container section">
-        <h1 className="compact-title">Plan unavailable</h1>
-        <p role="alert">{error || 'This plan could not be found.'}</p>
-        <Link className="button" href="/#planner">
+        <h1>Plan unavailable</h1>
+        <p role="alert">{error}</p>
+        <Link className="button" href="/destinations">
           Search plans
         </Link>
       </section>
     );
-  if (session && user?.uid === session.uid && user.emailVerified) {
-    return (
-      <section className="container section">
-        <button className="text-link" onClick={() => setSession(null)}>
-          ← Back to plan
-        </button>
-        <div className="page-intro">
-          <span className="eyebrow">
-            {paymentMode === 'test' ? 'SECURE TEST CHECKOUT' : 'SECURE CHECKOUT'}
-          </span>
-          <h1>Complete your payment</h1>
-          <p>
-            {plan.name} · {money(plan.priceCents)} USD
-          </p>
-        </div>
-        <div className="notice">
-          {paymentMode === 'test'
-            ? 'Test mode: no real money will be charged and no eSIM will be issued. '
-            : 'Your eSIM will appear in your account after payment and provisioning. '}
-          Apple Pay and Google Pay appear when supported by your device and wallet.
-        </div>
-        <StripeCheckout clientSecret={session.clientSecret} orderId={session.orderId} />
-        <p className="fine-print">Payment details are securely handled by Stripe.</p>
-      </section>
-    );
-  }
-  const covered = itinerary.length > 0 && itinerary.every((c) => plan.countries.includes(c));
+  const limit =
+    cart.items.reduce((n, i) => n + i.quantity, 0) >= 10 ||
+    (cart.items.find((i) => i.plan.id === id)?.quantity ?? 0) >= 5;
   return (
     <section className="container section">
-      <Link className="text-link" href="/#planner">
-        ← Back to your itinerary
+      <Link className="text-link" href="/destinations">
+        ← Explore destinations
       </Link>
       <div className="page-intro">
-        <span className="eyebrow">{review ? 'REVIEW YOUR PLAN' : 'ONE PLAN. EVERY STOP.'}</span>
+        <span className="eyebrow">ONE PLAN. EVERY STOP.</span>
         <h1>{plan.name}</h1>
         <p>
-          {plan.dataType === 'unlimited'
-            ? 'Unlimited data'
-            : `${plan.dataGb} GB${plan.dataType === 'daily' ? ' per day' : ''}`}{' '}
-          · {plan.days} days · Data only
+          {plan.dataGb} GB · {plan.days} days · Data only
         </p>
       </div>
       <div className="detail-layout">
         <div className="stack">
           <div className="surface">
-            <h2>Every destination, checked.</h2>
-            {itinerary.length > 0 && (
-              <p className={covered ? 'success-message' : 'error-message'}>
-                {covered
-                  ? '✓ Covers all your selected countries'
-                  : 'This plan does not cover your full itinerary'}
-                : {itinerary.map(countryName).join(', ')}.
-              </p>
-            )}
+            <h2>{coverageLabel(plan)}</h2>
+            <p>
+              Includes exactly {plan.countries.length}{' '}
+              {plan.countries.length === 1 ? 'destination' : 'destinations'}:
+            </p>
             <div className="coverage-list">
               {plan.countries.map((c) => (
                 <span key={c}>{countryName(c)}</span>
@@ -182,11 +107,11 @@ export function PlanDetails({ id, review = false }: { id: string; review?: boole
                 <dd>
                   {plan.networks.length
                     ? plan.networks.join(', ')
-                    : 'Operator information is not available for this sample plan.'}
+                    : 'Network information has not been provided for this plan.'}
                 </dd>
               </div>
               <div>
-                <dt>Data and fair use</dt>
+                <dt>Data policy</dt>
                 <dd>{plan.fairUse}</dd>
               </div>
               <div>
@@ -195,7 +120,7 @@ export function PlanDetails({ id, review = false }: { id: string; review?: boole
               </div>
             </dl>
             <Link href="/help#compatibility" className="text-link">
-              Check your device compatibility ↗
+              Check device compatibility ↗
             </Link>
           </div>
         </div>
@@ -205,103 +130,46 @@ export function PlanDetails({ id, review = false }: { id: string; review?: boole
             {money(plan.priceCents)} <small>USD</small>
           </h2>
           <p>
-            {plan.demo
-              ? 'Illustrative price. No payment will be taken.'
-              : 'One-time payment. Final total must be confirmed before payment.'}
+            {plan.dataGb} GB · {plan.days} days
           </p>
+          <p>Coverage: {plan.countries.length} destinations</p>
           {plan.demo && (
-            <div className="notice">
-              First draft preview. Supplier availability, network coverage and pricing have not been
-              verified. Purchases are disabled.
+            <p className="notice">Illustrative sample. This plan cannot be purchased.</p>
+          )}
+          <button
+            className="button primary full-width"
+            disabled={Boolean(plan.demo) || adding || limit || !cart.ready || cart.syncing}
+            onClick={() => void add()}
+          >
+            {adding ? 'Adding…' : 'Add to cart'}
+          </button>
+          <Link
+            className="button full-width"
+            href={plan.demo ? '#' : '/checkout?buy=' + encodeURIComponent(id)}
+            aria-disabled={Boolean(plan.demo)}
+          >
+            Buy now
+          </Link>
+          {added && (
+            <div role="status" className="success-message">
+              <p>Added to your cart.</p>
+              <Link href="/destinations">Continue shopping</Link> ·{' '}
+              <Link href="/cart">View cart →</Link>
             </div>
           )}
-          {review && !authLoading && !user && (
-            <div className="notice">
-              <Link
-                href={`/login?next=${encodeURIComponent(`/checkout/${id}`)}`}
-                className="text-link"
-              >
-                Log in
-              </Link>{' '}
-              or{' '}
-              <Link
-                href={`/register?next=${encodeURIComponent(`/checkout/${id}`)}`}
-                className="text-link"
-              >
-                create an account
-              </Link>{' '}
-              to keep your plans in one place. Email verification is required before purchasing.
-            </div>
-          )}
-          {review && user && !user.emailVerified && (
-            <div className="notice">
-              Verify your email before purchasing.{' '}
-              <Link
-                href={`/verify-email?next=${encodeURIComponent('/checkout/' + id)}`}
-                className="text-link"
-              >
-                Open your account to resend the email or check verification.
-              </Link>
-            </div>
-          )}
-          <label className="checkbox-label">
-            <input
-              type="checkbox"
-              checked={compatible}
-              onChange={(e) => setCompatible(e.target.checked)}
-            />
-            <span>My phone supports eSIM and is carrier unlocked.</span>
-          </label>
-          {review ? (
-            <>
-              {paymentMode === 'test' && (
-                <div className="notice">
-                  Stripe test checkout. No real payment or eSIM will be issued. Apple Pay and Google
-                  Pay appear in Stripe when supported by your device and wallet.
-                </div>
-              )}
-              <button
-                disabled={
-                  paymentMode === 'disabled' ||
-                  paymentMode !== stripeCheckoutMode ||
-                  !stripeCheckoutConfigured ||
-                  Boolean(plan.demo) ||
-                  !compatible ||
-                  paying ||
-                  authLoading ||
-                  (itinerary.length > 0 && !covered)
-                }
-                onClick={checkout}
-                className="button primary full-width"
-              >
-                {paying
-                  ? 'Preparing payment…'
-                  : paymentMode !== 'disabled' &&
-                      paymentMode === stripeCheckoutMode &&
-                      stripeCheckoutConfigured &&
-                      !plan.demo
-                    ? 'Continue to payment'
-                    : 'Checkout unavailable'}
-              </button>
-              {error && (
-                <p role="alert" className="error-message">
-                  {error}
-                </p>
-              )}
-            </>
-          ) : (
-            <Link
-              aria-disabled={!compatible || (itinerary.length > 0 && !covered)}
-              href={compatible && (!itinerary.length || covered) ? `/checkout/${id}` : '#'}
-              className="button primary full-width"
-            >
-              Review plan →
-            </Link>
+          {(error || limit || cart.error) && (
+            <p className="error-message" role="alert">
+              {error ||
+                (limit ? 'Cart limit reached: five per plan and ten eSIMs per order.' : cart.error)}
+            </p>
           )}
           <p className="fine-print">
-            Install over Wi-Fi. Check the activation rule before installing.{' '}
-            <Link href="/legal/refunds">Refund information</Link>
+            Your device must support eSIM and be carrier unlocked. Install over Wi-Fi and follow the
+            activation rule.
           </p>
+          <Link href="/legal/refunds" className="text-link">
+            Refund information
+          </Link>
         </aside>
       </div>
     </section>

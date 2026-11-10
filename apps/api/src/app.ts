@@ -17,6 +17,8 @@ import {
   verifyFulfillmentIdentity,
   type FulfillmentService,
 } from './lib/fulfillment.js';
+import { configuredCommerce, CommerceError, type CommerceService } from './lib/commerce.js';
+import { registerCommerceRoutes } from './lib/commerce-routes.js';
 import { documentId } from './lib/validation.js';
 import { registerEsimWebhook, type EsimWebhookInbox } from './lib/esim-webhook.js';
 const code = z
@@ -42,6 +44,7 @@ export async function createApp(
     logger?: boolean;
     origins?: string[];
     payments?: PaymentService | null;
+    commerce?: CommerceService | null;
     fulfillment?: FulfillmentService | null;
     esimWebhook?: { token?: string; inbox?: EsimWebhookInbox };
   } = {},
@@ -52,6 +55,7 @@ export async function createApp(
   const payments = options.payments === undefined ? configuredPayments() : options.payments;
   const fulfillment =
     options.fulfillment === undefined ? configuredFulfillment() : options.fulfillment;
+  const commerce = options.commerce === undefined ? configuredCommerce() : options.commerce;
   const app = Fastify({
     bodyLimit: 64 * 1024,
     logger: options.logger
@@ -59,6 +63,7 @@ export async function createApp(
           redact: [
             'req.url',
             'req.headers.authorization',
+            'req.headers["x-order-access"]',
             'req.headers.cookie',
             'res.headers.set-cookie',
           ],
@@ -76,6 +81,8 @@ export async function createApp(
     reply.header('Cache-Control', 'no-store');
   });
   app.setErrorHandler((error, _request, reply) => {
+    if (error instanceof CommerceError)
+      return reply.code(error.statusCode).send({ error: error.message });
     if (error instanceof CheckoutError) return reply.code(400).send({ error: error.message });
     if (error instanceof z.ZodError)
       return reply.code(400).send({ error: 'Invalid request parameters.' });
@@ -105,10 +112,13 @@ export async function createApp(
     }
   }
   registerEsimWebhook(app, options.esimWebhook);
-  await registerStripeWebhook(app, payments);
+  await registerStripeWebhook(app, payments, commerce);
+  registerCommerceRoutes(app, commerce, repository, verify);
   app.get('/v1/config', async () => ({
     paymentMode: payments?.mode ?? 'disabled',
     catalogueMode: demo ? 'preview' : 'live',
+    cartCheckoutMode: commerce?.mode ?? 'disabled',
+    supportedCurrencies: ['USD'],
     fulfillmentMode: payments?.mode === 'live' ? 'esim_access' : 'test_no_issuance',
   }));
   app.post('/internal/catalogue/sync', async (request, reply) => {
@@ -130,6 +140,7 @@ export async function createApp(
     z.object({}).strict().parse(request.query);
     if (!fulfillment) return reply.code(503).send({ error: 'Delivery is not configured.' });
     const result = await fulfillment.run();
+    await commerce?.notify();
     if (result.failed) {
       app.log.error({ failed: result.failed }, 'Delivery reconciliation failed.');
       return reply.code(503).send(result);
@@ -222,7 +233,9 @@ export async function createApp(
           return reply
             .code(400)
             .send({ error: 'Confirm device compatibility and provide a checkout request ID.' });
-        return payments.checkout(user, input.planId, input.requestId, input.ui);
+        return reply
+          .code(410)
+          .send({ error: 'Checkout has moved. Open /checkout to pay for your cart.' });
       }
       return reply
         .code(503)

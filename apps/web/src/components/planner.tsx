@@ -2,7 +2,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useDispatch, useSelector } from 'react-redux';
-import { setCountries, type RootState } from '@/lib/store';
+import {
+  setCountries,
+  restoreSearch,
+  switchSearch,
+  chooseCountry,
+  removeCountry,
+  type RootState,
+} from '@/lib/store';
 import {
   ArrowRight,
   Check,
@@ -23,6 +30,8 @@ import {
   type Plan,
   type Country,
   suggestedPlans,
+  readSearch,
+  coverageLabel,
 } from '@voyaspan/shared';
 import { demoPlans } from '@voyaspan/shared/demo';
 import { api, demoMode } from '@/lib/api';
@@ -37,30 +46,58 @@ export function Planner({
 }) {
   const dispatch = useDispatch();
   const saved = useSelector((s: RootState) => s.itinerary);
-  const [mode, setMode] = useState<'trip' | 'country'>(
-    !destinationMode && saved.countries.length > 1 ? 'trip' : 'country',
+  const [error, setError] = useState('');
+  const mode = saved.mode;
+  const selected = saved.countries;
+  const initialKey = initialCountries.join(',');
+  useEffect(() => {
+    const restore = () => {
+      const parsed = readSearch(new URLSearchParams(window.location.search));
+      if (parsed) dispatch(restoreSearch(parsed));
+    };
+    if (readSearch(new URLSearchParams(window.location.search))) restore();
+    else if (destinationMode && initialKey) dispatch(setCountries(initialKey.split(',')));
+    window.addEventListener('popstate', restore);
+    return () => window.removeEventListener('popstate', restore);
+  }, [dispatch, destinationMode, initialKey]);
+  function syncUrl() {
+    const url = new URL(window.location.href);
+    url.searchParams.set('mode', saved.mode);
+    url.searchParams.set('countries', saved.countries.join(','));
+    url.searchParams.set('single', saved.single || '');
+    url.searchParams.set('trip', saved.trip.join(','));
+    window.history.pushState({}, '', url);
+  }
+  useEffect(() => {
+    if (!saved.initialized) return;
+    const url = new URL(window.location.href);
+    const next = new URLSearchParams(url.search);
+    next.set('mode', saved.mode);
+    next.set('countries', saved.countries.join(','));
+    next.set('single', saved.single || '');
+    next.set('trip', saved.trip.join(','));
+    if (next.toString() !== url.searchParams.toString()) {
+      url.search = next.toString();
+      window.history.pushState({}, '', url);
+    }
+  }, [saved]);
+  const [availableCountries, setAvailableCountries] = useState<Country[]>(
+    demoMode ? countries : [],
   );
-  const [availableCountries, setAvailableCountries] = useState<Country[]>(countries);
   const [showAll, setShowAll] = useState(false);
   useEffect(() => {
     if (!demoMode)
       void api<{ countries: Country[] }>('/v1/countries')
         .then((r) => setAvailableCountries(r.countries))
-        .catch(() => {});
+        .catch(() => setError('Destinations could not be loaded. Refresh the page and try again.'));
   }, []);
-  const [selected, updateSelected] = useState(
-    destinationMode ? initialCountries : saved.initialized ? saved.countries : initialCountries,
-  );
-  function setSelected(next: string[]) {
-    updateSelected(next);
-    dispatch(setCountries(next));
-  }
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [minGb, setMinGb] = useState('1');
+  const requestVersion = useRef(0);
+  const selectionKey = selected.join(',');
   const [results, setResults] = useState<Plan[] | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
   const [sort, setSort] = useState('recommended');
   const picker = useRef<HTMLDivElement>(null);
   const resultRef = useRef<HTMLDivElement>(null);
@@ -73,7 +110,9 @@ export function Planner({
   }, []);
   const filtered = availableCountries.filter(
     (c) =>
-      (mode === 'country' || !selected.includes(c.code)) &&
+      ((mode === 'country' && !saved.chooseTrip) ||
+        saved.chooseSingle ||
+        !selected.includes(c.code)) &&
       `${c.name} ${c.code}`.toLowerCase().includes(query.toLowerCase()),
   );
   const sorted = useMemo(
@@ -90,14 +129,30 @@ export function Planner({
     [results, sort],
   );
   function add(code: string) {
-    setSelected(mode === 'country' ? [code] : [...selected, code]);
+    dispatch(chooseCountry(code));
     setOpen(false);
     setQuery('');
     setResults(null);
     setShowAll(false);
   }
+  useEffect(() => {
+    requestVersion.current++;
+    setResults(null);
+    setLoading(false);
+  }, [selectionKey, mode, minGb]);
   async function search() {
-    dispatch(setCountries(selected));
+    const version = ++requestVersion.current;
+    syncUrl();
+    if (saved.chooseTrip) {
+      setError('Add at least two destinations for a multi-country search.');
+      setOpen(true);
+      return;
+    }
+    if (saved.chooseSingle) {
+      setError('Choose one country before searching in single-destination mode.');
+      setOpen(true);
+      return;
+    }
     if (!selected.length) {
       setError('Add at least one destination to find your eSIM.');
       setOpen(true);
@@ -113,16 +168,24 @@ export function Planner({
               `/v1/packages/match?countries=${selected.join(',')}&minGb=${minGb}`,
             )
           ).plans;
+      if (version !== requestVersion.current) return;
       setResults(plans);
       setShowAll(false);
       setTimeout(
-        () => resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+        () =>
+          resultRef.current?.scrollIntoView({
+            behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+              ? 'auto'
+              : 'smooth',
+            block: 'start',
+          }),
         60,
       );
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not find plans. Please try again.');
+      if (version === requestVersion.current)
+        setError(e instanceof Error ? e.message : 'Could not find plans. Please try again.');
     } finally {
-      setLoading(false);
+      if (version === requestVersion.current) setLoading(false);
     }
   }
   return (
@@ -135,9 +198,10 @@ export function Planner({
         <div className="planner-tabs">
           <button
             onClick={() => {
-              setMode('trip');
+              dispatch(switchSearch('trip'));
               setResults(null);
             }}
+            aria-pressed={mode === 'trip'}
             className={mode === 'trip' ? 'active' : ''}
           >
             <Globe2 size={16} />
@@ -145,10 +209,11 @@ export function Planner({
           </button>
           <button
             onClick={() => {
-              setMode('country');
-              if (selected.length > 1) setSelected([]);
+              dispatch(switchSearch('country'));
+              if (selected.length > 1) setOpen(true);
               setResults(null);
             }}
+            aria-pressed={mode === 'country'}
             className={mode === 'country' ? 'active' : ''}
           >
             <MapPin size={16} />
@@ -169,6 +234,18 @@ export function Planner({
               <ShieldCheck size={16} /> Every stop. Covered.
             </span>
           </div>
+          {saved.chooseTrip && (
+            <p className="notice" role="status">
+              Add another destination to start a multi-country trip. Your single destination is
+              kept.
+            </p>
+          )}
+          {saved.chooseSingle && (
+            <p className="notice" role="status">
+              Choose one country for a single-destination search. Your multi-country itinerary will
+              be kept.
+            </p>
+          )}
           <div className="planner-controls">
             <div className="country-field" ref={picker}>
               <span className="field-label">
@@ -182,7 +259,7 @@ export function Planner({
                     <button
                       aria-label={`Remove ${countryName(code)}`}
                       onClick={() => {
-                        setSelected(selected.filter((c) => c !== code));
+                        dispatch(removeCountry(code));
                         setResults(null);
                       }}
                     >
@@ -192,11 +269,13 @@ export function Planner({
                 ))}
                 <button className="add-country" aria-expanded={open} onClick={() => setOpen(!open)}>
                   <Plus size={16} />
-                  {selected.length
-                    ? mode === 'country'
-                      ? 'Change destination'
-                      : 'Add stop'
-                    : 'Choose destination'}
+                  {saved.chooseTrip
+                    ? 'Add destination'
+                    : selected.length
+                      ? mode === 'country'
+                        ? 'Change destination'
+                        : 'Add stop'
+                      : 'Choose destination'}
                 </button>
               </div>
               {open && (
@@ -210,7 +289,14 @@ export function Planner({
                       onChange={(e) => setQuery(e.target.value)}
                       autoFocus
                       onKeyDown={(e) => {
-                        if (e.key === 'Escape') setOpen(false);
+                        if (e.key === 'Escape') {
+                          setOpen(false);
+                          (
+                            picker.current?.querySelector(
+                              '.add-country',
+                            ) as HTMLButtonElement | null
+                          )?.focus();
+                        }
                       }}
                     />
                     <button aria-label="Close country search" onClick={() => setOpen(false)}>
@@ -264,7 +350,7 @@ export function Planner({
             <span>
               {demoMode
                 ? 'Preview · sample plans · purchases disabled'
-                : 'Live supplier plans · Stripe test payments'}
+                : 'Verified supplier coverage · Secure Stripe checkout'}
             </span>
           </div>
           {error && (
@@ -350,8 +436,7 @@ export function PlanCard({ plan, highlight = false }: { plan: Plan; highlight?: 
         <span className="plan-days">{plan.days} days</span>
       </div>
       <div className="plan-coverage">
-        <Check size={15} />{' '}
-        {plan.countries.length === 1 ? 'Local coverage' : 'One eSIM for your whole itinerary'}
+        <Check size={15} /> {coverageLabel(plan)}
       </div>
       <div className="plan-bottom">
         <div>

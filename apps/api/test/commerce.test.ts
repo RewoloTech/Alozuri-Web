@@ -238,7 +238,7 @@ test('private API refuses unverified accounts, checkout refuses client price and
     assert.equal(
       (await post({ planId: f.plan.id, requestId: crypto.randomUUID(), compatible: true }))
         .statusCode,
-      200,
+      410,
     );
     assert.equal(
       (

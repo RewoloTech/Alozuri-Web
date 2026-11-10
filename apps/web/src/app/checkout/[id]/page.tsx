@@ -1,9 +1,9 @@
 import { demoPlans } from '@voyaspan/shared/demo';
-import { PlanDetails } from '@/components/plan-details';
+import { LegacyCheckout } from '@/components/legacy-checkout';
 export const metadata = { title: 'Review your plan', robots: { index: false } };
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  return <PlanDetails key={id} id={id} review />;
+  return <LegacyCheckout id={id} />;
 }
 
 export function generateStaticParams() {

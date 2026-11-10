@@ -19,3 +19,7 @@ firebase-debug*.log
 # Local Firestore emulator logs
 firestore-debug*.log
 ui-debug*.log
+
+# Browser verification artifacts
+test-results/
+playwright-report/

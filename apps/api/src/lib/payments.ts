@@ -81,7 +81,7 @@ export function firestorePaymentStore(mode: PaymentMode = 'test'): PaymentStore 
           .where('paymentIntentId', '==', paymentIntentId)
           .limit(2)
           .get();
-      if (matches.size !== 1) return;
+      if (matches.size !== 1 || matches.docs[0].get('parentOrderId')) return;
       const ref = matches.docs[0].ref,
         eventRef = db.collection('stripeEvents').doc(mode + '_' + eventId);
       await db.runTransaction(async (t) => {
@@ -511,7 +511,11 @@ export function configuredPayments(): PaymentService | null {
     mode,
   );
 }
-export async function registerStripeWebhook(app: FastifyInstance, payments: PaymentService | null) {
+export async function registerStripeWebhook(
+  app: FastifyInstance,
+  payments: PaymentService | null,
+  commerce: { webhook(body: Buffer, signature: string): Promise<void> } | null = null,
+) {
   await app.register(async (instance) => {
     instance.removeContentTypeParser('application/json');
     instance.addContentTypeParser('application/json', { parseAs: 'buffer' }, (_req, body, done) =>
@@ -521,11 +525,13 @@ export async function registerStripeWebhook(app: FastifyInstance, payments: Paym
       '/v1/webhooks/stripe',
       { bodyLimit: 256 * 1024, config: { rateLimit: { max: 300, timeWindow: '1 minute' } } },
       async (request, reply) => {
-        if (!payments) return reply.code(503).send({ error: 'Payments are not configured.' });
+        if (!payments && !commerce)
+          return reply.code(503).send({ error: 'Payments are not configured.' });
         const signature = z.string().max(2000).parse(request.headers['stripe-signature']);
         if (!Buffer.isBuffer(request.body))
           return reply.code(400).send({ error: 'Invalid webhook body.' });
-        await payments.webhook(request.body, signature);
+        if (payments) await payments.webhook(request.body, signature);
+        if (commerce) await commerce.webhook(request.body, signature);
         return { received: true };
       },
     );

@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { AuthProvider } from '@/components/auth-provider';
 import { Header } from '@/components/header';
 import { Footer } from '@/components/footer';
+import { CartSync } from '@/components/cart-sync';
 import { StoreProvider } from '@/components/store-provider';
 import './globals.css';
 const preview =
@@ -23,6 +24,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body suppressHydrationWarning>
         <StoreProvider>
           <AuthProvider>
+            <CartSync />
             <a className="skip-link" href="#main">
               Skip to content
             </a>

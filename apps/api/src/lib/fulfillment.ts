@@ -12,12 +12,23 @@ const liveOrderSchema = orderSchema
     test: z.literal(false),
     supplierCode: z.string().min(1).max(200),
     wholesaleUnits: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-    sessionId: z.string().startsWith('cs_live_'),
+    sessionId: z.string().startsWith('cs_live_').optional(),
+    parentOrderId: z
+      .string()
+      .regex(/^purchase_[a-f0-9]{48}$/)
+      .optional(),
+    chargeTotalCents: z.number().int().positive().optional(),
     paymentIntentId: z.string().startsWith('pi_'),
     supplierOrderNo: z.string().min(1).max(200).optional(),
     refundId: z.string().optional(),
   })
-  .refine((o) => !o.plan.demo && o.amountCents === o.plan.priceCents && o.amountCents >= 50);
+  .refine(
+    (o) =>
+      !o.plan.demo &&
+      o.amountCents === o.plan.priceCents &&
+      o.amountCents >= 50 &&
+      (Boolean(o.sessionId) || Boolean(o.parentOrderId && o.chargeTotalCents)),
+  );
 export type DeliveryOrder = PaymentOrder &
   z.infer<typeof liveOrderSchema> & { lease: string; attempts: number };
 export interface FulfillmentStore {
@@ -233,23 +244,27 @@ export class FulfillmentService {
   }
   private async deliver(order: DeliveryOrder) {
     if (order.test || !eligible.includes(order.status)) throw new Error('Not a paid live order.');
-    const session = await this.stripe.checkout.sessions.retrieve(order.sessionId!);
-    assertOrderSession(order, session);
-    if (
-      !session.livemode ||
-      session.status !== 'complete' ||
-      session.payment_status !== 'paid' ||
-      session.payment_intent !== order.paymentIntentId
-    )
-      throw new Error('Payment not confirmed.');
+    if (!order.parentOrderId) {
+      const session = await this.stripe.checkout.sessions.retrieve(order.sessionId!);
+      assertOrderSession(order, session);
+      if (
+        !session.livemode ||
+        session.status !== 'complete' ||
+        session.payment_status !== 'paid' ||
+        session.payment_intent !== order.paymentIntentId
+      )
+        throw new Error('Payment not confirmed.');
+    }
     const intent = await this.stripe.paymentIntents.retrieve(order.paymentIntentId, {
       expand: ['latest_charge'],
     });
+    if (order.parentOrderId && intent.metadata?.alozuriPurchaseId !== order.parentOrderId)
+      throw new Error('Payment receipt mismatch.');
     const charge = intent.latest_charge;
     if (
       !intent.livemode ||
       intent.status !== 'succeeded' ||
-      intent.amount_received !== order.amountCents ||
+      intent.amount_received !== (order.chargeTotalCents ?? order.amountCents) ||
       intent.currency !== 'usd' ||
       !charge ||
       typeof charge === 'string'
@@ -259,7 +274,30 @@ export class FulfillmentService {
       await this.refund(order);
       return;
     }
-    if (charge.disputed || charge.amount_refunded > 0) {
+    let unrelatedRefund = false;
+    if (order.parentOrderId && charge.amount_refunded > 0 && !charge.refunded && !charge.disputed) {
+      const refunds = await this.stripe.refunds.list({
+        payment_intent: order.paymentIntentId,
+        limit: 100,
+      });
+      const own = refunds.data.find((r) => r.metadata?.alozuriOrderId === order.id);
+      if (own) {
+        await this.store.update(order, { status: 'refund_pending', refundId: own.id });
+        await this.refund(order);
+        return;
+      }
+      unrelatedRefund =
+        refunds.data.length > 0 &&
+        refunds.data
+          .filter((r) => r.status !== 'failed' && r.status !== 'canceled')
+          .reduce((sum, r) => sum + r.amount, 0) === charge.amount_refunded &&
+        refunds.data.every(
+          (r) =>
+            typeof r.metadata?.alozuriOrderId === 'string' &&
+            /^order_[a-f0-9]{48}$/.test(r.metadata.alozuriOrderId),
+        );
+    }
+    if (charge.disputed || (charge.amount_refunded > 0 && !unrelatedRefund)) {
       await this.store.finish(order, {
         status: charge.refunded ? 'refunded' : 'provision_error',
         paymentBlocked: true,

@@ -22,7 +22,7 @@ export function Footer() {
         </div>
         <div>
           <span className="eyebrow">YOUR ALOZURI</span>
-          <Link href="/dashboard">My eSIMs</Link>
+          <Link href="/account/esims">My eSIMs</Link>
           <Link href="/register">Create an account</Link>
           <Link href="/help#compatibility">Device compatibility</Link>
         </div>

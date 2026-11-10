@@ -1,6 +1,8 @@
 'use client';
 import Link from 'next/link';
-import { ArrowUpRight, Globe2, Menu, X } from 'lucide-react';
+import { ArrowUpRight, Globe2, Menu, X, ShoppingBag } from 'lucide-react';
+import { useSelector } from 'react-redux';
+import type { RootState } from '@/lib/store';
 import { useState } from 'react';
 import { useAuth } from './auth-provider';
 export function Brand() {
@@ -15,6 +17,7 @@ export function Brand() {
 }
 export function Header() {
   const { user } = useAuth();
+  const quantity = useSelector((s: RootState) => s.cart.items.reduce((n, i) => n + i.quantity, 0));
   const [open, setOpen] = useState(false);
   return (
     <header className="site-header">
@@ -32,11 +35,23 @@ export function Header() {
           </Link>
         </nav>
         <div className="nav-actions">
+          <Link
+            href="/cart"
+            className="header-cart"
+            aria-label={`Shopping cart, ${quantity} ${quantity === 1 ? 'item' : 'items'}`}
+          >
+            <ShoppingBag size={21} />
+            {quantity > 0 && (
+              <span className="cart-badge" aria-live="polite" aria-atomic="true">
+                {quantity}
+              </span>
+            )}
+          </Link>
           <span className="currency">
             <Globe2 size={15} /> USD $
           </span>
           <Link
-            href={user ? (user.emailVerified ? '/dashboard' : '/verify-email') : '/login'}
+            href={user ? (user.emailVerified ? '/account/esims' : '/verify-email') : '/login'}
             className="nav-login"
           >
             {user ? (user.emailVerified ? 'My account' : 'Verify email') : 'Log in'}{' '}
