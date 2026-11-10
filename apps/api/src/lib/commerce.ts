@@ -84,6 +84,7 @@ export async function priceCart(
   for (const item of normalized) {
     const p = await loadPlan(item.planId);
     if (
+      (p.providerId && p.providerId !== 'esim-access') ||
       p.demo ||
       p.currency !== 'USD' ||
       !p.active ||
@@ -228,6 +229,8 @@ export class CommerceService {
               i.plan.priceCents,
               i.plan.dataGb,
               i.plan.days,
+              i.plan.dataType,
+              i.plan.dailyPolicy || null,
               i.plan.countries,
               i.supplierCode,
             ]),
@@ -239,6 +242,8 @@ export class CommerceService {
                 i.plan.priceCents,
                 i.plan.dataGb,
                 i.plan.days,
+                i.plan.dataType,
+                i.plan.dailyPolicy || null,
                 i.plan.countries,
                 i.supplierCode,
               ]),

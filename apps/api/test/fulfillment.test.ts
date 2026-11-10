@@ -306,6 +306,10 @@ test('supplier adapter binds delivery profile to the original order and package'
       amount: 1000,
       packageInfoList: [{ packageCode: 'sku', count: 1, price: 1000 }],
     });
+    await client.order('stable-daily-tx', 'daily-sku', 1000, 1);
+    assert.deepEqual(captured.packageInfoList, [
+      { packageCode: 'daily-sku', count: 1, price: 1000, periodNum: 1 },
+    ]);
     const profile = {
       ...activation,
       orderNo: 'supplier-1',

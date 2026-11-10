@@ -4,7 +4,7 @@ COPY package.json package-lock.json tsconfig.base.json ./
 COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
 COPY packages/shared/package.json packages/shared/package.json
-RUN npm ci
+RUN CYPRESS_INSTALL_BINARY=0 npm ci
 COPY apps/api apps/api
 COPY packages/shared packages/shared
 RUN npm run build -w @voyaspan/api

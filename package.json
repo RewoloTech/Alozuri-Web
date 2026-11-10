@@ -15,7 +15,7 @@
     "dev:api": "npm run dev -w @voyaspan/api",
     "build": "npm run build -w @voyaspan/web && npm run build -w @voyaspan/api",
     "build:web": "npm run build -w @voyaspan/web",
-    "test:firestore": "firebase emulators:exec --only firestore --project demo-alozuri --config infra/production-emulator.json \"node --import tsx --test --test-concurrency=1 apps/api/test/production.firestore.mts apps/api/test/commerce.firestore.mts\"",
+    "test:firestore": "firebase emulators:exec --only firestore --project demo-alozuri --config infra/production-emulator.json \"node --import tsx --test --test-concurrency=1 apps/api/test/production.firestore.mts apps/api/test/commerce.firestore.mts apps/api/test/catalogue.firestore.mts\"",
     "test": "npm run test:unit",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "eslint .",

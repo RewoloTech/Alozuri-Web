@@ -3,7 +3,14 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { ShoppingBag, Trash2, Minus, Plus, LockKeyhole } from 'lucide-react';
-import { cartItems, coverageLabel, countryName, money, type CartLine } from '@voyaspan/shared';
+import {
+  cartItems,
+  coverageLabel,
+  countryName,
+  dataLabel,
+  money,
+  type CartLine,
+} from '@voyaspan/shared';
 import { quantityChanged, removeFromCart, restoreCart, type RootState } from '@/lib/store';
 import { api } from '@/lib/api';
 import { useAuth } from './auth-provider';
@@ -19,7 +26,7 @@ export function LineDescription({ line }: { line: CartLine }) {
     <>
       <h3>{line.plan.name}</h3>
       <p>
-        {line.plan.dataGb} GB · {line.plan.days} days · {coverageLabel(line.plan)}
+        {dataLabel(line.plan)} · {line.plan.days} days · {coverageLabel(line.plan)}
       </p>
       <details>
         <summary>
@@ -48,7 +55,7 @@ export function OrderSummary({
           <div>
             <strong>{line.plan.name}</strong>
             <p>
-              {line.plan.dataGb} GB · {line.plan.days} days · Qty {line.quantity}
+              {dataLabel(line.plan)} · {line.plan.days} days · Qty {line.quantity}
             </p>
             <small>
               Coverage: {line.plan.countries.length}{' '}

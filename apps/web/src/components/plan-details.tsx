@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useDispatch, useSelector } from 'react-redux';
-import { countryName, money, coverageLabel, type Plan } from '@voyaspan/shared';
+import { dataLabel, countryName, money, coverageLabel, type Plan } from '@voyaspan/shared';
 import { demoPlans } from '@voyaspan/shared/demo';
 import { api, demoMode } from '@/lib/api';
 import { addToCart, type RootState } from '@/lib/store';
@@ -78,7 +78,7 @@ export function PlanDetails({ id }: { id: string; review?: boolean }) {
         <span className="eyebrow">ONE PLAN. EVERY STOP.</span>
         <h1>{plan.name}</h1>
         <p>
-          {plan.dataGb} GB · {plan.days} days · Data only
+          {dataLabel(plan)} · {plan.days} days · Data only
         </p>
       </div>
       <div className="detail-layout">
@@ -96,6 +96,12 @@ export function PlanDetails({ id }: { id: string; review?: boolean }) {
             </div>
           </div>
           <div className="surface">
+            {plan.supplierNotes && (
+              <section>
+                <h2>Supplier conditions</h2>
+                <p style={{ whiteSpace: 'pre-line' }}>{plan.supplierNotes}</p>
+              </section>
+            )}
             <h2>Know before you go</h2>
             <dl className="spec-list">
               <div>
@@ -130,7 +136,7 @@ export function PlanDetails({ id }: { id: string; review?: boolean }) {
             {money(plan.priceCents)} <small>USD</small>
           </h2>
           <p>
-            {plan.dataGb} GB · {plan.days} days
+            {dataLabel(plan)} · {plan.days} days
           </p>
           <p>Coverage: {plan.countries.length} destinations</p>
           {plan.demo && (

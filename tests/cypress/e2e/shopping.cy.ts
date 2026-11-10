@@ -105,3 +105,47 @@ describe('card fallback', () => {
     }
   });
 });
+
+describe('data allowance filters', () => {
+  beforeEach(mockCommerce);
+  it('filters 50 GB and unlimited plans, refreshes results and restores the allowance from the URL', () => {
+    const fifty = { ...plan, id: 'fifty-gb', name: 'Europe 50 GB fixture', dataGb: 50 };
+    const daily = {
+      ...plan,
+      id: 'daily-unlimited',
+      name: 'Europe daily fixture',
+      dataGb: 2,
+      dataType: 'daily',
+      dailyPolicy: 'reduced',
+      fairUse: '2 GB high-speed per day, then 384 Kbps.',
+    };
+    cy.intercept('GET', 'http://127.0.0.1:8189/v1/packages/match*', (req) => {
+      const url = new URL(req.url);
+      expect(url.searchParams.get('countries')).to.eq('FR,CH,IT');
+      const unlimited = url.searchParams.get('dataType') === 'unlimited';
+      if (!unlimited) expect(url.searchParams.get('minGb')).to.eq('50');
+      req.reply({
+        headers: { 'access-control-allow-origin': 'http://localhost:3100' },
+        body: { plans: unlimited ? [daily] : [fifty] },
+      });
+    }).as('dataFilter');
+    cy.visit('/?mode=trip&countries=FR,CH,IT');
+    cy.contains('label', 'DATA ALLOWANCE').find('select').select('50');
+    button('Find my eSIM').click();
+    cy.wait('@dataFilter');
+    cy.contains('h3', fifty.name).should('be.visible');
+    cy.contains('label', 'DATA ALLOWANCE').find('select').select('unlimited');
+    cy.wait('@dataFilter');
+    cy.contains('h3', fifty.name).should('not.exist');
+    cy.contains('Unlimited · 2 GB/day high-speed').should('be.visible');
+    cy.contains('2 GB high-speed per day, then 384 Kbps.').should('be.visible');
+    cy.viewport(375, 900);
+    cy.document().then((doc) => expect(doc.documentElement.scrollWidth).to.be.at.most(375));
+    cy.screenshot('unlimited-filter-mobile');
+    cy.reload();
+    cy.contains('label', 'DATA ALLOWANCE').find('select').should('have.value', 'unlimited');
+    button('Find my eSIM').click();
+    cy.wait('@dataFilter');
+    cy.contains('h3', daily.name).should('be.visible');
+  });
+});

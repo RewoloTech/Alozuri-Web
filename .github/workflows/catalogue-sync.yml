@@ -1,0 +1,31 @@
+name: Daily supplier catalogue sync
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: catalogue-sync-esim-access
+  cancel-in-progress: false
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GOOGLE_CLOUD_PROJECT: alozuri
+      CYPRESS_INSTALL_BINARY: '0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: google-github-actions/auth@v3
+        with:
+          project_id: alozuri
+          workload_identity_provider: projects/259378235356/locations/global/workloadIdentityPools/alozuri-github/providers/catalogue
+          service_account: alozuri-catalogue@alozuri.iam.gserviceaccount.com
+      - run: node --import tsx scripts/sync-catalogue.mts

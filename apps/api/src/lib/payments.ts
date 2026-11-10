@@ -251,6 +251,8 @@ export async function currentCheckoutPlan(
   if (
     fresh.priceCents !== publicPlan.priceCents ||
     fresh.dataGb !== publicPlan.dataGb ||
+    fresh.dataType !== publicPlan.dataType ||
+    fresh.dailyPolicy !== publicPlan.dailyPolicy ||
     fresh.days !== publicPlan.days ||
     JSON.stringify([...fresh.countries].sort()) !== JSON.stringify([...publicPlan.countries].sort())
   )

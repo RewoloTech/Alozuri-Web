@@ -51,13 +51,20 @@ export type Plan = {
   priceCents: number;
   currency: 'USD';
   dataType: 'fixed' | 'daily' | 'unlimited';
+  dailyPolicy?: 'reduced' | 'cutoff';
+  supplierNotes?: string;
   activation: string;
   networks: string[];
   fairUse: string;
   demo?: boolean;
   syncedAt: string;
 };
-export type StoredPlan = Plan & { supplierCode: string; wholesaleUnits: number; active: boolean };
+export type StoredPlan = Plan & {
+  supplierCode: string;
+  wholesaleUnits: number;
+  active: boolean;
+  providerId?: string;
+};
 export function retailPlan(plan: StoredPlan): Plan {
   const {
     id,
@@ -68,6 +75,8 @@ export function retailPlan(plan: StoredPlan): Plan {
     priceCents,
     currency,
     dataType,
+    dailyPolicy,
+    supplierNotes,
     activation,
     networks,
     fairUse,
@@ -83,6 +92,8 @@ export function retailPlan(plan: StoredPlan): Plan {
     priceCents,
     currency,
     dataType,
+    ...(dailyPolicy ? { dailyPolicy } : {}),
+    ...(supplierNotes ? { supplierNotes } : {}),
     activation,
     networks,
     fairUse,
@@ -93,19 +104,63 @@ export function retailPlan(plan: StoredPlan): Plan {
 export function normalizeCountries(input: string[]) {
   return [...new Set(input.map((x) => x.trim().toUpperCase()).filter(Boolean))];
 }
-export function matchPlans(plans: Plan[], selected: string[], minGb = 0): Plan[] {
+export type DataFilter = 'all' | 'fixed' | 'daily' | 'unlimited';
+export const DATA_ALLOWANCES = [
+  'all',
+  '1',
+  '3',
+  '5',
+  '10',
+  '20',
+  '50',
+  'daily',
+  'unlimited',
+] as const;
+export type DataAllowance = (typeof DATA_ALLOWANCES)[number];
+export function allowanceFilter(value: DataAllowance): { minGb: number; dataType: DataFilter } {
+  return value === 'all' || value === 'daily' || value === 'unlimited'
+    ? { minGb: 0, dataType: value }
+    : { minGb: Number(value), dataType: 'fixed' };
+}
+export function dataLabel(plan: Plan): string {
+  if (plan.dataType === 'unlimited') return 'Unlimited';
+  if (plan.dataType === 'daily')
+    return plan.dailyPolicy === 'reduced'
+      ? `Unlimited · ${plan.dataGb} GB/day high-speed`
+      : `${plan.dataGb} GB/day`;
+  return `${plan.dataGb} GB`;
+}
+export function comparePlanValue(a: Plan, b: Plan): number {
+  const cost = (p: Plan) =>
+    p.dataType === 'fixed' && p.dataGb > 0 ? p.priceCents / p.dataGb : Infinity;
+  return cost(a) - cost(b) || a.priceCents - b.priceCents;
+}
+export function matchPlans(
+  plans: Plan[],
+  selected: string[],
+  minGb = 0,
+  dataType: DataFilter = 'all',
+): Plan[] {
   const required = normalizeCountries(selected);
-  if (!required.length || required.some((c) => !/^[A-Z]{2}$/.test(c))) return [];
+  if (
+    !required.length ||
+    required.some((c) => !isCountryCode(c)) ||
+    !Number.isFinite(minGb) ||
+    minGb < 0
+  )
+    return [];
   return plans
-    .filter(
-      (p) =>
-        required.every((c) => p.countries.includes(c)) &&
-        p.dataType === 'fixed' &&
-        p.dataGb >= minGb,
-    )
-    .sort(
-      (a, b) => a.priceCents / a.dataGb - b.priceCents / b.dataGb || a.priceCents - b.priceCents,
-    );
+    .filter((p) => {
+      if (!required.every((c) => p.countries.includes(c))) return false;
+      if (dataType === 'unlimited')
+        return (
+          p.dataType === 'unlimited' || (p.dataType === 'daily' && p.dailyPolicy === 'reduced')
+        );
+      if (dataType === 'daily') return p.dataType === 'daily' && p.dataGb >= minGb;
+      if (dataType === 'fixed' || minGb > 0) return p.dataType === 'fixed' && p.dataGb >= minGb;
+      return true;
+    })
+    .sort(comparePlanValue);
 }
 // Supplier units are 1/10,000 USD. Retail amounts are integer USD cents.
 export function priceRetail(wholesaleUnits: number, markup = 1.8, minimumMargin = 0.3): number {

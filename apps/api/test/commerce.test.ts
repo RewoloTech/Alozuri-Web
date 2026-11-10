@@ -34,7 +34,7 @@ test('supplier adapter uses explicit coverage, unit conversion, retail margin an
   for (const patch of [
     { location: 'Europe' },
     { currencyCode: 'EUR' },
-    { dataType: 2 },
+    { dataType: 9 },
     { price: -1 },
     { durationUnit: 'HOUR' },
     { volume: 'bad' },

@@ -18,6 +18,8 @@ export const planSchema = z.object({
   priceCents: cents,
   currency: z.literal('USD'),
   dataType: z.enum(['fixed', 'daily', 'unlimited']),
+  dailyPolicy: z.enum(['reduced', 'cutoff']).optional(),
+  supplierNotes: z.string().max(10000).optional(),
   activation: text,
   networks: z.array(text).max(250),
   fairUse: z.string().max(5000),

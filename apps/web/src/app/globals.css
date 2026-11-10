@@ -660,7 +660,17 @@ h1 {
   font-size: 15px;
   font-weight: 500;
 }
+.plan-data {
+  flex-wrap: wrap;
+}
+.plan-data .plan-allowance {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.4;
+  min-width: 0;
+}
 .plan-data .plan-days {
+  flex-shrink: 0;
   margin-left: auto;
   color: var(--muted);
   font-size: 11px;

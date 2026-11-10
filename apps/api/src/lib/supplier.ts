@@ -7,13 +7,14 @@ const sourcePackage = z.object({
   name: z.string().min(1).max(1000),
   price: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   currencyCode: z.literal('USD'),
-  volume: z.number().positive().max(Number.MAX_SAFE_INTEGER),
+  volume: z.number().nonnegative().max(Number.MAX_SAFE_INTEGER),
   duration: z.number().int().positive().max(3660),
   durationUnit: z.literal('DAY'),
   durationType: z.literal(1),
-  dataType: z.literal(1),
+  dataType: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
+  saleNote: z.string().max(10000).nullish(),
   location: z.string().min(2),
-  activeType: z.union([z.literal(1), z.literal(2)]),
+  activeType: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   fupPolicy: z.string().nullish(),
   locationNetworkList: z
     .array(
@@ -49,18 +50,43 @@ export function adaptPackage(input: unknown, syncedAt: string): StoredPlan | nul
     days: p.duration,
     priceCents: Math.max(50, priceRetail(p.price)),
     currency: 'USD' as const,
-    dataType: 'fixed' as const,
+    dataType: (p.dataType === 4 || (p.dataType === 1 && /\bunlimited\b/i.test(p.name))
+      ? 'unlimited'
+      : p.dataType === 1
+        ? 'fixed'
+        : 'daily') as StoredPlan['dataType'],
+    ...(p.dataType === 2
+      ? { dailyPolicy: 'reduced' as const }
+      : p.dataType === 3
+        ? { dailyPolicy: 'cutoff' as const }
+        : {}),
+    ...(p.saleNote ? { supplierNotes: p.saleNote } : {}),
     activation:
       p.activeType === 2
         ? 'Starts on first connection to a supported mobile network.'
-        : 'Validity starts when the eSIM is installed. Install when you are ready to use it.',
+        : p.activeType === 3
+          ? 'Validity starts after purchase. Buy only when you are ready to use it.'
+          : 'Validity starts when the eSIM is installed. Install when you are ready to use it.',
     networks: networks.slice(0, 250),
-    fairUse: p.fupPolicy || 'Fixed total data allowance. Data only; no local phone number.',
+    fairUse:
+      p.dataType === 2
+        ? `${p.volume / 1073741824} GB high-speed per day, then reduced speed${p.fupPolicy ? ' (' + p.fupPolicy + ')' : ' according to the supplier fair-use policy'}.`
+        : p.dataType === 3
+          ? `${p.volume / 1073741824} GB per day. Service stops at the daily limit. ${p.fupPolicy || ''}`
+          : p.fupPolicy ||
+            (p.dataType === 4 || /\bunlimited\b/i.test(p.name)
+              ? 'Supplier describes this plan as unlimited. Check plan name and supplier conditions for speed restrictions.'
+              : 'Fixed total data allowance. Data only; no local phone number.'),
     syncedAt,
     active: true,
   };
   if (!storedPlanSchema.safeParse(publicFields).success) return null;
-  return { ...publicFields, supplierCode: p.packageCode, wholesaleUnits: p.price };
+  return {
+    ...publicFields,
+    providerId: 'esim-access',
+    supplierCode: p.packageCode,
+    wholesaleUnits: p.price,
+  };
 }
 export class SupplierError extends Error {
   constructor(
@@ -123,14 +149,22 @@ export class SupplierClient {
     }
     return result.obj;
   }
-  async order(transactionId: string, packageCode: string, wholesaleUnits: number): Promise<string> {
+  async order(
+    transactionId: string,
+    packageCode: string,
+    wholesaleUnits: number,
+    periodNum?: number,
+  ): Promise<string> {
     z.string().min(1).max(50).parse(transactionId);
     z.string().min(1).max(200).parse(packageCode);
     z.number().int().positive().max(Number.MAX_SAFE_INTEGER).parse(wholesaleUnits);
+    if (periodNum !== undefined) z.number().int().min(1).max(365).parse(periodNum);
     const result = await this.request('esim/order', {
       transactionId,
       amount: wholesaleUnits,
-      packageInfoList: [{ packageCode, count: 1, price: wholesaleUnits }],
+      packageInfoList: [
+        { packageCode, count: 1, price: wholesaleUnits, ...(periodNum ? { periodNum } : {}) },
+      ],
     });
     return z.object({ orderNo: z.string().min(1).max(200) }).parse(result).orderNo;
   }

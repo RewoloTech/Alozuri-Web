@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { OAuth2Client } from 'google-auth-library';
 import { database } from './firebase.js';
-import { SupplierClient, adaptPackage } from './supplier.js';
+import { EsimAccessCatalogue, type CatalogueProvider } from './catalogue-provider.js';
+import type { Firestore } from 'firebase-admin/firestore';
+import { storedPlanSchema } from './validation.js';
 export async function verifySyncIdentity(header: string | undefined) {
   const audience = process.env.CATALOGUE_SYNC_AUDIENCE,
     email = process.env.CATALOGUE_SYNC_SERVICE_ACCOUNT;
@@ -14,9 +16,12 @@ export async function verifySyncIdentity(header: string | undefined) {
     return false;
   }
 }
-export async function syncCatalogue(supplier = new SupplierClient()) {
-  const db = database(),
-    state = db.doc('catalogueSync/state'),
+export async function syncCatalogue(
+  provider: CatalogueProvider = new EsimAccessCatalogue(),
+  db: Firestore = database(),
+) {
+  if (!/^[a-z][a-z0-9-]{1,49}$/.test(provider.id)) throw new Error('Invalid catalogue provider.');
+  const state = db.doc('catalogueSync/' + provider.id),
     runId = randomUUID(),
     now = Date.now();
   await db.runTransaction(async (t) => {
@@ -25,20 +30,29 @@ export async function syncCatalogue(supplier = new SupplierClient()) {
     t.set(state, { runId, leaseUntil: now + 10 * 60 * 1000, status: 'running' }, { merge: true });
   });
   try {
-    const source = await supplier.packages(),
-      syncedAt = new Date().toISOString();
-    const plans = source.map((p) => adaptPackage(p, syncedAt)).filter((p) => p !== null);
-    if (plans.length < 1)
-      throw new Error('No supported fixed-data plans returned; catalogue preserved.');
+    const syncedAt = new Date().toISOString();
+    const { fetched, plans } = await provider.fetch(syncedAt);
+    if (
+      plans.some((p) => p.providerId !== provider.id || !storedPlanSchema.safeParse(p).success) ||
+      new Set(plans.map((p) => p.id)).size !== plans.length
+    )
+      throw new Error('Invalid or duplicate provider products.');
+    if (plans.length < 1) throw new Error('No supported plans returned; catalogue preserved.');
     // Refuse a severe shrink instead of accidentally disabling most of a healthy catalogue.
     const existing = await db.collection('packages').get();
-    const activeCount = existing.docs.filter((d) => d.get('active') === true).length;
+    const owns = (d: FirebaseFirestore.QueryDocumentSnapshot) =>
+      d.get('providerId') === provider.id ||
+      (provider.id === 'esim-access' && !d.get('providerId'));
+    const owned = existing.docs.filter(owns);
+    if (plans.some((p) => existing.docs.some((d) => d.id === p.id && !owns(d))))
+      throw new Error('Provider product identifier collision.');
+    const activeCount = owned.filter((d) => d.get('active') === true).length;
     if (activeCount > 100 && plans.length < activeCount * 0.5)
       throw new Error('Unexpected catalogue shrink; catalogue preserved.');
     const ids = new Set(plans.map((p) => p.id));
     const writes = [
       ...plans.map((p) => ({ ref: db.collection('packages').doc(p.id), data: p })),
-      ...existing.docs
+      ...owned
         .filter((d) => !ids.has(d.id) && d.get('active') === true)
         .map((d) => ({ ref: d.ref, data: { active: false } })),
     ];
@@ -48,9 +62,10 @@ export async function syncCatalogue(supplier = new SupplierClient()) {
       await batch.commit();
     }
     const result = {
-      fetched: source.length,
+      providerId: provider.id,
+      fetched,
       active: plans.length,
-      unsupported: source.length - plans.length,
+      unsupported: fetched - plans.length,
       syncedAt,
     };
     await state.set({ ...result, status: 'complete', leaseUntil: 0, runId });

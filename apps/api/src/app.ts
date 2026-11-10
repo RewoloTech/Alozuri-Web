@@ -33,6 +33,7 @@ const matchQuery = z
       .transform((s) => s.split(',').map((c) => c.trim().toUpperCase()))
       .pipe(z.array(code).min(1).max(50)),
     minGb: z.coerce.number().finite().min(0).max(10000).default(0),
+    dataType: z.enum(['all', 'fixed', 'daily', 'unlimited']).default('all'),
   })
   .strict();
 const idSchema = documentId;
@@ -188,7 +189,9 @@ export async function createApp(
   });
   app.get('/v1/packages/match', async (request) => {
     const query = matchQuery.parse(request.query);
-    return { plans: matchPlans(await repository.plans(), query.countries, query.minGb) };
+    return {
+      plans: matchPlans(await repository.plans(), query.countries, query.minGb, query.dataType),
+    };
   });
   app.get<{ Params: { id: string } }>('/v1/packages/:id', async (request, reply) => {
     z.object({}).strict().parse(request.query);

@@ -163,7 +163,12 @@ export function firestoreFulfillmentStore(): FulfillmentStore {
   };
 }
 export interface DeliverySupplier {
-  order(transactionId: string, packageCode: string, wholesaleUnits: number): Promise<string>;
+  order(
+    transactionId: string,
+    packageCode: string,
+    wholesaleUnits: number,
+    periodNum?: number,
+  ): Promise<string>;
   profile(orderNo: string, transactionId: string, packageCode: string): Promise<Activation | null>;
 }
 export class FulfillmentService {
@@ -314,6 +319,7 @@ export class FulfillmentService {
           transactionId,
           order.supplierCode,
           order.wholesaleUnits,
+          order.plan.dataType === 'daily' ? 1 : undefined,
         );
       } catch (e) {
         if (e instanceof SupplierError && e.rejected) {

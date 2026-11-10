@@ -32,6 +32,11 @@ import {
   suggestedPlans,
   readSearch,
   coverageLabel,
+  dataLabel,
+  comparePlanValue,
+  allowanceFilter,
+  DATA_ALLOWANCES,
+  type DataAllowance,
 } from '@voyaspan/shared';
 import { demoPlans } from '@voyaspan/shared/demo';
 import { api, demoMode } from '@/lib/api';
@@ -93,7 +98,16 @@ export function Planner({
   }, []);
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
-  const [minGb, setMinGb] = useState('1');
+  const [allowance, setAllowance] = useState<DataAllowance>('all');
+  useEffect(() => {
+    const restore = () => {
+      const value = new URLSearchParams(window.location.search).get('allowance');
+      setAllowance(DATA_ALLOWANCES.find((v) => v === value) || 'all');
+    };
+    restore();
+    window.addEventListener('popstate', restore);
+    return () => window.removeEventListener('popstate', restore);
+  }, []);
   const requestVersion = useRef(0);
   const selectionKey = selected.join(',');
   const [results, setResults] = useState<Plan[] | null>(null);
@@ -122,8 +136,12 @@ export function Planner({
             sort === 'price' || sort === 'recommended'
               ? a.priceCents - b.priceCents
               : sort === 'data'
-                ? b.dataGb - a.dataGb
-                : a.priceCents / a.dataGb - b.priceCents / b.dataGb,
+                ? a.dataType === 'unlimited'
+                  ? -1
+                  : b.dataType === 'unlimited'
+                    ? 1
+                    : b.dataGb - a.dataGb
+                : comparePlanValue(a, b),
           )
         : null,
     [results, sort],
@@ -139,10 +157,14 @@ export function Planner({
     requestVersion.current++;
     setResults(null);
     setLoading(false);
-  }, [selectionKey, mode, minGb]);
-  async function search() {
+  }, [selectionKey, mode]);
+  async function search(value: DataAllowance = allowance) {
+    const { minGb, dataType } = allowanceFilter(value);
     const version = ++requestVersion.current;
     syncUrl();
+    const url = new URL(window.location.href);
+    url.searchParams.set('allowance', value);
+    window.history.replaceState({}, '', url);
     if (saved.chooseTrip) {
       setError('Add at least two destinations for a multi-country search.');
       setOpen(true);
@@ -162,10 +184,10 @@ export function Planner({
     setError('');
     try {
       const plans = demoMode
-        ? matchPlans(demoPlans, selected, Number(minGb))
+        ? matchPlans(demoPlans, selected, minGb, dataType)
         : (
             await api<{ plans: Plan[] }>(
-              `/v1/packages/match?countries=${selected.join(',')}&minGb=${minGb}`,
+              `/v1/packages/match?countries=${selected.join(',')}&minGb=${minGb}&dataType=${dataType}`,
             )
           ).plans;
       if (version !== requestVersion.current) return;
@@ -321,23 +343,31 @@ export function Planner({
               <span className="field-label">DATA ALLOWANCE</span>
               <span className="select-wrap">
                 <select
-                  value={minGb}
+                  value={allowance}
                   onChange={(e) => {
-                    setMinGb(e.target.value);
-                    setResults(null);
+                    const value = e.target.value as DataAllowance;
+                    setAllowance(value);
+                    if (results !== null) void search(value);
                   }}
                 >
+                  <option value="all">All data plans</option>
                   <option value="1">1 GB or more</option>
-                  <option value="0">All data plans</option>
                   <option value="3">3 GB or more</option>
                   <option value="5">5 GB or more</option>
                   <option value="10">10 GB or more</option>
                   <option value="20">20 GB or more</option>
+                  <option value="50">50 GB or more</option>
+                  <option value="daily">Daily data plans</option>
+                  <option value="unlimited">Unlimited (check fair use)</option>
                 </select>
                 <ChevronDown size={16} />
               </span>
             </label>
-            <button className="button primary search-button" disabled={loading} onClick={search}>
+            <button
+              className="button primary search-button"
+              disabled={loading}
+              onClick={() => void search()}
+            >
               {loading ? 'Finding your plans…' : 'Find my eSIM'}
               <ArrowRight size={18} />
             </button>
@@ -374,7 +404,7 @@ export function Planner({
                 <p>
                   {sorted.length
                     ? `Covers all your selected countries: ${selected.map(countryName).join(', ')}.`
-                    : 'No fixed-data plans cover all those stops. Try another destination combination or a lower data allowance.'}
+                    : 'No plans match every selected country and this allowance. Try another allowance or destination combination.'}
                 </p>
               </div>
               {sorted.length > 0 && (
@@ -400,7 +430,11 @@ export function Planner({
                   ? suggestedPlans(sorted)
                   : sorted.slice(0, 4)
               ).map((p, i) => (
-                <PlanCard key={p.id} plan={p} highlight={i === 0 && sort === 'value'} />
+                <PlanCard
+                  key={p.id}
+                  plan={p}
+                  highlight={i === 0 && sort === 'value' && p.dataType === 'fixed'}
+                />
               ))}
             </div>
             {sorted.length > 4 && (
@@ -431,10 +465,17 @@ export function PlanCard({ plan, highlight = false }: { plan: Plan; highlight?: 
         · Data only
       </p>
       <div className="plan-data">
-        {plan.dataGb}
-        <span>GB {plan.dataType === 'daily' ? 'per day' : ''}</span>
+        {plan.dataType === 'fixed' ? (
+          <>
+            {plan.dataGb}
+            <span>GB</span>
+          </>
+        ) : (
+          <span className="plan-allowance">{dataLabel(plan)}</span>
+        )}
         <span className="plan-days">{plan.days} days</span>
       </div>
+      {plan.dataType !== 'fixed' && <p className="muted">{plan.fairUse}</p>}
       <div className="plan-coverage">
         <Check size={15} /> {coverageLabel(plan)}
       </div>
