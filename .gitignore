@@ -10,6 +10,7 @@ dist/
 .DS_Store
 .firebase/
 coverage/
+.turbo/
 
 # Next.js static Hosting export and CLI logs
 apps/web/out/
