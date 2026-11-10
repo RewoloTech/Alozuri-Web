@@ -226,7 +226,7 @@ export class PaymentService {
         ...(user.email ? { customer_email: user.email } : {}),
         success_url: this.siteUrl + '/dashboard/orders?id=' + order.id + '&checkout=success',
         cancel_url: this.siteUrl + '/checkout/' + planId + '?cancelled=1',
-        expires_at: Math.floor(Date.now() / 1000) + 1800,
+        expires_at: Math.floor(Date.now() / 1000) + 1860,
       },
       { idempotencyKey: order.id + ':checkout:v1' },
     );
