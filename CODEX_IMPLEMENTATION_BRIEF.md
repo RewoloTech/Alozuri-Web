@@ -30,9 +30,9 @@
 - Client checkout payload cannot set pricing.
 - Auth identity is verified by the API, not accepted from frontend flags.
 - Google Analytics is not initialized.
-- Static Firebase Hosting storefront deployed. API deployment for the eSIM webhook is being validated separately. No charge, test customer creation or supplier purchase has been performed.
+- Static Firebase Hosting storefront deployed. The eSIM webhook API and deny-all Firestore rules are deployed and verified in europe-west4. No charge, test customer creation or supplier purchase has been performed.
 - GitHub push and automatic Hosting deployment still require repository write access; local source is committed.
 
 ## eSIM webhook receiver
 
-A validated, URL-token-protected eSIM Access callback endpoint and persistent, deduplicated Firestore inbox are implemented, with protocol health-check support. Events are stored awaiting reconciliation. This delivers webhook receipt only; supplier-confirmed reconciliation, fulfilment and Stripe integration remain pending. See README.md for deployment details.
+A validated, URL-token-protected eSIM Access callback endpoint and persistent, deduplicated Firestore inbox are deployed on Cloud Run, with protocol health-check support. Default Firestore is in europe-west4, and inbox TTL cleanup is enabled. Live health, authorization, input validation, storage, deduplication and conflict checks passed; the synthetic test record was removed. Events are stored awaiting reconciliation. This delivers webhook receipt only; supplier-confirmed reconciliation, fulfilment and Stripe integration remain pending. See README.md for deployment details.
