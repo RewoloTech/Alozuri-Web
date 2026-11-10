@@ -1,5 +1,6 @@
 'use client';
 import Link from 'next/link';
+import { AccountGate } from './account-gate';
 import { useEffect, useState } from 'react';
 import { sendEmailVerification, updateProfile } from 'firebase/auth';
 import { Globe2, ShieldCheck, Receipt, ArrowRight } from 'lucide-react';
@@ -8,7 +9,11 @@ import { useAuth } from './auth-provider';
 import { api, demoMode } from '@/lib/api';
 export function Dashboard() {
   const { user } = useAuth();
-  return <AccountDashboard key={user?.uid ?? 'preview'} />;
+  return (
+    <AccountGate>
+      <AccountDashboard key={user?.uid ?? 'preview'} />
+    </AccountGate>
+  );
 }
 function AccountDashboard() {
   const { user, loading, logout } = useAuth();
@@ -74,7 +79,7 @@ function AccountDashboard() {
               ? `Hi, ${user.displayName?.split(' ')[0] || 'traveller'}.`
               : 'Every adventure, in one place.'}
           </h1>
-          <p>Your travel data, installation guides and order history.</p>
+          <p>Your plans and order history. Stripe test payments do not issue real eSIMs.</p>
         </div>
         {user && (
           <button
@@ -183,7 +188,10 @@ function AccountDashboard() {
                       {money(o.amountCents, o.currency)}
                     </small>
                   </div>
-                  <span className="status-pill">{o.status.replaceAll('_', ' ')}</span>
+                  <span className="status-pill">
+                    {o.test ? 'Test · ' : ''}
+                    {o.status.replaceAll('_', ' ')}
+                  </span>
                 </Link>
               ))}
             </div>

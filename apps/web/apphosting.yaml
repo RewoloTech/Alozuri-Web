@@ -9,8 +9,11 @@ runConfig:
 # environment before building. Keep NEXT_PUBLIC_DEMO_MODE=true for preview.
 env:
   - variable: NEXT_PUBLIC_DEMO_MODE
-    value: 'true'
+    value: 'false'
   - variable: NEXT_PUBLIC_API_URL
     value: https://voyaspan-api-g74tu22y5q-ez.a.run.app
   - variable: NEXT_PUBLIC_SITE_URL
     value: https://voyaspan--voyaspan.europe-west4.hosted.app
+
+  - variable: NEXT_PUBLIC_PAYMENT_MODE
+    value: test

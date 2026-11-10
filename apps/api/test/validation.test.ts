@@ -20,7 +20,7 @@ test('catalogue rejects corrupt, stale, inactive and future records and strips p
     { active: false },
     { syncedAt: 'invalid' },
     { syncedAt: new Date(now + 1).toISOString() },
-    { syncedAt: new Date(now - 12 * 60 * 60 * 1000).toISOString() },
+    { syncedAt: new Date(now - 36 * 60 * 60 * 1000).toISOString() },
   ])
     assert.equal(cataloguePlan({ ...plan, ...patch }, now), null);
 });

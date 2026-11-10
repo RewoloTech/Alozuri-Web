@@ -15,11 +15,19 @@ import {
   SlidersHorizontal,
   X,
 } from 'lucide-react';
-import { countries, countryName, matchPlans, money, type Plan } from '@voyaspan/shared';
+import {
+  countries,
+  countryName,
+  matchPlans,
+  money,
+  type Plan,
+  type Country,
+  suggestedPlans,
+} from '@voyaspan/shared';
 import { demoPlans } from '@voyaspan/shared/demo';
 import { api, demoMode } from '@/lib/api';
 export function Planner({
-  initialCountries = ['GB', 'FR', 'IT'],
+  initialCountries = [],
   compact = false,
   destinationMode = false,
 }: {
@@ -27,9 +35,19 @@ export function Planner({
   compact?: boolean;
   destinationMode?: boolean;
 }) {
-  const [mode, setMode] = useState<'trip' | 'country'>(destinationMode ? 'country' : 'trip');
   const dispatch = useDispatch();
   const saved = useSelector((s: RootState) => s.itinerary);
+  const [mode, setMode] = useState<'trip' | 'country'>(
+    !destinationMode && saved.countries.length > 1 ? 'trip' : 'country',
+  );
+  const [availableCountries, setAvailableCountries] = useState<Country[]>(countries);
+  const [showAll, setShowAll] = useState(false);
+  useEffect(() => {
+    if (!demoMode)
+      void api<{ countries: Country[] }>('/v1/countries')
+        .then((r) => setAvailableCountries(r.countries))
+        .catch(() => {});
+  }, []);
   const [selected, updateSelected] = useState(
     destinationMode ? initialCountries : saved.initialized ? saved.countries : initialCountries,
   );
@@ -39,11 +57,11 @@ export function Planner({
   }
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
-  const [minGb, setMinGb] = useState('0');
+  const [minGb, setMinGb] = useState('1');
   const [results, setResults] = useState<Plan[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [sort, setSort] = useState('value');
+  const [sort, setSort] = useState('recommended');
   const picker = useRef<HTMLDivElement>(null);
   const resultRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -53,16 +71,16 @@ export function Planner({
     document.addEventListener('mousedown', close);
     return () => document.removeEventListener('mousedown', close);
   }, []);
-  const filtered = countries.filter(
+  const filtered = availableCountries.filter(
     (c) =>
-      !selected.includes(c.code) &&
+      (mode === 'country' || !selected.includes(c.code)) &&
       `${c.name} ${c.code}`.toLowerCase().includes(query.toLowerCase()),
   );
   const sorted = useMemo(
     () =>
       results
         ? [...results].sort((a, b) =>
-            sort === 'price'
+            sort === 'price' || sort === 'recommended'
               ? a.priceCents - b.priceCents
               : sort === 'data'
                 ? b.dataGb - a.dataGb
@@ -76,6 +94,7 @@ export function Planner({
     setOpen(false);
     setQuery('');
     setResults(null);
+    setShowAll(false);
   }
   async function search() {
     dispatch(setCountries(selected));
@@ -95,6 +114,7 @@ export function Planner({
             )
           ).plans;
       setResults(plans);
+      setShowAll(false);
       setTimeout(
         () => resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
         60,
@@ -126,7 +146,7 @@ export function Planner({
           <button
             onClick={() => {
               setMode('country');
-              setSelected(selected.slice(0, 1));
+              if (selected.length > 1) setSelected([]);
               setResults(null);
             }}
             className={mode === 'country' ? 'active' : ''}
@@ -157,7 +177,7 @@ export function Planner({
               <div className="country-chips">
                 {selected.map((code) => (
                   <span className="country-chip" key={code}>
-                    <span>{countries.find((c) => c.code === code)?.flag}</span>
+                    <span>{availableCountries.find((c) => c.code === code)?.flag}</span>
                     {countryName(code)}
                     <button
                       aria-label={`Remove ${countryName(code)}`}
@@ -172,7 +192,11 @@ export function Planner({
                 ))}
                 <button className="add-country" aria-expanded={open} onClick={() => setOpen(!open)}>
                   <Plus size={16} />
-                  {selected.length ? 'Add stop' : 'Choose destination'}
+                  {selected.length
+                    ? mode === 'country'
+                      ? 'Change destination'
+                      : 'Add stop'
+                    : 'Choose destination'}
                 </button>
               </div>
               {open && (
@@ -217,6 +241,7 @@ export function Planner({
                     setResults(null);
                   }}
                 >
+                  <option value="1">1 GB or more</option>
                   <option value="0">All data plans</option>
                   <option value="3">3 GB or more</option>
                   <option value="5">5 GB or more</option>
@@ -239,7 +264,7 @@ export function Planner({
             <span>
               {demoMode
                 ? 'Preview · sample plans · purchases disabled'
-                : 'USD pricing · one-time payment'}
+                : 'Live supplier plans · Stripe test payments'}
             </span>
           </div>
           {error && (
@@ -274,6 +299,7 @@ export function Planner({
                     value={sort}
                     onChange={(e) => setSort(e.target.value)}
                   >
+                    <option value="recommended">Recommended data sizes</option>
                     <option value="value">Best value per GB</option>
                     <option value="price">Lowest total price</option>
                     <option value="data">Most data</option>
@@ -282,15 +308,19 @@ export function Planner({
               )}
             </div>
             <div className="plan-grid">
-              {sorted.slice(0, 4).map((p, i) => (
+              {(showAll
+                ? sorted
+                : sort === 'recommended'
+                  ? suggestedPlans(sorted)
+                  : sorted.slice(0, 4)
+              ).map((p, i) => (
                 <PlanCard key={p.id} plan={p} highlight={i === 0 && sort === 'value'} />
               ))}
             </div>
             {sorted.length > 4 && (
-              <p className="fine-print">
-                Showing the first 4 matching plans. Adjust your data allowance or sorting to compare
-                more options.
-              </p>
+              <button className="button" onClick={() => setShowAll(!showAll)}>
+                {showAll ? 'Show recommendations' : `Show all ${sorted.length} matching plans`}
+              </button>
             )}
           </>
         )}

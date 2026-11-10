@@ -159,6 +159,7 @@ export type CustomerOrder = {
   amountCents: number;
   currency: string;
   refundRequested?: boolean;
+  test?: boolean;
 };
 export const money = (cents: number, currency = 'USD') =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(cents / 100);
@@ -179,4 +180,34 @@ export function accountName(firstName: unknown, lastName: unknown): string {
 export function nameFields(displayName: string | null) {
   const [firstName = '', ...rest] = (displayName || '').trim().split(/\s+/);
   return { firstName, lastName: rest.join(' ') };
+}
+
+export function suggestedPlans(plans: Plan[], limit = 4): Plan[] {
+  const candidates = [...plans]
+    .filter((p) => p.dataType === 'fixed' && p.dataGb >= 1)
+    .sort(
+      (a, b) =>
+        a.priceCents - b.priceCents || a.countries.length - b.countries.length || b.days - a.days,
+    );
+  const chosen: Plan[] = [];
+  for (const target of [1, 3, 5, 10, 20, 50]) {
+    const next = candidates
+      .filter((p) => p.dataGb >= target && !chosen.some((c) => c.dataGb === p.dataGb))
+      .sort(
+        (a, b) =>
+          a.dataGb - b.dataGb ||
+          a.priceCents - b.priceCents ||
+          a.countries.length - b.countries.length,
+      )[0];
+    if (next) chosen.push(next);
+    if (chosen.length >= limit) break;
+  }
+  return chosen.length ? chosen : plans.slice(0, limit);
+}
+export function isCountryCode(code: string): boolean {
+  return (
+    /^[A-Z]{2}$/.test(code) &&
+    !['ZZ', 'XA', 'XB'].includes(code) &&
+    Boolean(new Intl.DisplayNames(['en'], { type: 'region', fallback: 'none' }).of(code))
+  );
 }

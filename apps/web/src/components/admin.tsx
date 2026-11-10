@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { AccountGate } from './account-gate';
 import { useAuth } from './auth-provider';
 import { api, demoMode } from '@/lib/api';
 type Status = {
@@ -11,7 +12,11 @@ type Status = {
 };
 export function Admin() {
   const { user } = useAuth();
-  return <AccountAdmin key={user?.uid ?? 'signed-out'} />;
+  return (
+    <AccountGate next="/admin">
+      <AccountAdmin key={user?.uid ?? 'signed-out'} />
+    </AccountGate>
+  );
 }
 function AccountAdmin() {
   const { user, loading } = useAuth();

@@ -61,31 +61,34 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' | 'reset' }) {
     const password = String(data.get('password') || '');
     try {
       if (mode === 'reset') {
-        await sendPasswordResetEmail(authClient(), email);
+        await sendPasswordResetEmail(authClient(), email, {
+          url: window.location.origin + '/login',
+        });
         setSuccess('If an account exists for that email, you’ll receive a password reset link.');
       } else if (mode === 'register') {
         const displayName = accountName(data.get('firstName'), data.get('lastName'));
         const credential = await createUserWithEmailAndPassword(authClient(), email, password);
-        let profileWarning = '';
+
         try {
           await updateProfile(credential.user, { displayName });
         } catch {
-          profileWarning =
-            'Your account was created, but your name could not be saved. You can update it in account details.';
+          /* Account details can be completed after verification. */
         }
         try {
-          await sendEmailVerification(credential.user);
+          await sendEmailVerification(credential.user, {
+            url: window.location.origin + '/verify-email?next=' + encodeURIComponent(destination),
+          });
         } catch {
           /* Dashboard offers resend if delivery fails. */
         }
-        if (profileWarning) {
-          setSuccess(profileWarning);
-          return;
-        }
-        router.push(destination);
+        router.push('/verify-email?next=' + encodeURIComponent(destination));
       } else {
-        await signInWithEmailAndPassword(authClient(), email, password);
-        router.push(destination);
+        const credential = await signInWithEmailAndPassword(authClient(), email, password);
+        router.push(
+          credential.user.emailVerified
+            ? destination
+            : '/verify-email?next=' + encodeURIComponent(destination),
+        );
       }
     } catch (e) {
       setError(message(e));

@@ -12,6 +12,7 @@ export const verifyToken = async (token: string) => {
   const decoded = await getAuth(firebase()).verifyIdToken(token, true);
   return {
     uid: decoded.uid,
+    email: decoded.email,
     verified: decoded.email_verified === true,
     admin: decoded.admin === true,
   };

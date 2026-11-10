@@ -35,8 +35,12 @@ export function Header() {
           <span className="currency">
             <Globe2 size={15} /> USD $
           </span>
-          <Link href={user ? '/dashboard' : '/login'} className="nav-login">
-            {user ? 'My account' : 'Log in'} <ArrowUpRight size={16} />
+          <Link
+            href={user ? (user.emailVerified ? '/dashboard' : '/verify-email') : '/login'}
+            className="nav-login"
+          >
+            {user ? (user.emailVerified ? 'My account' : 'Verify email') : 'Log in'}{' '}
+            <ArrowUpRight size={16} />
           </Link>
           {!user && (
             <Link href="/register" className="nav-login nav-signup">

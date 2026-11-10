@@ -2,15 +2,22 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import { z } from 'zod';
-import { countries, matchPlans } from '../../../packages/shared/src/index.ts';
+import { matchPlans, isCountryCode, countryName } from '../../../packages/shared/src/index.ts';
 import { createRepository, type Repository, type Principal } from './lib/repository.js';
 import { verifyToken } from './lib/firebase.js';
+import { syncCatalogue, verifySyncIdentity } from './lib/catalogue-sync.js';
+import {
+  configuredPayments,
+  CheckoutError,
+  registerStripeWebhook,
+  type PaymentService,
+} from './lib/payments.js';
 import { documentId } from './lib/validation.js';
 import { registerEsimWebhook, type EsimWebhookInbox } from './lib/esim-webhook.js';
 const code = z
   .string()
   .regex(/^[A-Z]{2}$/)
-  .refine((value) => countries.some((c) => c.code === value));
+  .refine((value) => isCountryCode(value));
 const matchQuery = z
   .object({
     countries: z
@@ -29,12 +36,14 @@ export async function createApp(
     demo?: boolean;
     logger?: boolean;
     origins?: string[];
+    payments?: PaymentService | null;
     esimWebhook?: { token?: string; inbox?: EsimWebhookInbox };
   } = {},
 ) {
   const demo = options.demo ?? process.env.DEMO_MODE !== 'false';
   const repository = options.repository ?? createRepository(demo);
   const verify = options.verify ?? verifyToken;
+  const payments = options.payments === undefined ? configuredPayments() : options.payments;
   const app = Fastify({
     bodyLimit: 64 * 1024,
     logger: options.logger
@@ -59,6 +68,7 @@ export async function createApp(
     reply.header('Cache-Control', 'no-store');
   });
   app.setErrorHandler((error, _request, reply) => {
+    if (error instanceof CheckoutError) return reply.code(400).send({ error: error.message });
     if (error instanceof z.ZodError)
       return reply.code(400).send({ error: 'Invalid request parameters.' });
     if (error instanceof Error && 'statusCode' in error) {
@@ -75,17 +85,53 @@ export async function createApp(
       return null;
     }
     try {
-      return await verify(header.slice(7));
+      const user = await verify(header.slice(7));
+      if (!user.verified) {
+        await reply.code(403).send({ error: 'Verify your email before entering your account.' });
+        return null;
+      }
+      return user;
     } catch {
       await reply.code(401).send({ error: 'Your session has expired. Please sign in again.' });
       return null;
     }
   }
   registerEsimWebhook(app, options.esimWebhook);
+  await registerStripeWebhook(app, payments);
+  app.get('/v1/config', async () => ({
+    paymentMode: payments ? 'test' : 'disabled',
+    catalogueMode: demo ? 'preview' : 'live',
+    fulfillmentMode: 'test_no_issuance',
+  }));
+  app.post('/internal/catalogue/sync', async (request, reply) => {
+    if (!(await verifySyncIdentity(request.headers.authorization)))
+      return reply.code(401).send({ error: 'Scheduler authentication required.' });
+    z.object({})
+      .strict()
+      .parse(request.body ?? {});
+    const result = await syncCatalogue();
+    repository.invalidate?.();
+    return result;
+  });
+  app.get('/v1/countries', async () => {
+    const codes = [...new Set((await repository.plans()).flatMap((p) => p.countries))];
+    return {
+      countries: codes
+        .filter(isCountryCode)
+        .map((code) => ({
+          code,
+          name: countryName(code),
+          flag: String.fromCodePoint(...[...code].map((c) => 127397 + c.charCodeAt(0))),
+          region: 'Available destinations',
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    };
+  });
   app.get('/health', async () => ({
     status: 'ok',
     mode: demo ? 'preview' : 'catalogue',
-    paymentsEnabled: false,
+    paymentsEnabled: Boolean(payments),
+    paymentMode: payments ? 'test' : 'disabled',
   }));
   app.get('/v1/packages', async (request) => {
     const query = z.object({ country: code.optional() }).strict().parse(request.query);
@@ -127,7 +173,21 @@ export async function createApp(
       if (!user.verified)
         return reply.code(403).send({ error: 'Verify your email before purchasing.' });
       z.object({}).strict().parse(request.query);
-      z.object({ planId: idSchema }).strict().parse(request.body);
+      const input = z
+        .object({
+          planId: idSchema,
+          requestId: z.string().uuid().optional(),
+          compatible: z.literal(true).optional(),
+        })
+        .strict()
+        .parse(request.body);
+      if (payments) {
+        if (!input.requestId || !input.compatible)
+          return reply
+            .code(400)
+            .send({ error: 'Confirm device compatibility and provide a checkout request ID.' });
+        return payments.checkout(user, input.planId, input.requestId);
+      }
       return reply
         .code(503)
         .send({ error: 'Purchases are not available yet. No payment has been taken.' });
@@ -139,8 +199,9 @@ export async function createApp(
     if (!user.admin) return reply.code(403).send({ error: 'Administrator access required.' });
     return {
       mode: demo ? 'preview' : 'catalogue',
-      paymentsEnabled: false,
-      supplierConnected: false,
+      paymentsEnabled: Boolean(payments),
+      paymentMode: payments ? 'test' : 'disabled',
+      supplierConnected: !demo,
       catalogueCount: (await repository.plans()).length,
     };
   });

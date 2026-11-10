@@ -1,6 +1,7 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useSelector } from 'react-redux';
 import { countryName, money, type Plan } from '@voyaspan/shared';
 import { demoPlans } from '@voyaspan/shared/demo';
@@ -9,11 +10,59 @@ import type { RootState } from '@/lib/store';
 import { useAuth } from './auth-provider';
 export function PlanDetails({ id, review = false }: { id: string; review?: boolean }) {
   const { user, loading: authLoading } = useAuth();
+  const router = useRouter();
   const [plan, setPlan] = useState<Plan | null>(() =>
     demoMode ? (demoPlans.find((p) => p.id === id) ?? null) : null,
   );
   const [loading, setLoading] = useState(!demoMode);
   const [error, setError] = useState('');
+  const [paymentMode, setPaymentMode] = useState<'test' | 'disabled'>('disabled');
+  const [paying, setPaying] = useState(false);
+  const requestId = useRef('');
+  useEffect(() => {
+    if (!demoMode)
+      void api<{ paymentMode: 'test' | 'disabled' }>('/v1/config')
+        .then((c) => setPaymentMode(c.paymentMode))
+        .catch(() => {});
+  }, []);
+  async function checkout() {
+    if (!user) {
+      router.push('/login?next=' + encodeURIComponent('/checkout/' + id));
+      return;
+    }
+    if (!user.emailVerified) {
+      router.push('/verify-email?next=' + encodeURIComponent('/checkout/' + id));
+      return;
+    }
+    setPaying(true);
+    setError('');
+    try {
+      requestId.current ||= crypto.randomUUID();
+      const result = await api<{ url: string }>(
+        '/v1/checkout',
+        {
+          method: 'POST',
+          body: JSON.stringify({ planId: id, requestId: requestId.current, compatible: true }),
+        },
+        true,
+      );
+      const target = new URL(result.url);
+      if (target.protocol !== 'https:' || target.hostname !== 'checkout.stripe.com')
+        throw new Error('Invalid checkout URL.');
+      window.location.assign(result.url);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not open checkout.');
+      if (e instanceof Error && /closed|changed|no longer|unavailable/i.test(e.message)) {
+        requestId.current = '';
+        setCompatible(false);
+      }
+      setPaying(false);
+      if (!demoMode)
+        void api<{ plan: Plan }>(`/v1/packages/${encodeURIComponent(id)}`)
+          .then((r) => setPlan(r.plan))
+          .catch(() => {});
+    }
+  }
   const [compatible, setCompatible] = useState(false);
   const itinerary = useSelector((s: RootState) => s.itinerary.countries);
   useEffect(() => {
@@ -149,7 +198,10 @@ export function PlanDetails({ id, review = false }: { id: string; review?: boole
           {review && user && !user.emailVerified && (
             <div className="notice">
               Verify your email before purchasing.{' '}
-              <Link href="/dashboard" className="text-link">
+              <Link
+                href={`/verify-email?next=${encodeURIComponent('/checkout/' + id)}`}
+                className="text-link"
+              >
                 Open your account to resend the email or check verification.
               </Link>
             </div>
@@ -163,9 +215,36 @@ export function PlanDetails({ id, review = false }: { id: string; review?: boole
             <span>My phone supports eSIM and is carrier unlocked.</span>
           </label>
           {review ? (
-            <button disabled className="button primary full-width">
-              Payments not available yet
-            </button>
+            <>
+              {paymentMode === 'test' && (
+                <div className="notice">
+                  Stripe test checkout. No real payment or eSIM will be issued. Apple Pay and Google
+                  Pay appear in Stripe when supported by your device and wallet.
+                </div>
+              )}
+              <button
+                disabled={
+                  paymentMode !== 'test' ||
+                  !compatible ||
+                  paying ||
+                  authLoading ||
+                  (itinerary.length > 0 && !covered)
+                }
+                onClick={checkout}
+                className="button primary full-width"
+              >
+                {paying
+                  ? 'Opening Stripe…'
+                  : paymentMode === 'test'
+                    ? 'Continue to Stripe test checkout'
+                    : 'Checkout unavailable'}
+              </button>
+              {error && (
+                <p role="alert" className="error-message">
+                  {error}
+                </p>
+              )}
+            </>
           ) : (
             <Link
               aria-disabled={!compatible || (itinerary.length > 0 && !covered)}

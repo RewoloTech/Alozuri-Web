@@ -5,7 +5,9 @@ import { Footer } from '@/components/footer';
 import { StoreProvider } from '@/components/store-provider';
 import './globals.css';
 const preview =
-  process.env.VOYASPAN_STATIC_EXPORT === 'true' || process.env.NEXT_PUBLIC_DEMO_MODE !== 'false';
+  process.env.VOYASPAN_STATIC_EXPORT === 'true' ||
+  process.env.NEXT_PUBLIC_DEMO_MODE !== 'false' ||
+  process.env.NEXT_PUBLIC_PAYMENT_MODE !== 'live';
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://voyaspan.com'),
   title: { default: 'VoyaSpan — One eSIM. Every stop.', template: '%s | VoyaSpan' },

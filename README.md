@@ -6,6 +6,10 @@ Published draft: https://voyaspan-cf6b7.web.app (Firebase project `voyaspan`).
 
 **This is a functional preview, not a live shop.** All included plans and prices are clearly labelled samples. Payments, supplier orders and activation credentials are not created. Firebase accounts are real when configured. Do not enable sales until the payment/fulfilment milestones in CODEX_IMPLEMENTATION_BRIEF.md are completed and reviewed.
 
+## Live catalogue and Stripe test checkout
+
+The current implementation supports daily live fixed-plan syncing, single-destination recommendations, email verification before account access, Google sign-in, Firebase password reset, and Stripe hosted **test checkout** with eligible Apple Pay and Google Pay wallets. Test payments never order real eSIMs. See [commerce testing and setup](docs/commerce-testing.md). Earlier draft/readiness sections below describe the earlier release and are superseded by this implementation for those features. Real supplier issuance and live sales remain disabled.
+
 ## Run locally
 
 Use Node 22.13+ and npm. From the repository root:

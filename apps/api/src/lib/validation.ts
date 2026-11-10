@@ -33,4 +33,5 @@ export const orderSchema = z.object({
   amountCents: cents,
   currency: z.literal('USD'),
   refundRequested: z.boolean().optional(),
+  test: z.boolean().optional(),
 });
