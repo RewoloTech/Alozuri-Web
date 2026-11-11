@@ -202,7 +202,6 @@ test('UK geography is independent of French destination and currency changes pre
   await page
     .getByRole('textbox', { name: 'Email address', exact: true })
     .fill('currency@example.test');
-  await page.getByRole('textbox', { name: 'Confirm email address' }).fill('currency@example.test');
   await page.getByRole('checkbox').check();
   await expect(page.locator('.commerce-total')).toContainText('€11.00');
   const request = page.waitForRequest(

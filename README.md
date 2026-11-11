@@ -94,11 +94,13 @@ npm run lint
 npm run typecheck
 npm run test:unit
 npm run typecheck:tests
-npm run test:cypress
+npm run test:e2e
 npm run build
 ```
 
-See [testing instructions](docs/testing.md) for unit/API tests, Cypress, Playwright, Firestore emulator checks and the real Stripe sandbox test. Cypress runs locally and in CI with mocked providers; it does not charge real customers or issue eSIMs. Live integration limits and configuration are documented in [production checkout](docs/production-checkout.md).
+See [testing instructions](docs/testing.md) for unit/API tests, Playwright, Firestore emulator checks and the real Stripe sandbox test. Playwright runs locally and in CI with mocked providers; it does not charge real customers or issue eSIMs. Live integration limits and configuration are documented in [production checkout](docs/production-checkout.md).
+
+Install its browser with `npx playwright install chromium`. Use `npm run test:e2e:ui` for interactive runs. [Browser test migration](docs/playwright-migration.md) maps the retired runner's scenarios to Playwright.
 
 Dependency overrides pin patched transitive gRPC, glob and minimatch versions, plus Node 22 compatible Firebase app packages. Recheck these overrides against upstream dependencies during upgrades.
 

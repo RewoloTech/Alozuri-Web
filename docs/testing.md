@@ -1,6 +1,6 @@
 # Testing Alozuri
 
-Install dependencies with `npm ci`. Use Node 22.13 or newer. Cypress downloads its browser binary during installation; if installation scripts were disabled, run `npx cypress install` first.
+Install dependencies with `npm ci`. Use Node 22.13 or newer. Install the browser with `npx playwright install chromium` (Linux CI uses `--with-deps`). Playwright is the only browser test runner. Historical results below retain the names of runners used at the time; they are not current instructions.
 
 ## Unit and API tests
 
@@ -12,28 +12,24 @@ npm test
 
 These tests use Node's existing test runner and `tsx` for the API. No extra unit-testing framework is required. They cover destination state/restoration, full-country matching, cart aggregation and limits, authoritative minor-unit pricing, supplier snapshots, unavailable cart items, input validation, payment transitions, provider adapters, fulfilment retries and refunds. Network providers are mocked. No Firebase credentials or paid supplier calls are needed.
 
-## Cypress browser tests
+## Playwright browser tests
 
 ```sh
 # Starts an isolated Next.js server, runs headlessly, then stops that server.
-npm run test:cypress
-# Starts the same isolated server and opens the interactive Cypress runner.
-npm run test:cypress:open
-```
-
-Cypress tests live in `tests/cypress/e2e`. Their TypeScript settings are separate from the app and Playwright to avoid conflicting global test types:
-
-```sh
+npm run test:e2e
+# Interactive test runner:
+npm run test:e2e:ui
+# Check browser tests, fixtures and the Auth integration test:
 npm run typecheck:tests
 ```
 
-The test server uses port 3100 and a temporary source copy, preserving the developer's normal Next.js server and generated files. Stop any previous test server on that port before starting another browser suite. Do not run Cypress and Playwright simultaneously because they use the same isolated test port. For an already running **test-configured** server, use `npm run cypress:run`.
+Tests live in `tests/e2e`, with shared fixtures in `tests/fixtures` and TypeScript settings in `tests/tsconfig.json`. The test server uses port 3100 and a temporary source copy, preserving the developer's normal Next.js server and generated files. Stop an older test server on that port before starting a suite. The separate Stripe integration runner uses the same port and must run sequentially.
 
-API requests are intercepted at `http://127.0.0.1:8189`; unexpected commerce endpoints fail the test. Tests cover explicit single/trip selection, full coverage, refresh and browser history, persistent cart quantities/totals/removal, empty cart, 375/390/768px layouts, guest email validation, declined-payment retry, Apple Pay/Google Pay callback contracts and unsupported-wallet card fallback. Search regression cases also cover 50 GB/unlimited results, stale-response cancellation, local-only coverage, pagination without duplicate or omitted products, catalogue-revision refresh, filter counts and country aliases. Playwright additionally checks native Enter activation and focus restoration in the country picker. Test isolation clears browser storage between cases; refresh tests check persistence within a case. Browser exceptions fail tests.
+Provider requests are controlled with local server fixtures and route mocks. Coverage includes single/trip selection, full-country matching, cart persistence and quantities, mobile bounds, guest checkout, decline/retry, wallet callback contracts, optional accounts, usage, privacy, currencies and featured bundles. Search regressions also cover 50 GB/fair-use plans, delayed responses, local-only coverage, pagination, sort/facet counts, catalogue-revision refresh and country aliases. Currency regressions cover GBP/EUR quantities, currency locking and separate idempotency attempts for equal numeric totals in different currencies.
 
-Cypress uses a Stripe contract stub. These tests verify our UI and callback handling, **not** Stripe authentication, actual wallet availability or completed wallet transactions. They require no Stripe keys, Firebase login, Resend account or supplier balance. Do not replace fixtures with live credentials. The launcher removes an inherited `ELECTRON_RUN_AS_NODE` flag that can prevent Cypress from starting inside editors/agents.
+Stripe contract mocks test UI/callback handling, not real wallet eligibility or completed wallet transactions. The opt-in real Stripe SDK test runs separately with test keys. Ordinary browser tests do not need Firebase login, Resend credentials or supplier credit. Playwright creates isolated browser storage for each test and retains screenshots/traces for failures in `test-results/`, which is ignored by Git.
 
-Failure screenshots are saved in `test-results/cypress/screenshots` and ignored by Git. CI runs unit/API tests and Cypress on pushes and pull requests, and uploads Cypress failure artifacts. No Cypress Cloud recording key is required.
+CI runs unit/API/static/build checks plus the Playwright suite on pushes and pull requests, installs Chromium with its OS dependencies, and uploads failure artifacts. No paid browser-testing service or recording key is required.
 
 ## Existing integration and payment checks
 
@@ -108,7 +104,7 @@ Responsive chat verification: all six privacy/chat browser cases passed, along w
 
 Version `2026-11-11.2` uses one initially unchecked device-compatibility checkbox and a concise policy-link notice. The notice is also present before card/wallet confirmation. Removed early-supply/waiver controls are not recorded as consent: new order snapshots explicitly retain false flags. Strict version-one compatibility supports already-open checkout forms and their archived documents.
 
-Tests now cover compatibility-row alignment at 375/390/768/1440px; blocked cross-origin catalogue/quote calls recovered through the same-origin store route; origin rejection, operation allowlisting and request-size limits; and new-versus-historical legal snapshots. Run the full unit/Firestore/Cypress/Playwright checks plus the real local Stripe TEST runner before release. That runner does not purchase an eSIM, send delivery email or charge real money. Updated backend and frontend must both be released for the new checkout notice; no deployment is implied by these local checks.
+Tests now cover compatibility-row alignment at 375/390/768/1440px; blocked cross-origin catalogue/quote calls recovered through the same-origin store route; origin rejection, operation allowlisting and request-size limits; and new-versus-historical legal snapshots. Run the full unit/Firestore/Playwright checks plus the real local Stripe TEST runner before release. That runner does not purchase an eSIM, send delivery email or charge real money. Updated backend and frontend must both be released for the new checkout notice; no deployment is implied by these local checks.
 
 Observed follow-up results: 105 shared/API unit tests, 21 Firestore tests and 13 Cypress cases passed. Six shopping browser cases passed with the single compatibility checkbox; all eight privacy/network browser cases passed, and the two transport recovery/error-retry cases passed again after the final origin check. Real Stripe TEST decline, same-intent retry and successful USD payment passed with the simplified checkout. Lint, application/test TypeScript and the production build passed. Mobile checkout screenshots were reviewed; no live payment, supplier purchase, pricing migration or deployment was performed.
 
@@ -145,5 +141,7 @@ The header's account disclosure provides My eSIMs, Account settings and Log out 
 `tests/e2e/account-menu.spec.ts` covers keyboard focus/Escape, outside dismissal, 375/390/768/1440px bounds, successful/failed logout callbacks and unverified navigation. Its fixture is copied only into the temporary app created by `scripts/run-e2e-server.mjs`; no fixture route or test authentication bypass is added to the deployed app. These component checks use a controlled logout callback, not a real customer session. The production build was checked to exclude the fixture route. Usage tracking is covered separately in [Customer eSIM usage](esim-usage.md), including its live-verification limitation.
 
 `tests/e2e/seasonal-destinations.spec.ts` checks the [seasonal destination grid](seasonal-destinations.md): four cards, Japan restored, no carousel controls, winter/spring changes, stable reload order, image loading, mobile bounds and keyboard access. Shared selection tests cover London month boundaries and Japan's presence in every season.
+
+The [single-email checkout and optional account flow](checkout-account.md) documents Firebase Auth emulator validation, the checkout account component fixture, API ownership regressions and actual Stripe sandbox results. Run `npm run test:auth` for real Firebase SDK signup/verification/login against the local emulator; Google UI callback tests do not substitute for production OAuth verification.
 
 The data allowance picker in `tests/e2e/shopping.spec.ts` verifies that the label, value, arrow and padding all receive native select clicks and open the picker at 375/390/768/1440px. It checks keyboard opening, value changes and overflow; the existing empty-filter regression verifies search integration. Native popup dismissal uses a second trigger click because headless macOS does not consistently forward synthetic Escape keys to its platform popup. For this fix, 12 existing shopping cases passed, followed by both the corrected picker test and empty-filter test. Lint, TypeScript, production build, formatting and diff checks passed; mobile/desktop field screenshots were reviewed. No deployment was performed.

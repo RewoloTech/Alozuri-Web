@@ -440,7 +440,6 @@ test('blocked cross-origin requests recover through the same-site store for add,
   await expect(compatibility).toHaveCount(1);
   await expect(compatibility).not.toBeChecked();
   await page.getByRole('textbox', { name: 'Email address', exact: true }).fill('guest@example.com');
-  await page.getByRole('textbox', { name: 'Confirm email address' }).fill('guest@example.com');
   await compatibility.check();
   await expect(page.getByRole('button', { name: 'Continue to payment' })).toBeEnabled();
   await expect(page.locator('main [role="alert"]')).toHaveCount(0);

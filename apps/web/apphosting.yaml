@@ -13,10 +13,6 @@ env:
     value: cloudflare
     availability:
       - RUNTIME
-  - variable: CYPRESS_INSTALL_BINARY
-    value: '0'
-    availability:
-      - BUILD
   - variable: NEXT_PUBLIC_DEMO_MODE
     value: 'false'
   - variable: NEXT_PUBLIC_API_URL

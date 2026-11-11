@@ -94,6 +94,12 @@ Register the matching-mode endpoint `https://YOUR_ALOZURI_API/v1/webhooks/stripe
 
 Stripe payment method domains were registered and reported Apple Pay and Google Pay active in both live and test modes for `alozuri.com`, `www.alozuri.com`, and `alozuri--alozuri.europe-west4.hosted.app`. Wallets still require HTTPS, an eligible browser/customer wallet, supported currency and account settings. Domain activation alone is not evidence of a completed wallet payment.
 
+A read-only Stripe API check on 11 November 2026 reconfirmed that those three domains are enabled in live mode and both wallet domain statuses are `active`. The local frontend now uses the Express Checkout `always` settings for Apple Pay and Google Pay, ordered before Link. These settings broaden supported-browser coverage and can offer wallet setup; Stripe still suppresses methods on unsupported platforms/currencies. The standard Payment Element leaves their duplicate wallet controls disabled because Express Checkout owns the wallet buttons. Link and Revolut Pay are separate methods selected by Stripe, rather than replacements for device wallets.
+
+Stripe requires HTTPS for Express Checkout wallets in development as well as production. `http://localhost:3000` does not verify wallet availability. Test on a registered HTTPS domain with an eligible browser/device, or use a registered HTTPS development tunnel. See [supported browsers and display settings](https://docs.stripe.com/elements/express-checkout-element#supported-browsers) and [development prerequisites](https://docs.stripe.com/elements/express-checkout-element/accept-a-payment?payment-ui=elements). Actual Apple Pay/Google Pay authorisation still requires eligible-device verification; the local settings have not been deployed.
+
+For this wallet-display update, four focused Playwright wallet/card regressions passed, including unavailable-wallet fallback and the broader display options/order. The real Stripe TEST card decline/retry/payment case passed separately. Scoped lint, application/test TypeScript and formatting/diff checks passed. These results do not verify an actual Apple Pay or Google Pay transaction.
+
 ## Verification
 
 ```sh

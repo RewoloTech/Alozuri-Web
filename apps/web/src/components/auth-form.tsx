@@ -1,5 +1,7 @@
 'use client';
 import { useState } from 'react';
+import { authErrorMessage } from '@/lib/auth-errors';
+import { GoogleIcon } from './google-icon';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { ArrowRight, Eye, EyeOff, Globe2, ShieldCheck } from 'lucide-react';
@@ -14,20 +16,6 @@ import {
 } from 'firebase/auth';
 import { accountName, safeAccountDestination } from '@voyaspan/shared';
 import { authClient, firebaseConfigured } from '@/lib/firebase';
-const errors: Record<string, string> = {
-  'auth/invalid-credential': 'The email or password is incorrect.',
-  'auth/email-already-in-use': 'This email already has an account. Log in or reset your password.',
-  'auth/weak-password': 'Please choose a password of at least 8 characters.',
-  'auth/popup-blocked': 'Your browser blocked Google sign-in. Allow popups and try again.',
-  'auth/popup-closed-by-user': 'Google sign-in was closed. Try again when you’re ready.',
-  'auth/too-many-requests': 'Too many attempts. Please wait a moment and try again.',
-  'auth/unauthorized-domain': 'Sign-in is not available on this domain yet.',
-  'auth/operation-not-allowed': 'This sign-in method is not enabled yet.',
-};
-function message(error: unknown) {
-  const e = error as { code?: string; message?: string };
-  return errors[e.code || ''] || e.message || 'Unable to sign in. Please try again.';
-}
 export function AuthForm({ mode }: { mode: 'login' | 'register' | 'reset' }) {
   const router = useRouter();
   const search = useSearchParams();
@@ -46,7 +34,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' | 'reset' }) {
       await signInWithPopup(authClient(), provider);
       router.push(destination);
     } catch (e) {
-      setError(message(e));
+      setError(authErrorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -90,7 +78,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' | 'reset' }) {
         );
       }
     } catch (e) {
-      setError(message(e));
+      setError(authErrorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -282,27 +270,5 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' | 'reset' }) {
         </div>
       </section>
     </div>
-  );
-}
-function GoogleIcon() {
-  return (
-    <svg width="19" height="19" viewBox="0 0 48 48" aria-hidden="true">
-      <path
-        fill="#EA4335"
-        d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"
-      />
-      <path
-        fill="#4285F4"
-        d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6C44.4 38.06 46.98 31.92 46.98 24.55z"
-      />
-      <path
-        fill="#FBBC05"
-        d="M10.53 28.59a14.41 14.41 0 010-9.18l-7.98-6.19a23.9 23.9 0 000 21.56l7.98-6.19z"
-      />
-      <path
-        fill="#34A853"
-        d="M24 48c6.48 0 11.93-2.13 15.91-5.8l-7.73-6c-2.15 1.45-4.92 2.3-8.18 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"
-      />
-    </svg>
   );
 }

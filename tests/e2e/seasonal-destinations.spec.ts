@@ -36,7 +36,12 @@ test('seasonal grid restores Japan and has four visible cards without carousel c
       const img = cards.nth(i).locator('img');
       await img.scrollIntoViewIfNeeded();
       await expect
-        .poll(() => img.evaluate((element) => element.complete && element.naturalWidth > 0))
+        .poll(() =>
+          img.evaluate(
+            (element) =>
+              element instanceof HTMLImageElement && element.complete && element.naturalWidth > 0,
+          ),
+        )
         .toBe(true);
       if (width === 375 || width === 1440) {
         const href = await cards.nth(i).getAttribute('href');

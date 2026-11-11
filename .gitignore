@@ -24,6 +24,4 @@ ui-debug*.log
 test-results/
 playwright-report/
 
-# Local Cypress settings can contain private test credentials.
-cypress.env.json
 gha-creds-*.json

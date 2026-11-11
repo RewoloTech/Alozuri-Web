@@ -20,6 +20,7 @@ import { useCurrency } from './currency-provider';
 import { useAuth } from './auth-provider';
 import { OrderSummary, type Quote } from './cart';
 import { stripeCheckoutMode } from './stripe-checkout';
+import { CheckoutAccount } from './checkout-account';
 const key = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '';
 let stripePromise: ReturnType<typeof loadStripe> | undefined;
 function CheckoutPolicyNotice() {
@@ -70,6 +71,7 @@ function StripePayment({
         clientSecret,
         confirmParams: {
           return_url: new URL('/checkout/success?order=' + orderId, window.location.origin).href,
+          payment_method_data: { billing_details: { email: deliveryEmail } },
         },
         redirect: 'if_required',
       });
@@ -95,7 +97,9 @@ function StripePayment({
       <div style={{ display: wallets ? 'block' : 'none' }}>
         <ExpressCheckoutElement
           options={{
-            paymentMethods: { applePay: 'auto', googlePay: 'auto' },
+            // Broader supported-browser coverage; Stripe still checks eligibility.
+            paymentMethods: { applePay: 'always', googlePay: 'always' },
+            paymentMethodOrder: ['apple_pay', 'google_pay', 'link'],
             layout: { maxColumns: 2, maxRows: 2 },
           }}
           onReady={(e) =>
@@ -119,6 +123,7 @@ function StripePayment({
           layout: 'tabs',
           business: { name: 'Alozuri' },
           defaultValues: { billingDetails: { email: deliveryEmail } },
+          fields: { billingDetails: { email: 'never' } },
           wallets: { applePay: 'never', googlePay: 'never' },
         }}
       />
@@ -138,9 +143,9 @@ function StripePayment({
   );
 }
 export function Checkout() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const { currency, ready } = useCurrency();
-  if (!ready)
+  if (!ready || loading)
     return (
       <section className="container section" role="status">
         Loading checkout…
@@ -161,13 +166,14 @@ function CheckoutForIdentity() {
     [error, setError] = useState(''),
     [loading, setLoading] = useState(false),
     [starting, setStarting] = useState(false),
-    [email, setEmail] = useState(user?.emailVerified ? user.email || '' : ''),
-    [confirmation, setConfirmation] = useState(''),
+    [email, setEmail] = useState(user?.email || ''),
+    [accountBusy, setAccountBusy] = useState(false),
     [compatible, setCompatible] = useState(false),
     [session, setSession] = useState<{
       clientSecret: string;
       orderId: string;
       quote: Quote;
+      deliveryEmail: string;
     } | null>(null),
     [mode, setMode] = useState('disabled'),
     [quoteAttempt, setQuoteAttempt] = useState(0),
@@ -179,8 +185,8 @@ function CheckoutForIdentity() {
   const request = useRef(crypto.randomUUID()),
     submitting = useRef(false);
   useEffect(() => {
-    if (user?.emailVerified && user.email) setEmail(user.email);
-  }, [user]);
+    if (user?.email) setEmail(user.email);
+  }, [user?.email]);
   useEffect(() => {
     void api<{ cartCheckoutMode: string }>('/v1/config')
       .then((r) => setMode(r.cartCheckoutMode))
@@ -258,11 +264,8 @@ function CheckoutForIdentity() {
   );
   async function start(e: React.FormEvent) {
     e.preventDefault();
-    if (submitting.current || !quote || !compatible || !quoteReady) return;
-    if (email.trim().toLowerCase() !== confirmation.trim().toLowerCase()) {
-      setError('Email addresses do not match.');
+    if (submitting.current || accountBusy || cart.syncing || !quote || !compatible || !quoteReady)
       return;
-    }
     submitting.current = true;
     setStarting(true);
     setError('');
@@ -299,7 +302,9 @@ function CheckoutForIdentity() {
             items: JSON.parse(signature),
             currency,
             email: email.trim(),
-            emailConfirmation: confirmation.trim(),
+            // Keep the single-input UI compatible with the deployed API's
+            // legacy contract until the optional-field API update is released.
+            emailConfirmation: email.trim(),
             compatible,
             legal: CHECKOUT_LEGAL_ACCEPTANCE,
             requestId: request.current,
@@ -329,7 +334,7 @@ function CheckoutForIdentity() {
         stripePromise = undefined;
         throw new Error('Stripe could not load. Check your connection and try again.');
       }
-      setSession(result);
+      setSession({ ...result, deliveryEmail: email.trim().toLowerCase() });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Checkout could not start.');
       if (e instanceof Error && /price changed|Checkout changed/i.test(e.message)) {
@@ -379,7 +384,7 @@ function CheckoutForIdentity() {
           {session ? (
             <>
               <h2>Secure payment</h2>
-              <p>Delivery email: {email}</p>
+              <p>Delivery email: {session.deliveryEmail}</p>
               {mode === 'test' && (
                 <p className="notice">Test payment. No real money or eSIM will be issued.</p>
               )}
@@ -400,7 +405,7 @@ function CheckoutForIdentity() {
                 <StripePayment
                   clientSecret={session.clientSecret}
                   orderId={session.orderId}
-                  deliveryEmail={email}
+                  deliveryEmail={session.deliveryEmail}
                   totalCents={session.quote.totalCents}
                   currency={session.quote.currency}
                 />
@@ -412,29 +417,16 @@ function CheckoutForIdentity() {
               <p>
                 Your private installation link will be sent to this email when your eSIM is ready.
               </p>
-              <label>
-                Email address
-                <input
-                  className="commerce-input"
-                  type="email"
-                  required
-                  autoComplete="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </label>
-              <label>
-                Confirm email address
-                <input
-                  className="commerce-input"
-                  type="email"
-                  required
-                  autoComplete="off"
-                  value={confirmation}
-                  onChange={(e) => setConfirmation(e.target.value)}
-                />
-              </label>
+              <CheckoutAccount
+                email={email}
+                onEmailChange={setEmail}
+                user={user}
+                disabled={starting}
+                onBusyChange={setAccountBusy}
+                returnTo={buy ? '/checkout?buy=' + encodeURIComponent(buy) : '/checkout'}
+              />
               <h2>Review your order</h2>
+              {cart.syncing && <p role="status">Syncing your saved cart…</p>}
               <p>The order summary shows your plans and final total in {currency}.</p>
               <label className="checkbox-label">
                 <input
@@ -458,6 +450,8 @@ function CheckoutForIdentity() {
                 className="button primary full-width"
                 disabled={
                   starting ||
+                  accountBusy ||
+                  cart.syncing ||
                   loading ||
                   !quoteReady ||
                   !compatible ||

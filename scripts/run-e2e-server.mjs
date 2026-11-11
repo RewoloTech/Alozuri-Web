@@ -27,9 +27,11 @@ if (existsSync(path.join(source, 'apps/api/package.json'))) {
 }
 symlinkSync(path.join(source, 'node_modules'), path.join(target, 'node_modules'), 'dir');
 // Component fixtures exist only in this temporary test app, never the deployed source.
-const accountFixture = path.join(target, 'apps/web/src/app/e2e-fixtures/account-menu/page.tsx');
-mkdirSync(path.dirname(accountFixture), { recursive: true });
-cpSync(path.join(source, 'tests/fixtures/account-menu.tsx'), accountFixture);
+for (const name of ['account-menu', 'checkout-account']) {
+  const fixture = path.join(target, `apps/web/src/app/e2e-fixtures/${name}/page.tsx`);
+  mkdirSync(path.dirname(fixture), { recursive: true });
+  cpSync(path.join(source, `tests/fixtures/${name}.tsx`), fixture);
+}
 const child = spawn(
   process.execPath,
   [path.join(source, 'node_modules/next/dist/bin/next'), 'dev', '--webpack', '--port', '3100'],

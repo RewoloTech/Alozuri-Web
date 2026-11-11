@@ -695,9 +695,13 @@ h1 {
 .plan-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
+  grid-auto-rows: 1fr;
   gap: 16px;
 }
 .plan-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
   background: white;
   border: 1px solid var(--border);
   border-radius: 14px;
@@ -762,6 +766,8 @@ h1 {
   gap: 7px;
   color: var(--blue);
   font-size: 0.875rem;
+  margin-top: auto;
+  padding-top: 12px;
   padding-bottom: 19px;
   border-bottom: 1px solid var(--border);
 }
@@ -2404,6 +2410,45 @@ h1 {
   margin-top: 8px;
   background: white;
   color: var(--navy);
+}
+.checkout-account {
+  min-width: 0;
+  gap: 14px;
+}
+.checkout-account .stack {
+  gap: 14px;
+}
+.checkout-guest-intro strong {
+  display: block;
+  color: var(--ink);
+  font-size: 1rem;
+}
+.checkout-guest-intro span {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.875rem;
+}
+.checkout-account-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 32px;
+}
+.checkout-account-options .text-link {
+  min-height: 44px;
+  margin-top: 0;
+  padding: 4px 8px;
+}
+.checkout-account .google-button {
+  width: 100%;
+  margin-top: 0;
+}
+.checkout-account .password-field input {
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.checkout-account .password-field {
+  border: 0;
 }
 .payment-divider {
   text-align: center;

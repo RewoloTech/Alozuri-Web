@@ -22,7 +22,7 @@ This is a scoped code/configuration review with automated tests, not a penetrati
 
 ## Verification
 
-102 shared/API unit tests and 21 Firestore integration tests passed. The full Playwright fixture suite passed 11 cases (real Stripe is intentionally separate); it includes hover readability, checkbox alignment at desktop/390/375px, safe server-rendered JSON-LD, privacy controls, search state and payment retry behaviour. Lint, application/test TypeScript checks and the production build passed. Strict single-country behaviour, including older regional-option URLs, is covered by Cypress; final command results are recorded in `docs/testing.md`.
+102 shared/API unit tests and 21 Firestore integration tests passed. The full Playwright fixture suite passed 11 cases (real Stripe is intentionally separate); it includes hover readability, checkbox alignment at desktop/390/375px, safe server-rendered JSON-LD, privacy controls, search state and payment retry behaviour. Lint, application/test TypeScript checks and the production build passed. Strict single-country behaviour, including older regional-option URLs, is covered by Playwright; final command results are recorded in `docs/testing.md`.
 
 ## Remaining operational checks
 

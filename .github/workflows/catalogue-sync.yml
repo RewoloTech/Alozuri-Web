@@ -15,7 +15,6 @@ jobs:
     timeout-minutes: 10
     env:
       GOOGLE_CLOUD_PROJECT: alozuri
-      CYPRESS_INSTALL_BINARY: '0'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

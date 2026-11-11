@@ -16,7 +16,7 @@ jobs:
       - run: npm run test:unit
       - run: npm run build
 
-  cypress:
+  playwright:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -26,10 +26,11 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run test:cypress
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: cypress-failures
-          path: test-results/cypress
+          name: playwright-failures
+          path: test-results
           if-no-files-found: ignore

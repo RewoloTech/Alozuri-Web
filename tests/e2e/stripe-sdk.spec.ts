@@ -33,9 +33,6 @@ test('real Stripe Payment Element declines a test card, retries the same intent 
   await page
     .getByRole('textbox', { name: 'Email address', exact: true })
     .fill('checkout-test@example.com');
-  await page
-    .getByRole('textbox', { name: 'Confirm email address' })
-    .fill('checkout-test@example.com');
   for (const checkbox of await page.getByRole('checkbox').all()) await checkbox.check();
   await page.getByRole('button', { name: 'Continue to payment' }).click();
   let paymentFrame: Frame | undefined;
