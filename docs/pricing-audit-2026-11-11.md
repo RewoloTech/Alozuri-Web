@@ -2,7 +2,8 @@
 
 Read-only supplier fetch: **3283 products**. Compared against
 **3283 stored package records** from production. No production
-writes, purchases, migrations or deployments were performed. Policy:
+writes, purchases, migrations or deployments were performed during the original
+preview. The subsequent authorised activation is recorded below. Policy:
 `contribution-usd-v2-8988d8d43ad7`.
 
 The old engine's $1.99 minimum, 50-cent rounding and pre-fee margin checks
@@ -90,8 +91,9 @@ The price-only migration alone cannot populate supplier comparison metadata.
 GBP/EUR conversion now rounds to whole cents, without a second marketing price
 step that could make different USD prices equal again.
 
-The current localhost storefront points at the deployed API, so it will continue
-to show existing prices until the reviewed backend and fresh catalogue are released.
+The localhost storefront points at the deployed API. The authorised activation
+below now makes the new prices available on both localhost and the live site.
+Reload an existing search to retrieve current results.
 
 ## Validation
 
@@ -114,6 +116,49 @@ to show existing prices until the reviewed backend and fresh catalogue are relea
   catalogue export, all-catalogue comparison, and inspection of the supplied
   screenshot. No new visual layout change was made.
 
-No live payment, supplier purchase, production write or deployment was performed.
+No live payment or supplier purchase was performed. The local audit made no
+production changes; the later authorised release is recorded below.
 Actual live fees, tax treatment, wallet authorisation and supplier delivery were
 not verified by these local tests.
+
+## Authorised production activation
+
+The owner explicitly selected **“Release the pricing to production too.”** The
+backend pricing source was committed and pushed as `49b3e8f` so the existing daily
+GitHub importer uses the same policy. Automatic App Hosting website rollouts were
+verified disabled before and after the push. Other pending frontend changes were
+not included in this backend release.
+
+Cloud Build `37d9cd7f-4051-426a-9f20-70c69835966f` built the reviewed local API
+archive (SHA-256 `f833f31eba1fc89f400cabf757d27a62393b118e2db254eb20004ea616af230e`).
+The immutable image digest is
+`sha256:1cd549619beaa94434e2b841fd3132f806d8784da5a77ff9c9be58f4469c91a4`.
+Existing service identity, live payment mode, secrets, supplier/email configuration
+and worker settings were preserved. Revision `alozuri-api-00009-h6t` paused new
+checkout while records changed; revision **`alozuri-api-00010-qb4`** reopened
+checkout and serves 100% of API traffic.
+
+The approved migration updated 3,283 package records and stored 3,283 once-only
+original backups under `pricingMigrations/contribution-usd-v2-8988d8d43ad7/packages`.
+A temporary catalogue lease prevented an overlapping importer during migration.
+A fresh supplier sync (`8a4c0b94-188f-4eb3-a3ff-ffe2e14abb61`) then published
+3,179 public products, 96 hidden variants and eight review-required products.
+All four featured bundles reference this completed sync. The normal 03:17 UTC
+schedule remains unchanged. Historical orders and charged totals were not migrated.
+
+Production verification confirmed current pricing metadata, stored supplier IDs,
+backup count, hidden-product rejection, public-field isolation, localhost CORS,
+and matching public/cart quote amounts in USD, GBP and EUR. The live currency
+quotes at verification were:
+
+| Currency | 500 MB/day | 1 GB/day |
+| -------- | ---------: | -------: |
+| USD      |      $1.49 |    $1.99 |
+| GBP      |      £1.12 |    £1.50 |
+| EUR      |      €1.34 |    €1.79 |
+
+Actual browser checks confirmed the live product/cart/pre-payment checkout at
+$1.49, with no overflow at 375/390/768/1440px, and the actual localhost search
+showing seven curated US daily plans with $1.49 and $1.99 as the first two prices.
+No live payment request or supplier order was submitted. See the
+[machine-readable release record](pricing-production-release-2026-11-11.json).

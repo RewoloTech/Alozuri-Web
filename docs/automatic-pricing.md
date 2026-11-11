@@ -172,8 +172,9 @@ Firestore/Stripe local tests require Java 21+ and use `demo-alozuri` on the emul
 ## Historical v1 production activation — 11 November 2026
 
 The following records the earlier v1 release, before this audit. The contribution
-pricing and curation changes above are local; see the [current audit](pricing-audit-2026-11-11.md)
-for their preview and validation. They have not changed live prices.
+pricing and curation changes above have since been activated separately; see the
+[current audit](pricing-audit-2026-11-11.md) for the authorised v2 production release
+and verification.
 
 The owner explicitly approved deployment and the reviewed `alozuri:tiered-usd-v1` migration. All 3,283 records were migrated with once-only backups: 2,677 prices increased, 599 decreased and seven stayed unchanged. Zero records require review, and a verification dry-run found zero remaining changes. A temporary catalogue lease prevented a concurrent importer during migration and was released afterward. Historical orders and charged amounts were not migrated.
 

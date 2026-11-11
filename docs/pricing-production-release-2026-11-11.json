@@ -1,0 +1,63 @@
+{
+  "completedAt": "2026-11-11T23:39:32.594Z",
+  "project": "alozuri",
+  "policy": "contribution-usd-v2-8988d8d43ad7",
+  "sourceCommit": "49b3e8f",
+  "buildId": "37d9cd7f-4051-426a-9f20-70c69835966f",
+  "sourceArchiveSha256": "f833f31eba1fc89f400cabf757d27a62393b118e2db254eb20004ea616af230e",
+  "image": "europe-west4-docker.pkg.dev/alozuri/alozuri-api/api:pricing-v2-f833f31eba1f",
+  "digest": "sha256:1cd549619beaa94434e2b841fd3132f806d8784da5a77ff9c9be58f4469c91a4",
+  "revision": "projects/alozuri/locations/europe-west4/services/alozuri-api/revisions/alozuri-api-00010-qb4",
+  "checkout": "live",
+  "migration": {
+    "version": "contribution-usd-v2-8988d8d43ad7",
+    "mode": "apply",
+    "scanned": 3283,
+    "changed": 3283,
+    "reviewRequired": 0,
+    "increased": 399,
+    "decreased": 1807
+  },
+  "catalogue": {
+    "version": "contribution-usd-v2-8988d8d43ad7",
+    "total": 3283,
+    "visible": 3179,
+    "hidden": 96,
+    "review": 8,
+    "backupCount": 3283,
+    "syncId": "8a4c0b94-188f-4eb3-a3ff-ffe2e14abb61",
+    "usdQuotes": {
+      "half": 149,
+      "one": 199
+    },
+    "supplierCodes": {
+      "half": "PL9Z2WXJC",
+      "one": "PDDRFB321"
+    },
+    "bundles": 4
+  },
+  "publicPrices": [
+    {
+      "currency": "USD",
+      "halfMinor": 149,
+      "oneMinor": 199
+    },
+    {
+      "currency": "GBP",
+      "halfMinor": 112,
+      "oneMinor": 150
+    },
+    {
+      "currency": "EUR",
+      "halfMinor": 134,
+      "oneMinor": 179
+    }
+  ],
+  "manualChecks": [
+    "Live product, cart and pre-payment checkout agree at USD 149 minor units",
+    "Live checkout has no horizontal overflow at 375/390/768/1440px",
+    "Actual localhost browser search shows seven US daily plans, USD 149/199 minor units",
+    "No payment request or supplier order submitted",
+    "Automatic App Hosting website rollouts remain disabled"
+  ]
+}
