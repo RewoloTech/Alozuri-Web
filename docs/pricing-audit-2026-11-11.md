@@ -162,3 +162,12 @@ $1.49, with no overflow at 375/390/768/1440px, and the actual localhost search
 showing seven curated US daily plans with $1.49 and $1.99 as the first two prices.
 No live payment request or supplier order was submitted. See the
 [machine-readable release record](pricing-production-release-2026-11-11.json).
+
+### Subsequent currency presentation update
+
+The API revision and prices above record the original v2 activation. The owner
+subsequently approved bounded GBP/EUR retail endings above £5/€5; the USD
+catalogue, low-priced offers and historical orders remain unchanged. The current
+API is `alozuri-api-00011-sc7`. See the
+[local-currency release](local-currency-rounding-2026-11-11.md) for the safeguards,
+current featured prices and verification.

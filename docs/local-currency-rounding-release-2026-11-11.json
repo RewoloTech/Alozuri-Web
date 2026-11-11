@@ -1,0 +1,167 @@
+{
+  "completedAt": "2026-11-11T23:53:56.121Z",
+  "project": "alozuri",
+  "sourceCommit": "cd0e251",
+  "build": {
+    "operation": "operations/build/alozuri/OWE4YzVkZmEtNzNiMC00ZTJkLWJkNjItNTNjZTQ3MzRhZWI1",
+    "buildId": "9a8c5dfa-73b0-4e2d-bd62-53ce4734aeb5",
+    "image": "europe-west4-docker.pkg.dev/alozuri/alozuri-api/api:local-rounding-1d3424d0c4b7",
+    "sha": "1d3424d0c4b7d752268cb72ede4fa278d0f76a7098de1da1440e61066fe1b72f",
+    "digest": "sha256:58d1a74f43aec34893fd562f4d725196b881475e1f7a2806c416c0c357df8de3"
+  },
+  "live": {
+    "verifiedAt": "2026-11-11T23:52:56.124Z",
+    "revision": "projects/alozuri/locations/europe-west4/services/alozuri-api/revisions/alozuri-api-00011-sc7",
+    "traffic": [
+      {
+        "type": "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST",
+        "revision": "alozuri-api-00011-sc7",
+        "percent": 100
+      }
+    ],
+    "config": {
+      "paymentMode": "live",
+      "catalogueMode": "live",
+      "cartCheckoutMode": "live",
+      "supportedCurrencies": ["USD", "GBP", "EUR"],
+      "fulfillmentMode": "esim_access"
+    },
+    "results": [
+      {
+        "currency": "USD",
+        "prices": [
+          {
+            "region": "europe",
+            "productId": "esim-b0702e322fbcf8a23d9d69e8",
+            "minor": 1099
+          },
+          {
+            "region": "asia",
+            "productId": "esim-db0fb72526448cb80bf983d3",
+            "minor": 2549
+          },
+          {
+            "region": "north-america",
+            "productId": "esim-c525b3fa0ca7f258c7dd956c",
+            "minor": 2449
+          },
+          {
+            "region": "global",
+            "productId": "esim-faf726618a4c44744c58d8d3",
+            "minor": 4949
+          }
+        ]
+      },
+      {
+        "currency": "GBP",
+        "prices": [
+          {
+            "region": "europe",
+            "productId": "esim-b0702e322fbcf8a23d9d69e8",
+            "minor": 849
+          },
+          {
+            "region": "asia",
+            "productId": "esim-db0fb72526448cb80bf983d3",
+            "minor": 1949
+          },
+          {
+            "region": "north-america",
+            "productId": "esim-c525b3fa0ca7f258c7dd956c",
+            "minor": 1849
+          },
+          {
+            "region": "global",
+            "productId": "esim-faf726618a4c44744c58d8d3",
+            "minor": 3749
+          }
+        ]
+      },
+      {
+        "currency": "EUR",
+        "prices": [
+          {
+            "region": "europe",
+            "productId": "esim-b0702e322fbcf8a23d9d69e8",
+            "minor": 999
+          },
+          {
+            "region": "asia",
+            "productId": "esim-db0fb72526448cb80bf983d3",
+            "minor": 2299
+          },
+          {
+            "region": "north-america",
+            "productId": "esim-c525b3fa0ca7f258c7dd956c",
+            "minor": 2201
+          },
+          {
+            "region": "global",
+            "productId": "esim-faf726618a4c44744c58d8d3",
+            "minor": 4449
+          }
+        ]
+      }
+    ],
+    "smallUsdPlanGbp": [112, 150]
+  },
+  "preview": {
+    "scanned": 3179,
+    "currencies": [
+      {
+        "currency": "GBP",
+        "rounded": 1045,
+        "keptPrecise": 2134
+      },
+      {
+        "currency": "EUR",
+        "rounded": 1274,
+        "keptPrecise": 1905
+      }
+    ],
+    "examples": [
+      {
+        "region": "europe",
+        "productId": "esim-b0702e322fbcf8a23d9d69e8",
+        "usd": 1099,
+        "GBP": 849,
+        "EUR": 999
+      },
+      {
+        "region": "asia",
+        "productId": "esim-db0fb72526448cb80bf983d3",
+        "usd": 2549,
+        "GBP": 1949,
+        "EUR": 2299
+      },
+      {
+        "region": "north-america",
+        "productId": "esim-c525b3fa0ca7f258c7dd956c",
+        "usd": 2449,
+        "GBP": 1849,
+        "EUR": 2201
+      },
+      {
+        "region": "global",
+        "productId": "esim-faf726618a4c44744c58d8d3",
+        "usd": 4949,
+        "GBP": 3749,
+        "EUR": 4449
+      }
+    ]
+  },
+  "validation": {
+    "unit": 146,
+    "firestore": 35,
+    "stripeTestMode": {
+      "smallGbp": true,
+      "smallEur": true,
+      "roundedGbp": true,
+      "roundedEur": true
+    },
+    "apiBuild": true,
+    "typechecks": true,
+    "lint": true,
+    "livePaymentSubmitted": false
+  }
+}

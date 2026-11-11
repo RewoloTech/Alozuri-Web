@@ -52,3 +52,30 @@ server search/detail parity with the actual rounded amounts. Full unit,
 Firestore and Stripe test-mode results and the production rollout are recorded
 below when complete. Live verification stops at quotes and pre-payment screens;
 no real payment or supplier purchase is part of this release.
+
+### Completed production activation
+
+Source commit `cd0e251` was pushed with automatic website rollouts still disabled.
+Cloud Build `9a8c5dfa-73b0-4e2d-bd62-53ce4734aeb5` succeeded; immutable image digest
+`sha256:58d1a74f43aec34893fd562f4d725196b881475e1f7a2806c416c0c357df8de3`
+is serving 100% of API traffic as **`alozuri-api-00011-sc7`**. Existing environment,
+secrets, service identity, checkout mode and worker settings were preserved.
+No catalogue migration, supplier cost update or historical-order rewrite occurred.
+
+- Full unit suite: **35 shared + 111 API tests passed**.
+- Firestore emulator: **35 passed**.
+- Real Stripe TEST-mode GBP/EUR decline/retry checkouts passed for both the small
+  £1.12/€1.34 fixture and the rounded £8.49/€9.99 fixture. The configurable
+  `STRIPE_TEST_COST_UNITS=60000` fixture exercises the actual cosmetic-rounding
+  branch. Signed webhook transport is simulated locally; no supplier is ordered.
+- Lint, application/test TypeScript, formatting and API production build passed.
+- Live HTTP checks confirmed all four default bundles match product detail and
+  two-item server quote totals in USD, GBP and EUR. USD defaults remain
+  $10.99/$25.49/$24.49/$49.49; GBP defaults are now £8.49/£19.49/£18.49/£37.49.
+- Actual localhost and live-site browser checks confirmed the GBP cards, Europe
+  product, cart and completed pre-payment quote all agree at £8.49, without a
+  payment request. Screenshots were visually inspected.
+- The low-priced US offers remain £1.12 and £1.50. Checkout remains live.
+
+No real payment or supplier purchase was submitted. Detailed evidence is in the
+[machine-readable release record](local-currency-rounding-release-2026-11-11.json).
