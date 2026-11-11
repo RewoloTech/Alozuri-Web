@@ -69,3 +69,5 @@ This runner refuses a backend unless `/v1/config` reports test checkout mode. It
 ## Search and pricing audit (2026-11-11)
 
 The read-only current supplier audit and its scope/measurements are documented in [catalogue and filters](catalogue-and-filters.md). Search tests cover strict parameter validation before database access, cursor/filter/revision binding, stable global sorting, complete country intersection, daily/unlimited distinctions, public-field projection and forwarded-address rate-limit isolation. Gross-margin figures are computed from actual stored cost/retail values, not assumed Stripe fees.
+
+For this release, 19 shared tests, 52 API tests, 11 Firestore tests, 11 Cypress cases and six Playwright fixture cases passed. The real Stripe case was skipped in the fixture suite and passed separately against the deployed sandbox with Stripe-delivered webhooks. Lint, app/test typechecks, changed-file formatting and the production build passed. Live browser search verification covered 375/390/768/1440 px. This does not verify a real charge, wallet authorisation, supplier purchase or delivery email.

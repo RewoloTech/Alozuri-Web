@@ -128,7 +128,10 @@ export function Home() {
           </span>
           <span>
             <ShieldCheck />
-            Checkout coming soon
+            {process.env.NEXT_PUBLIC_DEMO_MODE === 'false' &&
+            process.env.NEXT_PUBLIC_PAYMENT_MODE === 'live'
+              ? 'Secure Stripe checkout'
+              : 'Compare travel data plans'}
           </span>
           <span>
             <Signal />
