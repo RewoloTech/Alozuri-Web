@@ -2,9 +2,11 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import { SUPPORTED_CURRENCIES, type Currency } from '@voyaspan/shared';
+import { preferredCurrency } from '@voyaspan/shared/currency';
 
 const CurrencyContext = createContext<{
   currency: Currency;
+  ready: boolean;
   refresh: number;
   setCurrency: (value: Currency) => void;
   available: Currency[];
@@ -12,6 +14,7 @@ const CurrencyContext = createContext<{
   lock: (value: boolean) => void;
 }>({
   currency: 'USD',
+  ready: false,
   refresh: 0,
   setCurrency: () => {},
   available: ['USD'],
@@ -23,20 +26,43 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
   const [locked, lock] = useState(false);
   const [currency, update] = useState<Currency>('USD');
   const [refresh, setRefresh] = useState(0);
+  const [ready, setReady] = useState(false);
   useEffect(() => {
     let active = true;
-    void api<{ supportedCurrencies?: string[] }>('/v1/config')
-      .then((config) => {
-        if (!active) return;
-        const allowed = SUPPORTED_CURRENCIES.filter(
-          (c) => c === 'USD' || config.supportedCurrencies?.includes(c),
-        );
-        setAvailable(allowed);
-        try {
-          update(allowed.find((c) => c === localStorage.getItem('alozuri-currency')) ?? 'USD');
-        } catch {}
-      })
-      .catch(() => {});
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2500);
+    let saved: string | null = null;
+    try {
+      saved = localStorage.getItem('alozuri-currency');
+    } catch {}
+    const configuration = api<{ supportedCurrencies?: string[] }>('/v1/config', {
+      signal: controller.signal,
+    })
+      .then((config) =>
+        SUPPORTED_CURRENCIES.filter((c) => c === 'USD' || config.supportedCurrencies?.includes(c)),
+      )
+      .catch<Currency[]>(() =>
+        process.env.NEXT_PUBLIC_DEMO_MODE === 'false' ? [...SUPPORTED_CURRENCIES] : ['USD'],
+      );
+    // Existing localStorage preferences always win. Automatic suggestions are
+    // never saved as a manual preference. The root provider survives navigation.
+    const suggestion: Promise<Currency> = SUPPORTED_CURRENCIES.some((c) => c === saved)
+      ? Promise.resolve('USD')
+      : fetch('/api/currency', { cache: 'no-store', signal: controller.signal })
+          .then(async (response) => {
+            if (!response.ok) return 'USD' as const;
+            const data: unknown = await response.json();
+            if (!data || typeof data !== 'object' || !('currency' in data)) return 'USD' as const;
+            return SUPPORTED_CURRENCIES.find((c) => c === data.currency) ?? 'USD';
+          })
+          .catch(() => 'USD');
+    void Promise.all([configuration, suggestion]).then(([allowed, suggested]) => {
+      if (!active) return;
+      setAvailable(allowed);
+      update(preferredCurrency(saved, suggested, allowed));
+      setReady(true);
+      clearTimeout(timeout);
+    });
     const tick = () => {
       if (document.visibilityState === 'visible') setRefresh((n) => n + 1);
     };
@@ -44,19 +70,23 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
     document.addEventListener('visibilitychange', tick);
     return () => {
       active = false;
+      controller.abort();
+      clearTimeout(timeout);
       clearInterval(timer);
       document.removeEventListener('visibilitychange', tick);
     };
   }, []);
   function setCurrency(value: Currency) {
-    if (locked || !available.includes(value)) return;
+    if (!ready || locked || !available.includes(value)) return;
     update(value);
     try {
       localStorage.setItem('alozuri-currency', value);
     } catch {}
   }
   return (
-    <CurrencyContext.Provider value={{ currency, refresh, setCurrency, available, locked, lock }}>
+    <CurrencyContext.Provider
+      value={{ currency, ready, refresh, setCurrency, available, locked: locked || !ready, lock }}
+    >
       {children}
     </CurrencyContext.Provider>
   );

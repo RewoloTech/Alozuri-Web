@@ -5,10 +5,11 @@ import { PlanCard } from './planner';
 import { useCurrency } from './currency-provider';
 import { api } from '@/lib/api';
 export function CountryOffers({ code, initial }: { code: string; initial: Plan[] }) {
-  const { currency, refresh } = useCurrency(),
+  const { currency, refresh, ready } = useCurrency(),
     [plans, setPlans] = useState(initial),
     [error, setError] = useState('');
   useEffect(() => {
+    if (!ready) return;
     if (currency === 'USD') {
       setPlans(initial);
       setError('');
@@ -32,7 +33,7 @@ export function CountryOffers({ code, initial }: { code: string; initial: Plan[]
     return () => {
       active = false;
     };
-  }, [code, currency, refresh, initial]);
+  }, [code, currency, refresh, initial, ready]);
   if (!initial.length && !plans.length) return null;
   return (
     <section className="section" aria-label="Current local plans">

@@ -13,7 +13,7 @@ import {
 import { useCurrency } from './currency-provider';
 import { api } from '@/lib/api';
 export function FeaturedBundles({ initial }: { initial: FeaturedBundle[] | null }) {
-  const { currency, refresh } = useCurrency();
+  const { currency, refresh, ready } = useCurrency();
   const [bundles, setBundles] = useState(initial ?? unavailableBundles()),
     [loadedCurrency, setLoadedCurrency] = useState('USD'),
     [loading, setLoading] = useState(!initial),
@@ -21,6 +21,7 @@ export function FeaturedBundles({ initial }: { initial: FeaturedBundle[] | null 
   const [choices, setChoices] = useState<Partial<Record<FeaturedRegion, BundleAllowance>>>({});
   const loadedRequest = useRef(initial ? 'USD:0' : '');
   useEffect(() => {
+    if (!ready) return;
     const requestKey = currency + ':' + refresh;
     if (loadedRequest.current === requestKey) return;
     let active = true;
@@ -45,8 +46,8 @@ export function FeaturedBundles({ initial }: { initial: FeaturedBundle[] | null 
     return () => {
       active = false;
     };
-  }, [currency, refresh, initial]);
-  const current = loadedCurrency === currency;
+  }, [currency, refresh, initial, ready]);
+  const current = ready && loadedCurrency === currency;
   return (
     <section
       className="section container featured-bundles"
@@ -59,7 +60,7 @@ export function FeaturedBundles({ initial }: { initial: FeaturedBundle[] | null 
         </div>
       </div>
       {error && <p role="status">{error}</p>}
-      <div className="featured-grid" aria-busy={loading}>
+      <div className="featured-grid" aria-busy={!ready || loading}>
         {bundles.map((bundle) => {
           const selected =
             bundle.options.find((option) => option.dataGb === choices[bundle.region]) ??
@@ -82,7 +83,7 @@ export function FeaturedBundles({ initial }: { initial: FeaturedBundle[] | null 
                   <p className="featured-coverage">Covers {selected.countryCount} countries</p>
                   <strong className="featured-price">
                     {current ? money(selected.priceCents, selected.currency) : '—'}{' '}
-                    <small>{currency}</small>
+                    <small>{ready ? currency : ''}</small>
                   </strong>
                   <fieldset className="featured-allowances">
                     <legend>Data allowance for {bundle.regionName}</legend>

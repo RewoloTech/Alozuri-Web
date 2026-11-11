@@ -380,6 +380,26 @@ for (const currency of ['GBP', 'EUR'] as const)
     assert.equal(receipt.items[0].plan.priceCents, quote.items[0].plan.priceCents);
   });
 
+test('GBP and EUR contract emails retain the charged currency and total after catalogue changes', async () => {
+  for (const currency of ['GBP', 'EUR'] as const) {
+    const f = fixture(false, undefined, currency);
+    const result = await f.service.checkout(f.input, null);
+    f.intent.status = 'succeeded';
+    f.intent.amount_received = f.intent.amount;
+    await f.event();
+    f.plans[0].priceCents = 1;
+    for (let attempt = 0; attempt < 5 && !f.emails.some((e) => e.id === result.orderId); attempt++)
+      await f.service.notify();
+    const text = f.emails.find((e) => e.id === result.orderId && e.kind === 'contract')?.text;
+    const total = BigInt(result.quote.totalCents);
+    assert.ok(
+      text?.includes(
+        `Paid total: ${total / 100n}.${String(total % 100n).padStart(2, '0')} ${currency}`,
+      ),
+    );
+  }
+});
+
 test('public Firestore clients cannot read supplier pricing or bypass the importer with direct writes', async () => {
   const f = fixture(true);
   await db.doc('packages/private-pricing-test').set(f.plans[0]);

@@ -15,6 +15,7 @@ export default defineConfig({
     reuseExistingServer: false,
     timeout: 90000,
     env: {
+      CURRENCY_GEO_PROVIDER: 'cloudflare',
       NEXT_PUBLIC_DEMO_MODE: 'false',
       NEXT_PUBLIC_API_URL: process.env.E2E_API_URL || 'http://127.0.0.1:8189',
       NEXT_PUBLIC_PAYMENT_MODE: 'test',

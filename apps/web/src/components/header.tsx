@@ -19,7 +19,7 @@ export function Brand() {
 }
 export function Header() {
   const { user } = useAuth();
-  const { currency, setCurrency, available, locked } = useCurrency();
+  const { currency, ready, setCurrency, available, locked } = useCurrency();
   const quantity = useSelector((s: RootState) => s.cart.items.reduce((n, i) => n + i.quantity, 0));
   const [open, setOpen] = useState(false);
   return (
@@ -54,12 +54,14 @@ export function Header() {
             className="currency-select"
             aria-label="Currency"
             disabled={locked}
-            value={currency}
+            value={ready ? currency : ''}
+            aria-busy={!ready}
             onChange={(e) => {
               const value = SUPPORTED_CURRENCIES.find((c) => c === e.target.value);
               if (value) setCurrency(value);
             }}
           >
+            {!ready && <option value="">…</option>}
             {available.map((c) => (
               <option key={c} value={c}>
                 {c}

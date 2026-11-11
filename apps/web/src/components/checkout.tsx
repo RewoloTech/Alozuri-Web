@@ -139,7 +139,13 @@ function StripePayment({
 }
 export function Checkout() {
   const { user } = useAuth();
-  const { currency } = useCurrency();
+  const { currency, ready } = useCurrency();
+  if (!ready)
+    return (
+      <section className="container section" role="status">
+        Loading checkout…
+      </section>
+    );
   return <CheckoutForIdentity key={(user?.uid ?? 'guest') + currency} />;
 }
 function CheckoutForIdentity() {

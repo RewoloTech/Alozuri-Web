@@ -8,6 +8,11 @@ runConfig:
 # Configure NEXT_PUBLIC_FIREBASE_* and NEXT_PUBLIC_API_URL in the hosting
 # environment before building. Live catalogue and Stripe configuration; the API checks supplier credit before charging.
 env:
+  # Country is only an initial currency hint; IP Geolocation must be enabled at Cloudflare.
+  - variable: CURRENCY_GEO_PROVIDER
+    value: cloudflare
+    availability:
+      - RUNTIME
   - variable: CYPRESS_INSTALL_BINARY
     value: '0'
     availability:

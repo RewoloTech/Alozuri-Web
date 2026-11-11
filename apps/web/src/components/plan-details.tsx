@@ -15,7 +15,7 @@ export function PlanDetails({
   review?: boolean;
   initialPlan?: Plan | null;
 }) {
-  const { currency, refresh } = useCurrency();
+  const { currency, refresh, ready } = useCurrency();
   const dispatch = useDispatch(),
     cart = useSelector((s: RootState) => s.cart);
   const [plan, setPlan] = useState<Plan | null>(
@@ -26,7 +26,7 @@ export function PlanDetails({
     [added, setAdded] = useState(false),
     [error, setError] = useState('');
   useEffect(() => {
-    if (demoMode) return;
+    if (demoMode || !ready) return;
     let active = true;
     setLoading(true);
     setError('');
@@ -47,9 +47,9 @@ export function PlanDetails({
     return () => {
       active = false;
     };
-  }, [id, currency, refresh]);
+  }, [id, currency, refresh, ready]);
   async function add() {
-    if (!plan || plan.demo) return;
+    if (!ready || !plan || plan.demo || plan.currency !== currency) return;
     setAdding(true);
     setAdded(false);
     setError('');
@@ -156,7 +156,8 @@ export function PlanDetails({
         <aside className="surface purchase-summary">
           <span className="eyebrow">{plan.demo ? 'SAMPLE PLAN' : 'PLAN SUMMARY'}</span>
           <h2>
-            {money(plan.priceCents, plan.currency)} <small>{plan.currency}</small>
+            {ready && plan.currency === currency ? money(plan.priceCents, plan.currency) : '—'}{' '}
+            <small>{ready ? currency : ''}</small>
           </h2>
           <p>
             {dataLabel(plan)} · {plan.days} days
@@ -167,7 +168,15 @@ export function PlanDetails({
           )}
           <button
             className="button primary full-width"
-            disabled={Boolean(plan.demo) || adding || limit || !cart.ready || cart.syncing}
+            disabled={
+              !ready ||
+              plan.currency !== currency ||
+              Boolean(plan.demo) ||
+              adding ||
+              limit ||
+              !cart.ready ||
+              cart.syncing
+            }
             onClick={() => void add()}
           >
             {adding ? 'Adding…' : 'Add to cart'}
@@ -175,7 +184,10 @@ export function PlanDetails({
           <Link
             className="button full-width"
             href={plan.demo ? '#' : '/checkout?buy=' + encodeURIComponent(id)}
-            aria-disabled={Boolean(plan.demo)}
+            aria-disabled={!ready || plan.currency !== currency || Boolean(plan.demo)}
+            onClick={(event) => {
+              if (!ready || plan.currency !== currency || plan.demo) event.preventDefault();
+            }}
           >
             Buy now
           </Link>

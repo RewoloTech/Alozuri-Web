@@ -9,7 +9,8 @@
     "./legal": "./src/legal.ts",
     "./privacy": "./src/privacy.ts",
     "./policies": "./src/policies.ts",
-    "./featured": "./src/featured.ts"
+    "./featured": "./src/featured.ts",
+    "./currency": "./src/currency.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

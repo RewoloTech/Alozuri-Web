@@ -102,7 +102,7 @@ export function OrderSummary({
   );
 }
 export function Cart() {
-  const { currency, refresh } = useCurrency();
+  const { currency, refresh, ready: currencyReady } = useCurrency();
   const { user } = useAuth();
   async function restoreSavedCart() {
     try {
@@ -126,7 +126,7 @@ export function Cart() {
     [quotedSignature, setQuotedSignature] = useState('');
   const signature = JSON.stringify(cartItems(cart.items));
   useEffect(() => {
-    if (!cart.ready || signature === '[]') {
+    if (!currencyReady || !cart.ready || signature === '[]') {
       setQuote(null);
       return;
     }
@@ -162,8 +162,8 @@ export function Cart() {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [signature, cart.ready, dispatch, currency, refresh, quoteAttempt, store]);
-  if (!mounted || !cart.ready)
+  }, [signature, cart.ready, dispatch, currency, refresh, quoteAttempt, store, currencyReady]);
+  if (!currencyReady || !mounted || !cart.ready)
     return (
       <section className="container section" role="status">
         Loading your cart…

@@ -57,8 +57,8 @@ export function Planner({
   destinationMode?: boolean;
 }) {
   const dispatch = useDispatch();
-  const { currency, refresh } = useCurrency();
-  const currencyKey = currency + refresh;
+  const { currency, refresh, ready } = useCurrency();
+  const currencyKey = currency + refresh + ready;
   const previousCurrency = useRef(currencyKey);
   const saved = useSelector((s: RootState) => s.itinerary);
   const [error, setError] = useState('');
@@ -191,6 +191,7 @@ export function Planner({
     order: SearchSort = sort,
     cursor?: string,
   ) {
+    if (!ready) return;
     const { minGb, dataType } = allowanceFilter(value);
     const version = ++requestVersion.current;
     controller.current?.abort();
@@ -517,7 +518,7 @@ export function Planner({
             </label>
             <button
               className="button primary search-button"
-              disabled={loading}
+              disabled={loading || !ready}
               onClick={() => void search()}
             >
               {loading ? 'Finding your plans…' : 'Find my eSIM'}
@@ -633,6 +634,7 @@ export function Planner({
   );
 }
 export function PlanCard({ plan, highlight = false }: { plan: PlanSummary; highlight?: boolean }) {
+  const { currency, ready } = useCurrency();
   return (
     <article className={`plan-card ${highlight ? 'featured' : ''}`}>
       <div className="plan-top">
@@ -664,10 +666,12 @@ export function PlanCard({ plan, highlight = false }: { plan: PlanSummary; highl
       </div>
       <div className="plan-bottom">
         <div>
-          <strong>{money(plan.priceCents, plan.currency)}</strong>
+          <strong>
+            {ready && plan.currency === currency ? money(plan.priceCents, plan.currency) : '—'}
+          </strong>
           <span>
             {' '}
-            {plan.currency}
+            {ready ? currency : ''}
             {plan.demo ? ' · sample price' : ''}
           </span>
         </div>
