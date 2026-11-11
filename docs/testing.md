@@ -137,3 +137,9 @@ Removing trip stops no longer selects the single-country filter automatically. O
 Unit tests cover the retained mode, restoration, exact minor-unit previews, currency safety and matching European/global bundles. Browser regressions measure a persistent summary node and unchanged height during delayed rapid quantity updates, verify payment remains disabled until confirmation, and confirm explicit tab switching after removing all stops.
 
 Observed results for this follow-up: 108 unit/API tests, 11 shopping browser cases and all 13 Cypress cases passed. The two new mode/quantity browser regressions passed again after the stale-response guard, including a forced click that cannot leave the cart while prices are pending. The real Stripe TEST decline/retry/payment and order-document checks passed. Lint, application/test TypeScript and the production build passed; mobile/desktop cart screenshots were reviewed. No real charge, supplier purchase, live data change or deployment was performed.
+
+# Mobile typography — 11 November 2026
+
+The shared stylesheet uses 16px body text, 15–16px product descriptions and primary controls, and a 14px minimum for labels, captions, secondary information and footnotes at the default browser font setting. Small text uses rem units to respect the browser's preferred font size. Large heading sizes are unchanged. Mobile inputs/selects remain at least 16px, and the header allows longer account labels to wrap.
+
+For visual verification, inspect home, cart and checkout at 375/390/768/1440px; check product details, coverage, validity, footer links, country-picker controls, cookie choices and keyboard menu use. Check the signed-in header with both “My account” and “Verify email”, as well as the guest header, for overflow. Existing Playwright shopping, featured-bundle and policy cases cover the affected layouts and interactions; no payment or supplier purchase is necessary for this CSS change.
