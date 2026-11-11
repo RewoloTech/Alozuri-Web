@@ -513,7 +513,7 @@ export function Planner({
                     Unlimited (check fair use){page ? ` (${page.facets['unlimited']})` : ''}
                   </option>
                 </select>
-                <ChevronDown size={16} />
+                <ChevronDown size={16} aria-hidden="true" />
               </span>
             </label>
             <button
@@ -530,11 +530,7 @@ export function Planner({
               <ShieldCheck size={14} />
               Coverage checked for every selected country
             </span>
-            <span>
-              {demoMode
-                ? 'Preview · sample plans · purchases disabled'
-                : 'Verified supplier coverage · Secure Stripe checkout'}
-            </span>
+            {demoMode && <span>Preview · sample plans · purchases disabled</span>}
           </div>
           {loading && <p role="status">Searching current plans…</p>}
           {refreshRequired && (

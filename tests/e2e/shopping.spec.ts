@@ -566,3 +566,68 @@ test('rapid quantity updates keep the summary and checkout control mounted until
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: '/tmp/alozuri-stable-cart-mobile.png', fullPage: true });
 });
+
+test('the entire data allowance field opens its native picker, including the label and arrow', async ({
+  page,
+}) => {
+  await setup(page);
+  await page.goto('/?mode=country&countries=FR');
+  const field = page.locator('.data-field');
+  const select = page.getByRole('combobox', { name: 'Data allowance' });
+  for (const width of [375, 390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await field.scrollIntoViewIfNeeded();
+    for (const target of ['label', 'value', 'arrow', 'padding']) {
+      const point = await field.evaluate((element, target) => {
+        const rect = element.getBoundingClientRect();
+        const child =
+          target === 'label'
+            ? element.querySelector('.field-label')
+            : target === 'arrow'
+              ? element.querySelector('svg')
+              : null;
+        const childRect = child?.getBoundingClientRect();
+        const x = childRect
+          ? childRect.x + childRect.width / 2
+          : target === 'padding'
+            ? rect.x + 5
+            : rect.x + rect.width / 2;
+        const y = childRect
+          ? childRect.y + childRect.height / 2
+          : target === 'padding'
+            ? rect.y + 5
+            : rect.bottom - 20;
+        return {
+          x,
+          y,
+          hitsSelect: document.elementFromPoint(x, y) === element.querySelector('select'),
+        };
+      }, target);
+      expect(point.hitsSelect, `${target} at ${width}px reaches the native select`).toBe(true);
+      await page.mouse.click(point.x, point.y);
+      await expect
+        .poll(() => select.evaluate((element) => element.matches(':open')), {
+          message: `${target} at ${width}px opens the picker`,
+        })
+        .toBe(true);
+      // Close the platform picker with its trigger; headless macOS does not
+      // forward Playwright's Escape key to the native popup consistently.
+      await page.mouse.click(point.x, point.y);
+      await expect.poll(() => select.evaluate((element) => element.matches(':open'))).toBe(false);
+      await expect(select).toBeFocused();
+    }
+    await select.selectOption('5');
+    await expect(select).toHaveValue('5');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await field.screenshot({ path: `/tmp/alozuri-allowance-${width}.png` });
+  }
+  await select.focus();
+  await page.keyboard.press('ArrowDown');
+  await expect.poll(() => select.evaluate((element) => element.matches(':open'))).toBe(true);
+  await select.click();
+  await expect.poll(() => select.evaluate((element) => element.matches(':open'))).toBe(false);
+  await select.selectOption('all');
+  await expect(select).toHaveValue('all');
+});
