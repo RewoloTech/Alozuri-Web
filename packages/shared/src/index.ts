@@ -94,6 +94,20 @@ export type StoredPlan = Plan & {
   priceOverrideUsdCents?: number | null;
   pricingStatus?: 'valid' | 'review_required';
   catalogueDate?: string;
+  supplierName?: string;
+  supplierComparison?: {
+    key: string;
+    fup: string;
+    fupKbps: number | null;
+    topupType: number;
+    attributes: Record<string, unknown>;
+  };
+  catalogueVisibility?: 'public' | 'hidden';
+  catalogueDecision?: string;
+  replacedBy?: string | null;
+  priceAdjustmentUsdCents?: number;
+  priceAdjustmentReason?: 'none' | 'stable' | 'value';
+  pricingFlags?: string[];
 };
 export function retailPlan(plan: StoredPlan): Plan {
   const {

@@ -10,8 +10,10 @@ import {
 import { database } from './firebase.js';
 import { cataloguePlan, type Principal } from './repository.js';
 import { orderSchema, planSchema } from './validation.js';
-import { pricePackage, samePackage, packageWrite } from './package-pricing.js';
+import { pricePackage, samePackage, packageWrite, pricingDecision } from './package-pricing.js';
+import { Timestamp } from 'firebase-admin/firestore';
 import { SupplierClient, adaptPackage } from './supplier.js';
+import { decisionHash } from './catalogue-curation.js';
 export class CheckoutError extends Error {
   statusCode = 400;
 }
@@ -254,8 +256,44 @@ export async function currentCheckoutPlan(
   const fresh = await database().runTransaction(async (t) => {
     const current = await t.get(ref);
     const priced = pricePackage(candidate, current.data());
-    if (!samePackage(current.data() || {}, priced))
+    if (
+      current.get('supplierComparison') &&
+      (
+        [
+          'supplierComparison',
+          'dataGb',
+          'dataType',
+          'dailyPolicy',
+          'days',
+          'countries',
+          'activation',
+          'networks',
+          'fairUse',
+          'supplierNotes',
+        ] as const
+      ).some((field) => decisionHash(current.get(field)) !== decisionHash(candidate[field]))
+    ) {
+      priced.active = false;
+      priced.pricingStatus = 'review_required';
+      priced.pricingFlags = [...(priced.pricingFlags ?? []), 'service_changed_requires_sync'];
+    }
+    if (!samePackage(current.data() || {}, priced)) {
       t.set(ref, packageWrite(priced), { merge: true });
+      const before = pricingDecision(current.data() || {}),
+        after = pricingDecision(priced);
+      if (decisionHash(before) !== decisionHash(after))
+        t.set(
+          ref
+            .collection('pricingHistory')
+            .doc(decisionHash({ before, after, date: priced.catalogueDate })),
+          {
+            before,
+            after,
+            kind: 'checkout_revalidation',
+            recordedAt: Timestamp.now(),
+          },
+        );
+    }
     return priced;
   });
   if (!fresh.active) throw new CheckoutError('This package is unavailable pending price review.');

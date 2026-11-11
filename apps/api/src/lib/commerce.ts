@@ -126,9 +126,9 @@ export async function priceCart(
       p.demo ||
       p.currency !== 'USD' ||
       !p.active ||
+      p.catalogueVisibility === 'hidden' ||
       !validPackagePricing(p) ||
       !currentCatalogueDate(p.catalogueDate) ||
-      p.priceCents < 199 ||
       !Number.isSafeInteger(p.priceCents) ||
       !p.supplierCode ||
       !Number.isSafeInteger(p.wholesaleUnits) ||
@@ -260,7 +260,7 @@ export class CommerceService {
     input: {
       items: CartItem[];
       email: string;
-      emailConfirmation: string;
+      emailConfirmation?: string;
       requestId: string;
       compatible: true;
       legal: CheckoutLegalInput;
@@ -271,7 +271,10 @@ export class CommerceService {
   ) {
     if (process.env.CHECKOUT_PAUSED === 'true')
       throw new CommerceError('Checkout is temporarily paused for catalogue maintenance.', 503);
-    if (input.email.toLowerCase() !== input.emailConfirmation.toLowerCase())
+    if (
+      input.emailConfirmation !== undefined &&
+      input.email.toLowerCase() !== input.emailConfirmation.toLowerCase()
+    )
       throw new CommerceError('Email addresses do not match.');
     const acceptance = legalSnapshot(input.legal);
     const email = input.email.toLowerCase(),

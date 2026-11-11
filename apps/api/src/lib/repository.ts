@@ -40,7 +40,12 @@ export function cataloguePlan(data: unknown, now = Date.now()): Plan | null {
   if (!parsed.success || !parsed.data.active) return null;
   const plan = parsed.data;
   const privateData = z.record(z.string(), z.unknown()).safeParse(data);
-  if (!privateData.success || !validPackagePricing(privateData.data)) return null;
+  if (
+    !privateData.success ||
+    privateData.data.catalogueVisibility === 'hidden' ||
+    !validPackagePricing(privateData.data)
+  )
+    return null;
   if (
     !currentCatalogueDate(privateData.data.catalogueDate, now) ||
     privateData.data.catalogueDate !== catalogueDate(plan.syncedAt) ||

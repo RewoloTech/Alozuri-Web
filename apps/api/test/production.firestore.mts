@@ -1,3 +1,4 @@
+import { checkoutSessionFixture } from './fixtures/stripe-session.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { initializeApp, deleteApp } from 'firebase-admin/app';
@@ -32,7 +33,7 @@ test('live payment atomically queues one delivery; concurrent workers lease once
   const request = crypto.randomUUID(),
     order = await payments.reserve('alice', request, plan);
   await payments.bind(order.id, 'cs_live_emulator');
-  const session = {
+  const session = checkoutSessionFixture({
     id: 'cs_live_emulator',
     livemode: true,
     mode: 'payment',
@@ -43,7 +44,7 @@ test('live payment atomically queues one delivery; concurrent workers lease once
     currency: 'usd',
     client_reference_id: order.id,
     metadata: { voyaspanOrderId: order.id, voyaspanUid: 'alice' },
-  } as Stripe.Checkout.Session;
+  });
   await Promise.all([
     payments.apply('evt_emulator_one', session, 'paid'),
     payments.apply('evt_emulator_two', session, 'paid'),
@@ -92,7 +93,7 @@ test('test orders cannot enter live delivery and mode changes cannot reuse their
     testOrder = await testStore.reserve('alice', request, plan),
     liveOrder = await liveStore.reserve('alice', request, plan);
   assert.notEqual(testOrder.id, liveOrder.id);
-  const session = {
+  const session = checkoutSessionFixture({
     id: 'cs_test_emulator',
     mode: 'payment',
     livemode: false,
@@ -102,7 +103,7 @@ test('test orders cannot enter live delivery and mode changes cannot reuse their
     currency: 'usd',
     client_reference_id: testOrder.id,
     metadata: { voyaspanOrderId: testOrder.id, voyaspanUid: 'alice' },
-  } as Stripe.Checkout.Session;
+  });
   await testStore.apply('evt_test_emulator', session, 'paid');
   assert.equal((await db.collection('fulfillmentJobs').doc(testOrder.id).get()).exists, false);
   await assert.rejects(liveStore.find('alice', testOrder.id), /environment/);
@@ -129,7 +130,7 @@ test('a crashed worker loses its lease and cannot overwrite a newer worker resul
 test('pending refunds stay pending and late paid events cannot restart delivery', async () => {
   const store = firestorePaymentStore('live');
   const order = await store.reserve('alice', crypto.randomUUID(), plan);
-  const session = {
+  const session = checkoutSessionFixture({
     id: 'cs_live_refund',
     mode: 'payment',
     livemode: true,
@@ -139,7 +140,7 @@ test('pending refunds stay pending and late paid events cannot restart delivery'
     currency: 'usd',
     client_reference_id: order.id,
     metadata: { voyaspanOrderId: order.id, voyaspanUid: 'alice' },
-  } as Stripe.Checkout.Session;
+  });
   await store.apply('evt_refund_order_paid', session, 'paid');
   const charge = {
     id: 'ch_refund',

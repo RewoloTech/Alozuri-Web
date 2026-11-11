@@ -192,7 +192,8 @@ test('test, unpaid, mismatched and refunded payments cannot issue eSIMs', async 
   for (const patch of [
     () => {
       const f = fixture();
-      f.order.test = true;
+      // Simulate corrupt stored data to exercise the runtime safety guard.
+      Object.assign(f.order, { test: true });
       return f;
     },
     () => {

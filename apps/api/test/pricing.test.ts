@@ -26,23 +26,23 @@ const input = {
   syncedAt: new Date().toISOString(),
 };
 for (const [units, expected] of [
-  [5000, 199],
+  [5000, 149],
   [9000, 249],
   [10000, 249],
   [20000, 449],
-  [49900, 999],
-  [50000, 1049],
-  [100000, 1849],
-  [149900, 2699],
-  [150000, 2749],
-  [200000, 3349],
-  [299900, 4949],
-  [300000, 4999],
-  [400000, 6049],
+  [49900, 949],
+  [50000, 949],
+  [100000, 1699],
+  [149900, 2399],
+  [150000, 2399],
+  [200000, 3099],
+  [299900, 4449],
+  [300000, 4449],
+  [400000, 5699],
 ])
   test(`tier and boundary cost ${units}/10000 USD sells at ${expected} cents`, () =>
     assert.equal(calculateSellingPrice(units), expected));
-test('automatic pricing is monotonic at every supplier unit through $40 and preserves 30% margin', () => {
+test('automatic pricing is monotonic at every supplier unit through $40 and preserves contribution after fees', () => {
   let last = 0;
   for (let units = 1; units <= 400000; units++) {
     const price = calculateSellingPrice(units);
@@ -53,9 +53,9 @@ test('automatic pricing is monotonic at every supplier unit through $40 and pres
   }
 });
 test('rounding retains valid endings and always rounds upwards', () => {
-  assert.equal(profitable(70000, 1000), true); // Exactly 30%, before fees.
-  assert.equal(profitable(70000, 999), false);
-  assert.equal(profitable(1, 198), false); // The business minimum also applies to overrides.
+  assert.equal(profitable(70000, 1000), true); // $2.18 contribution after conservative fees.
+  assert.equal(profitable(70000, 800), false); // Insufficient contribution after fees.
+  assert.equal(profitable(1, 49), false); // Fixed fees and contribution replace the old retail floor.
   for (const [from, to] of [
     [1, 49],
     [49, 49],
@@ -141,7 +141,7 @@ test('missing/invalid supplier costs and wrong currencies are imported unavailab
 test('migration preserves metadata/overrides and is idempotent without rewriting historical orders', () => {
   const patch = migrationPatch(input.id, input);
   const migrated = { ...input, ...patch };
-  assert.deepEqual(migrationPatch(input.id, migrated), patch);
+  assert.deepEqual(migrationPatch(input.id, migrated), {});
   assert.ok(validPackagePricing(migrated));
   assert.equal(
     migrationPatch(input.id, { ...input, wholesaleUnits: null }).pricingStatus,
@@ -159,8 +159,14 @@ test('currency conversion is rational, upward rounded and never relabels USD cen
       EUR: { numerator: '11', denominator: '10' },
     },
   };
-  assert.equal(convertPrice(1999, 'GBP', priceExchange('GBP', rates)), 1549);
+  assert.equal(convertPrice(1999, 'GBP', priceExchange('GBP', rates)), 1500);
   assert.equal(convertPrice(1999, 'EUR', priceExchange('EUR', rates)), 2199);
+  const lowRate = {
+    ...rates,
+    rates: { ...rates.rates, GBP: { numerator: '7', denominator: '10' } },
+  };
+  assert.equal(convertPrice(149, 'GBP', priceExchange('GBP', lowRate)), 105);
+  assert.equal(convertPrice(199, 'GBP', priceExchange('GBP', lowRate)), 140);
   assert.equal(convertPrice(1999, 'USD', priceExchange('USD')), 1999);
   assert.throws(() => convertPrice(1999, 'GBP', priceExchange('USD')), /verified exchange/);
   assert.throws(() => priceExchange('EUR'), /required/);

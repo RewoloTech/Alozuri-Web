@@ -1,6 +1,6 @@
 import { Timestamp, FieldPath, type Firestore } from 'firebase-admin/firestore';
 import { storedPlanSchema } from './validation.js';
-import { pricePackage, samePackage } from './package-pricing.js';
+import { pricePackage, samePackage, validPackagePricing } from './package-pricing.js';
 import { PRICING_VERSION } from './pricing.js';
 
 export function migrationPatch(
@@ -9,6 +9,8 @@ export function migrationPatch(
   now = Timestamp.now(),
 ): Record<string, unknown> {
   if (data.providerId && data.providerId !== 'esim-access') return {};
+  // Never overwrite a current curated decision with the legacy price-only migration.
+  if (validPackagePricing(data)) return {};
   const parsed = storedPlanSchema.safeParse({ ...data, id });
   if (
     !parsed.success ||
@@ -38,6 +40,9 @@ export function migrationPatch(
     catalogueDate,
     priceCents,
     active,
+    priceAdjustmentUsdCents,
+    priceAdjustmentReason,
+    pricingFlags,
   } = priced;
   return {
     wholesaleUnits: priced.wholesaleUnits,
@@ -52,6 +57,9 @@ export function migrationPatch(
     catalogueDate,
     priceCents,
     active,
+    priceAdjustmentUsdCents,
+    priceAdjustmentReason,
+    pricingFlags,
   };
 }
 export async function migratePricing(db: Firestore, apply = false) {

@@ -53,7 +53,7 @@ export function registerCommerceRoutes(
         .object({
           items: itemsSchema,
           email: z.email().max(254),
-          emailConfirmation: z.email().max(254),
+          emailConfirmation: z.email().max(254).optional(),
           requestId: z.uuid(),
           compatible: z.literal(true),
           legal: checkoutLegalSchema,

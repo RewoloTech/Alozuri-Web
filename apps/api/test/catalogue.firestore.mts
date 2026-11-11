@@ -210,3 +210,72 @@ test('source metadata removal is persisted without losing overrides or unrelated
   assert.equal(fresh.get('priceOverrideUsdCents'), 349);
   assert.equal((await syncCatalogue(provider, db)).written, 0);
 });
+
+test('curated sync keeps supplier variants, is idempotent, audits decisions and uses the exact selected SKU at checkout', async (t) => {
+  const db = getFirestore(app, 'curation-checkout-tests');
+  t.after(() => db.terminate());
+  const { supplierFixture } = await import('./fixtures/catalogue.ts');
+  const { priceCart } = await import('../src/lib/commerce.ts');
+  const { cataloguePlan } = await import('../src/lib/repository.ts');
+  let halfCost = 4700;
+  const base = [
+    supplierFixture({
+      packageCode: 'curated-half',
+      volume: 524288000,
+      price: halfCost,
+      supportTopUpType: 1,
+    }),
+    supplierFixture({ packageCode: 'curated-one', price: 7500 }),
+    supplierFixture({ packageCode: 'curated-duplicate', price: 7800 }),
+    supplierFixture({ packageCode: 'curated-fast', price: 8000, fupPolicy: '1 Mbps' }),
+  ];
+  const provider: CatalogueProvider = {
+    id: 'esim-access',
+    fetch: async (syncedAt) => ({
+      fetched: base.length,
+      plans: base.map((p, i) => ({
+        ...p,
+        providerId: 'esim-access',
+        syncedAt,
+        wholesaleUnits: i === 0 ? halfCost : p.wholesaleUnits,
+      })),
+    }),
+  };
+  const result = await syncCatalogue(provider, db);
+  assert.equal(result.active, 2);
+  assert.equal(result.hidden, 2);
+  const refs = base.map((p) => db.doc('packages/' + p.id));
+  const first = await db.getAll(...refs);
+  assert.equal(first[0].get('priceCents'), 149);
+  assert.equal(first[3].get('priceCents'), 199);
+  assert.equal(first[2].get('supplierCode'), 'curated-duplicate');
+  assert.equal(first[2].get('catalogueVisibility'), 'hidden');
+  assert.equal(first[2].get('replacedBy'), base[3].id);
+  assert.equal(cataloguePlan(first[2].data()), null);
+  assert.equal((await refs[0].collection('pricingHistory').get()).size, 1);
+  const { storedPlanSchema } = await import('../src/lib/validation.ts');
+  const { z } = await import('zod');
+  const load = async (id: string) =>
+    storedPlanSchema
+      .extend({
+        supplierCode: z.string().min(1),
+        wholesaleUnits: z.number().int().positive(),
+      })
+      .passthrough()
+      .parse((await db.doc('packages/' + id).get()).data());
+  const quote = await priceCart([{ planId: base[0].id, quantity: 1 }], load);
+  assert.equal(quote.quote.totalCents, 149);
+  assert.equal(quote.snapshots[0].supplierCode, 'curated-half');
+  assert.equal(quote.snapshots[0].wholesaleUnits, 4700);
+  await assert.rejects(priceCart([{ planId: base[2].id, quantity: 1 }], load), /unavailable/);
+  assert.equal((await syncCatalogue(provider, db)).written, 0);
+  assert.ok((await refs[0].get()).updateTime!.isEqual(first[0].updateTime!));
+  assert.equal((await refs[0].collection('pricingHistory').get()).size, 1);
+  halfCost = 20000;
+  await syncCatalogue(provider, db);
+  const changed = await refs[0].get();
+  assert.ok(changed.get('priceCents') > 149);
+  assert.ok(changed.get('pricingFlags').includes('supplier_cost_increase'));
+  assert.equal((await refs[0].collection('pricingHistory').get()).size, 2);
+  assert.equal((await syncCatalogue(provider, db)).written, 0);
+});

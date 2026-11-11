@@ -382,7 +382,8 @@ export async function createApp(
   app.get('/v1/admin/status', async (request, reply) => {
     const user = await identity(request.headers.authorization, reply);
     if (!user) return;
-    if (!user.admin) return reply.code(403).send({ error: 'Administrator access required.' });
+    if (user.admin !== true)
+      return reply.code(403).send({ error: 'Administrator access required.' });
     return {
       mode: demo ? 'preview' : 'catalogue',
       paymentsEnabled: Boolean(payments),

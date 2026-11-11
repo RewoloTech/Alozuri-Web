@@ -1,6 +1,7 @@
 import { applicationDefault, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
+import { authenticateToken } from './authentication.js';
 function firebase() {
   return (
     getApps()[0] ??
@@ -8,12 +9,5 @@ function firebase() {
   );
 }
 export const database = () => getFirestore(firebase());
-export const verifyToken = async (token: string) => {
-  const decoded = await getAuth(firebase()).verifyIdToken(token, true);
-  return {
-    uid: decoded.uid,
-    email: decoded.email,
-    verified: decoded.email_verified === true,
-    admin: decoded.admin === true,
-  };
-};
+export const verifyToken = (token: string) =>
+  authenticateToken(token, getAuth(firebase()), process.env.ADMIN_OWNER_UID);

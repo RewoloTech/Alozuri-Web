@@ -3,7 +3,7 @@ import type { Firestore } from 'firebase-admin/firestore';
 import type { Currency, Plan } from '../../../../packages/shared/src/index.ts';
 import { database } from './firebase.js';
 import { catalogueDate } from './package-pricing.js';
-import { checkedMoney, ceilDiv, moneyInteger, roundRetailUp } from './pricing.js';
+import { checkedMoney, ceilDiv, moneyInteger } from './pricing.js';
 
 export const MINIMUM_CHARGE_MINOR: Record<Currency, number> = { USD: 50, GBP: 30, EUR: 50 };
 export const currencySchema = z.enum(['USD', 'GBP', 'EUR']);
@@ -153,7 +153,9 @@ export function convertPrice(cents: number, currency: Currency, exchange: PriceE
   if (n <= 0n || d <= 0n) throw new Error('Invalid exchange rate.');
   const minor = ceilDiv(BigInt(cents) * n, d),
     minimum = BigInt(MINIMUM_CHARGE_MINOR[currency]);
-  return roundRetailUp(checkedMoney(minor > minimum ? minor : minimum));
+  // A second 50-cent retail step can collapse distinct USD allowances to the
+  // same GBP/EUR price. Convert the canonical retail price to whole cents only.
+  return checkedMoney(minor > minimum ? minor : minimum);
 }
 export function convertedPlan(plan: Plan, currency: Currency, exchange: PriceExchange): Plan {
   if (plan.currency !== 'USD') throw new Error('Expected base USD catalogue.');

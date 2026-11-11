@@ -455,7 +455,8 @@ test('usage is ownership protected, scoped per purchased unit, cached and absent
   for (const [user, token] of [
     [null, undefined],
     [null, 'wrong'],
-    [{ uid: 'bob', email: 'other@example.com', verified: true }, undefined],
+    [{ uid: 'bob', email: 'other@example.com', verified: true, admin: false }, undefined],
+    [{ uid: 'bob', email: 'other@example.com', verified: true, admin: true }, undefined],
   ] as const)
     await assert.rejects(f.service.usage(f.result.orderId, unit, user, token), /not found/);
   assert.equal(calls, 0);
@@ -475,11 +476,23 @@ test('usage is ownership protected, scoped per purchased unit, cached and absent
     `http://${process.env.FIRESTORE_EMULATOR_HOST}/v1/projects/demo-alozuri/databases/(default)/documents/esimUsage/${unit}`,
   );
   assert.equal(anonymous.status, 403);
-  const history = await f.service.history({ uid: 'alice', email: f.input.email, verified: true });
+  const history = await f.service.history({
+    uid: 'alice',
+    email: f.input.email,
+    verified: true,
+    admin: false,
+  });
   assert.equal(history.find((order) => order.id === f.result.orderId)?.allocations.length, 3);
   assert.ok(!JSON.stringify(history).includes('vendor-order_'));
   assert.equal(
-    (await f.service.history({ uid: 'bob', email: 'other@example.com', verified: true })).length,
+    (
+      await f.service.history({
+        uid: 'bob',
+        email: 'other@example.com',
+        verified: true,
+        admin: false,
+      })
+    ).length,
     0,
   );
 });
@@ -619,6 +632,7 @@ test('usage API validates identifiers and auth before supplier access, including
       uid: token,
       email: token === 'alice' ? f.input.email : 'other@example.com',
       verified: token !== 'unverified',
+      admin: false,
     }),
   });
   try {
@@ -668,7 +682,7 @@ test('public Firestore clients cannot read supplier pricing or bypass the import
   await db.doc('packages/private-pricing-test').set(f.plans[0]);
   const base = 'http://127.0.0.1:8188/v1/projects/demo-alozuri/databases/(default)/documents';
   const now = Math.floor(Date.now() / 1000);
-  const token =
+  const token = (admin: boolean) =>
     [
       { alg: 'none', typ: 'JWT' },
       {
@@ -679,30 +693,28 @@ test('public Firestore clients cannot read supplier pricing or bypass the import
         iat: now,
         exp: now + 3600,
         auth_time: now,
+        admin,
+        email_verified: true,
         firebase: { identities: {}, sign_in_provider: 'custom' },
       },
     ]
       .map((value) => Buffer.from(JSON.stringify(value)).toString('base64url'))
       .join('.') + '.';
-  for (const collection of ['purchases', 'orders', 'carts'])
+  for (const collection of ['purchases', 'orders', 'carts', 'admins'])
     await db.doc(collection + '/security-probe').set({ uid: 'victim', private: 'must-not-leak' });
-  for (const authenticated of [false, true]) {
-    const headers: Record<string, string> = authenticated
-      ? { Authorization: 'Bearer ' + token }
-      : {};
+  for (const identity of ['anonymous', 'customer', 'admin'] as const) {
+    const headers: Record<string, string> =
+      identity !== 'anonymous' ? { Authorization: 'Bearer ' + token(identity === 'admin') } : {};
     for (const path of [
       'packages/private-pricing-test',
       'packages',
       'purchases/security-probe',
       'orders/security-probe',
       'carts/security-probe',
+      'admins/security-probe',
     ]) {
       const response = await fetch(base + '/' + path, { headers });
-      assert.equal(
-        response.status,
-        403,
-        `${authenticated ? 'Signed-in' : 'Anonymous'} client must not read ${path}`,
-      );
+      assert.equal(response.status, 403, `${identity} client must not read ${path}`);
       assert.ok(!(await response.text()).includes('must-not-leak'));
     }
     assert.equal(
@@ -716,6 +728,17 @@ test('public Firestore clients cannot read supplier pricing or bypass the import
         })
       ).status,
       403,
+    );
+    assert.equal(
+      (
+        await fetch(base + '/admins/self-promotion', {
+          method: 'PATCH',
+          headers: { ...headers, 'content-type': 'application/json' },
+          body: JSON.stringify({ fields: { admin: { booleanValue: true } } }),
+        })
+      ).status,
+      403,
+      `${identity} client must not assign roles through Firestore`,
     );
   }
 });
@@ -834,6 +857,73 @@ test('new orders require consent, store immutable terms, and cannot fulfil befor
     const owned = await f.service.order(started.orderId, null, started.accessToken);
     assert.equal(owned.legal?.termsText, original.termsText);
     await assert.rejects(f.service.order(started.orderId, null, 'wrong'), /not found/);
+  } finally {
+    await api.close();
+  }
+});
+
+test('single-email checkout preserves validation, legacy compatibility and verified ownership', async () => {
+  const f = fixture(true);
+  const api = await createApp({
+    repository: { plans: async () => [], orders: async () => [], order: async () => null },
+    payments: null,
+    fulfillment: null,
+    commerce: f.service,
+    demo: false,
+    verify: async (token) => ({
+      uid: token,
+      email: f.input.email,
+      verified: token !== 'unverified',
+      admin: false,
+    }),
+  });
+  try {
+    const { emailConfirmation, ...singleEmail } = f.input;
+    assert.equal(emailConfirmation, singleEmail.email);
+    let caller = 0;
+    const checkout = (payload: object, token?: string) =>
+      api.inject({
+        method: 'POST',
+        url: '/v2/checkout',
+        remoteAddress: '192.0.2.' + ++caller,
+        payload,
+        headers: token ? { authorization: 'Bearer ' + token } : {},
+      });
+    assert.equal((await checkout({ ...singleEmail, email: 'invalid' })).statusCode, 400);
+    assert.equal(
+      (await checkout({ ...singleEmail, emailConfirmation: 'wrong@example.test' })).statusCode,
+      400,
+    );
+    assert.equal((await checkout(singleEmail, 'unverified')).statusCode, 401);
+    assert.equal(f.getCreates(), 0);
+    const guest = await checkout(singleEmail);
+    assert.equal(guest.statusCode, 200);
+    const guestId = guest.json().orderId;
+    assert.equal((await db.doc('purchases/' + guestId).get()).get('uid'), null);
+    assert.equal((await checkout(f.input)).json().orderId, guestId);
+    assert.equal(f.getCreates(), 1);
+    const signedIn = await checkout({ ...singleEmail, requestId: crypto.randomUUID() }, 'alice');
+    assert.equal(signedIn.statusCode, 200);
+    assert.equal((await db.doc('purchases/' + signedIn.json().orderId).get()).get('uid'), 'alice');
+    await assert.rejects(
+      f.service.history({ uid: 'unverified', email: f.input.email, verified: false, admin: false }),
+      /verified/,
+    );
+    assert.ok(
+      (
+        await f.service.history({
+          uid: 'new-account',
+          email: f.input.email,
+          verified: true,
+          admin: false,
+        })
+      ).some((purchase) => purchase.id === guestId),
+    );
+    const denied = await api.inject({
+      url: '/v2/orders/' + guestId,
+      headers: { authorization: 'Bearer unverified' },
+    });
+    assert.equal(denied.statusCode, 401);
   } finally {
     await api.close();
   }

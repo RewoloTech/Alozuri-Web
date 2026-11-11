@@ -6,30 +6,33 @@ import { moneyInteger } from './pricing.js';
 import { storedPlanSchema } from './validation.js';
 import { parseSupplierUsage } from './usage-data.js';
 import type { UsageSnapshot } from '../../../../packages/shared/src/esim-usage.ts';
-const sourcePackage = z.object({
-  packageCode: z.string().min(1).max(200),
-  name: z.string().min(1).max(1000),
-  price: z.unknown().optional(),
-  currencyCode: z.unknown().optional(),
-  volume: z.number().nonnegative().max(Number.MAX_SAFE_INTEGER),
-  duration: z.number().int().positive().max(3660),
-  durationUnit: z.literal('DAY'),
-  durationType: z.literal(1),
-  dataType: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
-  saleNote: z.string().max(10000).nullish(),
-  location: z.string().min(2),
-  activeType: z.union([z.literal(1), z.literal(2), z.literal(3)]),
-  fupPolicy: z.string().nullish(),
-  locationNetworkList: z
-    .array(
-      z.object({
-        operatorList: z.array(
-          z.object({ operatorName: z.string(), networkType: z.string().optional() }),
-        ),
-      }),
-    )
-    .optional(),
-});
+import { supplierComparison } from './catalogue-curation.js';
+const sourcePackage = z
+  .object({
+    packageCode: z.string().min(1).max(200),
+    name: z.string().min(1).max(1000),
+    price: z.unknown().optional(),
+    currencyCode: z.unknown().optional(),
+    volume: z.number().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    duration: z.number().int().positive().max(3660),
+    durationUnit: z.literal('DAY'),
+    durationType: z.literal(1),
+    dataType: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
+    saleNote: z.string().max(10000).nullish(),
+    location: z.string().min(2),
+    activeType: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+    fupPolicy: z.string().nullish(),
+    locationNetworkList: z
+      .array(
+        z.object({
+          operatorList: z.array(
+            z.object({ operatorName: z.string(), networkType: z.string().optional() }),
+          ),
+        }),
+      )
+      .optional(),
+  })
+  .passthrough();
 export function catalogueId(code: string) {
   return 'esim-' + createHash('sha256').update(code).digest('hex').slice(0, 24);
 }
@@ -37,7 +40,7 @@ export function adaptPackage(input: unknown, syncedAt: string): StoredPlan | nul
   const parsed = sourcePackage.safeParse(input);
   if (!parsed.success) return null;
   const p = parsed.data,
-    countries = [...new Set(p.location.split(',').map((c) => c.trim().toUpperCase()))];
+    countries = [...new Set(p.location.split(',').map((c) => c.trim().toUpperCase()))].sort();
   if (!countries.length || countries.some((c) => !/^([A-Z]{2})$/.test(c))) return null;
   const networks = [
     ...new Set(
@@ -48,7 +51,14 @@ export function adaptPackage(input: unknown, syncedAt: string): StoredPlan | nul
   ];
   const publicFields = {
     id: catalogueId(p.packageCode),
-    name: p.name,
+    name: p.name
+      .replace(
+        p.ipExport === 'US' && countries.length === 1 && countries[0] === 'US'
+          ? /\s*\(USIP\)/gi
+          : /$^/,
+        '',
+      )
+      .replace(p.fupPolicy ? /\s+FUP\d+(?:\.\d+)?(?:K|M)bps\b/gi : /$^/, ''),
     countries,
     dataGb: p.volume / 1073741824,
     days: p.duration,
@@ -71,7 +81,7 @@ export function adaptPackage(input: unknown, syncedAt: string): StoredPlan | nul
         : p.activeType === 3
           ? 'Validity starts after purchase. Buy only when you are ready to use it.'
           : 'Validity starts when the eSIM is installed. Install when you are ready to use it.',
-    networks: networks.slice(0, 250),
+    networks: networks.sort().slice(0, 250),
     fairUse:
       p.dataType === 2
         ? `${dataSizeLabel(p.volume / 1073741824)} high-speed per day, then reduced speed${p.fupPolicy ? ' (' + p.fupPolicy + ')' : ' according to the supplier fair-use policy'}.`
@@ -82,7 +92,11 @@ export function adaptPackage(input: unknown, syncedAt: string): StoredPlan | nul
               ? 'Supplier describes this plan as unlimited. Check plan name and supplier conditions for speed restrictions.'
               : 'Fixed total data allowance. Data only; no local phone number.'),
     syncedAt,
-    active: p.currencyCode === 'USD' && moneyInteger(p.price),
+    active:
+      p.currencyCode === 'USD' &&
+      moneyInteger(p.price) &&
+      (p.volume > 0 || p.dataType === 4) &&
+      !(p.dataType === 1 && /\bunlimited\b/i.test(p.name)),
   };
   if (!storedPlanSchema.safeParse(publicFields).success) return null;
   return pricePackage({
@@ -90,6 +104,12 @@ export function adaptPackage(input: unknown, syncedAt: string): StoredPlan | nul
     providerId: 'esim-access',
     supplierCode: p.packageCode,
     wholesaleUnits: p.currencyCode === 'USD' && moneyInteger(p.price) ? p.price : 0,
+    supplierName: p.name,
+    pricingFlags:
+      p.dataType === 1 && /\bunlimited\b/i.test(p.name)
+        ? ['allowance_classification_ambiguous']
+        : [],
+    ...(supplierComparison(p) ? { supplierComparison: supplierComparison(p) } : {}),
   });
 }
 export class SupplierError extends Error {
