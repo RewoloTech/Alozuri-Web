@@ -11,6 +11,7 @@ import {
   convertPrice,
   priceExchange,
   usableRates,
+  roundConvertedRetail,
   type FxRates,
 } from '../src/lib/exchange-rates.js';
 import { cataloguePlan } from '../src/lib/repository.js';
@@ -50,6 +51,49 @@ test('automatic pricing is monotonic at every supplier unit through $40 and pres
     assert.ok(profitable(units, price));
     assert.ok(price % 100 === 49 || price % 100 === 99);
     last = price;
+  }
+});
+
+test('local retail endings respect the threshold, 3% cap and next canonical price', () => {
+  for (const [minor, next, expected] of [
+    [826, 864, 849],
+    [1916, 1954, 1949],
+    [1841, 1879, 1849],
+    [3720, 3758, 3749],
+    [112, 150, 112],
+    [499, 537, 499],
+    [500, 538, 500],
+    [501, 539, 501],
+    [1500, 1538, 1500],
+    [1916, 1949, 1916],
+    [1949, 1987, 1949],
+  ])
+    assert.equal(roundConvertedRetail(minor, next), expected);
+  for (const bad of [0, -1, 1.5, NaN, Infinity])
+    assert.throws(() => roundConvertedRetail(bad, 1000));
+});
+
+test('GBP/EUR rounding preserves canonical price steps without excessive markups', () => {
+  for (const numerator of [70, 75, 90, 110]) {
+    const exchange = {
+      source: 'frankfurter-ecb',
+      asOf: '2026-11-11',
+      fetchedAt: '2026-11-11T00:00:00Z',
+      numerator: String(numerator),
+      denominator: '100',
+    };
+    for (const currency of ['GBP', 'EUR'] as const) {
+      let previous = 0;
+      for (let usd = 99; usd <= 100099; usd += 50) {
+        const raw = Math.ceil((usd * numerator) / 100),
+          price = convertPrice(usd, currency, exchange);
+        assert.ok(price > previous, `Collapsed prices at ${usd} ${currency}/${numerator}`);
+        assert.ok(price >= raw);
+        assert.ok((price - raw) * 100 <= raw * 3);
+        if (raw <= 500) assert.equal(price, raw);
+        previous = price;
+      }
+    }
   }
 });
 test('rounding retains valid endings and always rounds upwards', () => {
@@ -176,7 +220,7 @@ test('currency conversion is rational, upward rounded and never relabels USD cen
 
 test('public search and plan endpoints convert prices on the server without exposing internal pricing metadata', async () => {
   const { createApp } = await import('../src/app.js');
-  const base = cataloguePlan(pricePackage({ ...input, countries: ['FR'] }))!;
+  const base = cataloguePlan(pricePackage({ ...input, wholesaleUnits: 60000, countries: ['FR'] }))!;
   const rates: FxRates = {
     source: 'frankfurter-ecb',
     asOf: new Date().toISOString().slice(0, 10),
@@ -198,6 +242,7 @@ test('public search and plan endpoints convert prices on the server without expo
       const r = await app.inject('/v2/search/plans?countries=FR&currency=' + currency);
       assert.equal(r.statusCode, 200);
       assert.equal(r.json().plans[0].currency, currency);
+      assert.equal(r.json().plans[0].priceCents, currency === 'GBP' ? 849 : 999);
       assert.equal(
         r.json().plans[0].priceCents,
         convertPrice(base.priceCents, currency, priceExchange(currency, rates)),

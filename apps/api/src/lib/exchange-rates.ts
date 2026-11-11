@@ -3,7 +3,7 @@ import type { Firestore } from 'firebase-admin/firestore';
 import type { Currency, Plan } from '../../../../packages/shared/src/index.ts';
 import { database } from './firebase.js';
 import { catalogueDate } from './package-pricing.js';
-import { checkedMoney, ceilDiv, moneyInteger } from './pricing.js';
+import { checkedMoney, ceilDiv, moneyInteger, roundRetailUp } from './pricing.js';
 
 export const MINIMUM_CHARGE_MINOR: Record<Currency, number> = { USD: 50, GBP: 30, EUR: 50 };
 export const currencySchema = z.enum(['USD', 'GBP', 'EUR']);
@@ -143,6 +143,18 @@ export function priceExchange(
     ...rates.rates[currency],
   };
 }
+// Keep inexpensive offers precise. A cosmetic increase must stay within 3%
+// and below the converted value of the next 50-cent canonical USD price step.
+// This bound preserves the distinctions established by catalogue curation.
+export function roundConvertedRetail(minor: number, nextStepMinor: number): number {
+  if (!moneyInteger(minor) || !moneyInteger(nextStepMinor))
+    throw new Error('Invalid converted price.');
+  if (minor <= 500) return minor;
+  const rounded = roundRetailUp(minor);
+  return BigInt(rounded - minor) * 10000n <= BigInt(minor) * 300n && rounded < nextStepMinor
+    ? rounded
+    : minor;
+}
 export function convertPrice(cents: number, currency: Currency, exchange: PriceExchange): number {
   if (!moneyInteger(cents)) throw new Error('Invalid selling price.');
   if (currency === 'USD') return cents;
@@ -153,9 +165,10 @@ export function convertPrice(cents: number, currency: Currency, exchange: PriceE
   if (n <= 0n || d <= 0n) throw new Error('Invalid exchange rate.');
   const minor = ceilDiv(BigInt(cents) * n, d),
     minimum = BigInt(MINIMUM_CHARGE_MINOR[currency]);
-  // A second 50-cent retail step can collapse distinct USD allowances to the
-  // same GBP/EUR price. Convert the canonical retail price to whole cents only.
-  return checkedMoney(minor > minimum ? minor : minimum);
+  const exact = checkedMoney(minor > minimum ? minor : minimum);
+  const nextStep = checkedMoney(ceilDiv((BigInt(cents) + 50n) * n, d));
+  // Nonstandard manual prices retain their exact converted amount.
+  return cents % 50 === 49 ? roundConvertedRetail(exact, nextStep) : exact;
 }
 export function convertedPlan(plan: Plan, currency: Currency, exchange: PriceExchange): Plan {
   if (plan.currency !== 'USD') throw new Error('Expected base USD catalogue.');

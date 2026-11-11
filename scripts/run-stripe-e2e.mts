@@ -36,6 +36,9 @@ if (!secret?.startsWith('sk_test_') || !publishable?.startsWith('pk_test_'))
 const firebase = initializeApp({ projectId: 'demo-alozuri' }),
   db = getFirestore(firebase),
   stripe = new Stripe(secret, { maxNetworkRetries: 1, timeout: 15000 });
+const fixtureCost = Number(process.env.STRIPE_TEST_COST_UNITS ?? 4700);
+if (!Number.isSafeInteger(fixtureCost) || fixtureCost <= 0)
+  throw new Error('Invalid Stripe test fixture cost.');
 const plan: StoredPlan = pricePackage({
   id: 'esim-stripe-integration',
   name: 'Alozuri sandbox verification',
@@ -52,7 +55,7 @@ const plan: StoredPlan = pricePackage({
   demo: false,
   active: true,
   supplierCode: 'no-supplier-call',
-  wholesaleUnits: 1000,
+  wholesaleUnits: fixtureCost,
 });
 const webhookSecret = 'whsec_local_stripe_e2e_transport',
   service = new CommerceService(
