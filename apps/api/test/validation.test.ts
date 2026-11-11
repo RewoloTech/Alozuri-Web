@@ -7,6 +7,31 @@ import { demoPlans } from '../../../packages/shared/src/demo.ts';
 
 const now = Date.parse('2026-11-09T12:00:00.000Z');
 const plan = { ...demoPlans[0], active: true, syncedAt: new Date(now).toISOString() };
+test('country API lists Curaçao once with its supported current code and flag', async () => {
+  const app = await createApp({
+    repository: {
+      plans: async () => [{ ...demoPlans[0], countries: ['AN', 'CW'] }],
+      orders: async () => [],
+      order: async () => null,
+    },
+    payments: null,
+    commerce: null,
+    fulfillment: null,
+  });
+  try {
+    const response = await app.inject('/v1/countries');
+    assert.equal(response.statusCode, 200);
+    assert.deepEqual(
+      response.json().countries.map((country: { code: string; flag: string }) => ({
+        code: country.code,
+        flag: country.flag,
+      })),
+      [{ code: 'CW', flag: '🇨🇼' }],
+    );
+  } finally {
+    await app.close();
+  }
+});
 test('catalogue rejects corrupt, stale, inactive and future records and strips private fields', () => {
   const publicPlan = cataloguePlan(
     pricePackage({ ...plan, wholesaleUnits: 123, supplierCode: 'secret' }),

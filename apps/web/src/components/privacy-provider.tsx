@@ -119,8 +119,8 @@ export function PrivacyProvider({ children }: { children: React.ReactNode }) {
             <h2>Your privacy choices</h2>
             <p>
               Essential storage keeps sign-in, your basket and checkout working. Optional Tawk.to
-              support is off until you choose it. We do not run analytics or advertising tags.{' '}
-              <Link href="/cookies">Cookie Policy</Link>
+              chat and its service providers, including Cloudflare, stay off until you allow and
+              open chat. <Link href="/cookies">Cookie Policy</Link>
             </p>
           </div>
           <div className="cookie-actions">
@@ -168,13 +168,14 @@ export function PrivacyProvider({ children }: { children: React.ReactNode }) {
               onChange={(e) => setSupport(e.target.checked)}
             />
             <span>
-              <strong>Optional support — Tawk.to.</strong> Enable chat in a separate, isolated
-              frame. Tawk is contacted only when you open chat; it cannot read your Alozuri account
-              or checkout page.
+              <strong>Optional support — Tawk.to.</strong> Allow live chat when you choose to open
+              it, including the provider’s service analytics and security technologies. We do not
+              automatically share your account or order details with chat.
             </span>
           </label>
           <p>
-            No analytics or advertising category is enabled because those tags are not installed.{' '}
+            Alozuri has no separate advertising or audience-analytics tools. The optional chat
+            provider may use its own service analytics and security providers.{' '}
             <Link href="/cookies">Read the cookie inventory</Link>.
           </p>
           <div className="cookie-actions">

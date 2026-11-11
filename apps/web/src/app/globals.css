@@ -945,7 +945,7 @@ h1 {
 }
 .footer-main {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr;
+  grid-template-columns: 1.5fr 1fr 1.25fr 1.25fr;
   gap: 30px;
   padding-bottom: 35px;
 }
@@ -954,7 +954,7 @@ h1 {
   line-height: 1.85;
   margin-top: 15px;
 }
-.footer-main > div:not(:first-child) {
+.footer-main .footer-links {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -963,12 +963,16 @@ h1 {
   font-size: 9px;
   margin-bottom: 7px;
 }
-.footer-main > div > a:not(.brand) {
+.footer-main .footer-links > a {
   font-size: 11px;
   display: flex;
   align-items: center;
   gap: 8px;
   color: #697184;
+}
+.footer-links > .text-link {
+  align-self: flex-start;
+  font-size: 11px;
 }
 .footer-bottom {
   border-top: 1px solid var(--border);
@@ -1357,7 +1361,7 @@ h1 {
     font-size: 25px;
   }
   .footer-main {
-    grid-template-columns: 1.4fr 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 20px;
   }
   .auth-page {
@@ -2433,6 +2437,54 @@ h1 {
 .policy-company p {
   margin: 14px 0;
   overflow-wrap: anywhere;
+}
+.policy-steps,
+.policy-resources {
+  padding-left: 24px;
+  margin-block: 16px;
+}
+.policy-steps li,
+.policy-resources li {
+  margin-block: 10px;
+}
+.policy-steps {
+  list-style: decimal;
+}
+.policy-resources {
+  list-style: disc;
+}
+.policy-table {
+  max-width: 100%;
+  overflow-x: auto;
+  margin-block: 20px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.policy-table table {
+  width: 100%;
+  min-width: 650px;
+  border-collapse: collapse;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.policy-table caption {
+  padding: 14px;
+  text-align: left;
+  font-weight: 600;
+}
+.policy-table th,
+.policy-table td {
+  padding: 12px;
+  text-align: left;
+  vertical-align: top;
+  border-top: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+.policy-table thead {
+  background: var(--soft);
+}
+.policy-table th[scope='row'] {
+  font-weight: 500;
 }
 .policy-contents {
   margin: 24px 0;

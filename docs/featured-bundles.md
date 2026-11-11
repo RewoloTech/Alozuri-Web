@@ -1,6 +1,6 @@
 # Automated regional and global bundles
 
-Implemented locally on 11 November 2026. No deployment, production writes, supplier orders, payments or scheduler changes were performed for this feature.
+Implemented and validated on 11 November 2026. Initial preparation made no live changes; the owner subsequently authorised production deployment and pricing migration. Activation evidence is recorded in [production-release.md](production-release.md). No real payment, supplier order or schedule change was part of activation.
 
 ## Data and integration
 
@@ -53,7 +53,7 @@ See [featured-bundles-preview.json](featured-bundles-preview.json) for all twelv
 
 ## Release prerequisite and administration
 
-**Live publication is blocked by the earlier pricing release.** None of the 3,283 live records currently satisfies the new pricing metadata validator; they use the legacy schema and lack pricing version/status and catalogue-date fields. The live `featured_bundles` collection was empty. Publishing against those records would present products that the new checkout rejects. This feature deliberately does not bypass pricing validation or migrate live prices without review.
+**Initial pre-release blocker (subsequently resolved):** none of the 3,283 live records satisfied the new pricing metadata validator; they use the legacy schema and lack pricing version/status and catalogue-date fields. At that initial inspection the live `featured_bundles` collection was empty. Publishing against those records would present products that the new checkout rejects. This feature deliberately does not bypass pricing validation or migrate live prices without review.
 
 After the existing pricing implementation and its migration are approved, the updated existing daily sync will automatically price products and publish bundles. Alternatively an authorised administrator can bootstrap references after a successfully completed, current priced sync. No new environment variable, Firestore index or scheduler is required. Existing Firebase admin credentials, existing rates and public API configuration are reused. Release the API capability before relying on it from the website.
 
@@ -104,3 +104,7 @@ Existing integration files modified for this feature:
 - `tests/cypress/support/commerce.ts`: fixture for the new public endpoint; `tests/e2e/privacy.spec.ts`: wait for verified checkout readiness in the existing retry test; `tests/e2e/stripe-sdk.spec.ts`: stable keyboard activation for the replacement-card retry.
 
 Other pre-existing local changes were retained and are outside this feature's scope.
+
+## Authorised production data activation
+
+Following explicit owner approval, the certified pricing migration completed with 3,283 backups and zero remaining changes/review-required products. Manual run [42959737165](https://github.com/RewoloTech/Alozuri-Web/actions/runs/42959737165) of the existing daily workflow then successfully published all four active regional records with source sync `78cd9157-8419-4152-bcdc-e5a41a7f3c61`, sourced at `2026-11-11T04:31:33.729Z`. Its `03:17 UTC` daily cron was unchanged. The live public API verified all twelve variant references in USD/GBP/EUR with no private pricing fields. See the release record for final frontend/checkout activation.

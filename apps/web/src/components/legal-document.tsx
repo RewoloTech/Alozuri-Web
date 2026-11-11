@@ -39,6 +39,54 @@ export function LegalDocument({
             {s.paragraphs.map((p, j) => (
               <p key={j}>{p}</p>
             ))}
+            {s.steps && (
+              <ol className="policy-steps">
+                {s.steps.map((step) => (
+                  <li key={step}>{step}</li>
+                ))}
+              </ol>
+            )}
+            {s.table && <p className="fine-print">Swipe or scroll to view all columns.</p>}
+            {s.table && (
+              <div className="policy-table" role="region" aria-label={s.table.caption} tabIndex={0}>
+                <table>
+                  <caption>{s.table.caption}</caption>
+                  <thead>
+                    <tr>
+                      {s.table.headings.map((heading) => (
+                        <th scope="col" key={heading}>
+                          {heading}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {s.table.rows.map((row) => (
+                      <tr key={row[0]}>
+                        {row.map((cell, column) =>
+                          column === 0 ? (
+                            <th scope="row" key={column}>
+                              {cell}
+                            </th>
+                          ) : (
+                            <td key={column}>{cell}</td>
+                          ),
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {s.links && (
+              <ul className="policy-resources">
+                {s.links.map((link) => (
+                  <li key={link.href}>
+                    <Link href={link.href}>{link.label}</Link>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
         ))}
       </div>

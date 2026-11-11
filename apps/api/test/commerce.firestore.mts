@@ -543,7 +543,9 @@ test('new orders require consent, store immutable terms, and cannot fulfil befor
     await db.doc('purchases/' + started.orderId).update({ contractEmailDueAt: Date.now() });
     await f.service.notify();
     assert.ok(
-      f.emails.some((e) => e.kind === 'contract' && e.text?.includes('Model cancellation notice')),
+      f.emails.some(
+        (e) => e.kind === 'contract' && e.text?.includes('I wish to cancel my Alozuri order'),
+      ),
     );
     assert.ok(await store.claim(children.docs[0].id));
     const owned = await f.service.order(started.orderId, null, started.accessToken);

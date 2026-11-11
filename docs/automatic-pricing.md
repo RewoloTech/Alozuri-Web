@@ -1,4 +1,4 @@
-# Automatic catalogue pricing (pending approval; not deployed)
+# Automatic catalogue pricing
 
 ## Scope and source of truth
 
@@ -60,9 +60,9 @@ Snapshots preserve base USD retail cents, pricing version, exact supplier units 
 
 `CHECKOUT_PAUSED=true` blocks new quotes/payments while leaving signed webhooks and existing-order handling available. It defaults off and has **not** been enabled in production.
 
-## Migration and deployment boundary
+## Initial migration preparation and deployment boundary
 
-**No live migration, deployment, repository push, schedule change or production price write was performed for this task.** Pushing main automatically deploys App Hosting, so changes must remain local until approved.
+**At the initial implementation stage, no live migration, deployment, repository push, schedule change or production price write was performed.** Pushing main automatically deploys App Hosting, so changes must remain local until approved.
 
 A read-only private export of all 3,283 existing package records was previewed on 2026-11-11: 3,283 need metadata migration, 2,677 selling prices increase, 599 decrease, seven stay unchanged, and zero require review. Re-run the preview immediately before any approved apply because supplier costs/overrides may change.
 
@@ -111,3 +111,9 @@ Firestore/Stripe local tests require Java 21+ and use `demo-alozuri` on the emul
 - Real `npm run test:stripe` runs in **USD, GBP and EUR each passed** using Stripe TEST card decline/retry against the new local API and Firestore emulator. Signed webhook transport is locally simulated in these runs. No live charge, supplier issuance or delivery email was performed.
 - Lint, application/test TypeScript checks, changed-file Prettier checks and production builds passed. Mobile EUR checkout was visually reviewed; responsive regression tests cover 375/390/768 px.
 - The live read-only comparison after the dry-run found **zero price or pricing-version changes** across all 3,283 packages. Git HEAD remains unchanged; the implementation and migration are local and uncommitted.
+
+## Authorised production activation — 11 November 2026
+
+The owner explicitly approved deployment and the reviewed `alozuri:tiered-usd-v1` migration. All 3,283 records were migrated with once-only backups: 2,677 prices increased, 599 decreased and seven stayed unchanged. Zero records require review, and a verification dry-run found zero remaining changes. A temporary catalogue lease prevented a concurrent importer during migration and was released afterward. Historical orders and charged amounts were not migrated.
+
+The existing daily GitHub workflow was manually dispatched once on the approved code, succeeded and published a current catalogue plus all four active bundle records under sync `78cd9157-8419-4152-bcdc-e5a41a7f3c61`. The daily cron was not changed. Final API/frontend rollout and live smoke-test evidence are recorded in [production-release.md](production-release.md).

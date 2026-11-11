@@ -2,6 +2,42 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { checkoutLegalSchema, legalSnapshot } from '../src/lib/legal.js';
 import { CHECKOUT_LEGAL_ACCEPTANCE, CHECKOUT_NOTICE } from '../../../packages/shared/src/legal.ts';
+import { POLICIES, POLICY_VERSIONS, policyText } from '../../../packages/shared/src/policies.ts';
+test('current policies explain customer rights without disclosing implementation details', () => {
+  const current = Object.values(POLICIES)
+    .map((policy) => policyText(policy))
+    .join('\n');
+  assert.doesNotMatch(
+    current,
+    /Firestore|webhooks?|Secret Manager|backend|server-side|IndexedDB|SDK|Next\.js|Google Cloud|eSIM Access/i,
+  );
+  assert.doesNotMatch(policyText(POLICIES.terms), /Stripe|Firebase/);
+  for (const disclosure of [
+    'Stripe',
+    'Tawk.to',
+    '__stripe_mid',
+    '__stripe_sid',
+    '180 days',
+    'Cookie settings',
+  ])
+    assert.ok(policyText(POLICIES.cookies).includes(disclosure), disclosure);
+  assert.ok(policyText(POLICIES.privacy).includes('Who receives it'));
+  assert.ok(policyText(POLICIES.cookies).includes('Google Firebase'));
+});
+test('already-open version-two checkouts retain the original text rather than accepting revised terms', () => {
+  const previous = { ...CHECKOUT_LEGAL_ACCEPTANCE, version: '2026-11-11.2' as const };
+  assert.ok(checkoutLegalSchema.safeParse(previous).success);
+  const snapshot = legalSnapshot(previous);
+  assert.equal(snapshot.version, previous.version);
+  assert.equal(
+    snapshot.termsText,
+    policyText(POLICY_VERSIONS[previous.version].terms, previous.version),
+  );
+  assert.ok(snapshot.termsText.includes('Firebase'));
+  assert.ok(!legalSnapshot(CHECKOUT_LEGAL_ACCEPTANCE).termsText.includes('Firebase'));
+  assert.equal(snapshot.immediateSupplyRequested, false);
+  assert.equal(snapshot.cancellationAcknowledged, false);
+});
 test('order placement requires the current notice and rejects invented waiver flags', () => {
   assert.ok(checkoutLegalSchema.safeParse(CHECKOUT_LEGAL_ACCEPTANCE).success);
   for (const change of [
@@ -23,7 +59,7 @@ test('the server snapshots the accepted text and time, retaining statutory-right
   const snapshot = legalSnapshot(CHECKOUT_LEGAL_ACCEPTANCE, '2026-11-11T12:00:00Z');
   assert.equal(snapshot.acceptedAt, '2026-11-11T12:00:00Z');
   assert.ok(snapshot.termsText.includes('Rewolo Technologies Ltd'));
-  assert.ok(snapshot.refundText.includes('not an automatic waiver'));
+  assert.ok(snapshot.refundText.includes('does not by itself waive'));
   assert.equal(snapshot.noticeText, CHECKOUT_NOTICE);
   assert.equal(snapshot.immediateSupplyRequested, false);
   assert.equal(snapshot.cancellationAcknowledged, false);

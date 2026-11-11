@@ -39,6 +39,29 @@ const regionNames = new Intl.DisplayNames(['en'], { type: 'region', fallback: 'n
 export function countryName(code: string) {
   return countries.find((c) => c.code === code)?.name ?? regionNames.of(code) ?? code;
 }
+export function countryFlag(code: string): string {
+  const upper = code.toUpperCase();
+  if (!isCountryCode(upper)) return '🌐';
+  // Match the canonical region used by Intl.DisplayNames (for example AN → CW).
+  // This changes display only; supplier coverage and purchase identifiers stay intact.
+  const displayCode = new Intl.Locale('und-' + upper).region ?? upper;
+  return String.fromCodePoint(...[...displayCode].map((c) => 127397 + c.charCodeAt(0)));
+}
+export function uniqueDestinations(items: readonly Country[]): Country[] {
+  const unique = new Map<string, Country>();
+  for (const item of items) {
+    if (!isCountryCode(item.code)) continue;
+    const canonical = new Intl.Locale('und-' + item.code).region ?? item.code;
+    const previous = unique.get(canonical);
+    // Prefer the current code only when it actually exists in the catalogue.
+    // Never replace supplier coverage codes or invent a destination's availability.
+    if (!previous || (item.code === canonical && previous.code !== canonical))
+      unique.set(canonical, { ...item, flag: countryFlag(item.code) });
+  }
+  return [...unique.values()].sort(
+    (a, b) => a.name.localeCompare(b.name) || a.code.localeCompare(b.code),
+  );
+}
 export type Currency = 'USD' | 'GBP' | 'EUR';
 export type Plan = {
   id: string;

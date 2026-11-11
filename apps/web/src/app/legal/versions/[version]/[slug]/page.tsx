@@ -1,5 +1,7 @@
 import { notFound } from 'next/navigation';
 import { POLICY_VERSIONS } from '@voyaspan/shared/policies';
+import { BUSINESS, LEGAL_VERSION } from '@voyaspan/shared/legal';
+import Link from 'next/link';
 import { LegalDocument } from '@/components/legal-document';
 export const metadata = {
   title: 'Archived policy version',
@@ -16,6 +18,27 @@ export default async function Page({
       ? POLICY_VERSIONS[version][slug]
       : undefined;
   if (!policy) notFound();
+  if (version !== LEGAL_VERSION)
+    return (
+      <article className="container section policy-page">
+        <header className="page-intro">
+          <h1>Previous {policy.title}</h1>
+          <p>Version {version}</p>
+        </header>
+        <p>
+          To request a copy of this policy version, contact{' '}
+          <a href={'mailto:' + BUSINESS.email}>{BUSINESS.email}</a>.
+        </p>
+        {(slug === 'terms' || slug === 'refunds') && (
+          <p>
+            Your purchase terms remain available in your order confirmation and the downloadable
+            documents on your private order page.
+          </p>
+        )}
+        <p>This update does not change the terms already attached to your purchase.</p>
+        <Link href={policy.path}>Read the current {policy.title}</Link>
+      </article>
+    );
   return <LegalDocument policy={policy} version={version} />;
 }
 export function generateStaticParams() {

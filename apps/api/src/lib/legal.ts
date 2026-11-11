@@ -1,14 +1,14 @@
 import { z } from 'zod';
 import {
-  LEGAL_VERSION,
+  NOTICE_LEGAL_VERSIONS,
   LEGAL_EFFECTIVE_DATE,
   CHECKOUT_NOTICE,
   type CheckoutLegalInput,
 } from '../../../../packages/shared/src/legal.ts';
-import { POLICIES, POLICY_VERSIONS, policyText } from '../../../../packages/shared/src/policies.ts';
+import { POLICY_VERSIONS, policyText } from '../../../../packages/shared/src/policies.ts';
 const noticeSchema = z
   .object({
-    version: z.literal(LEGAL_VERSION),
+    version: z.enum(NOTICE_LEGAL_VERSIONS),
     method: z.literal('order_placement'),
     noticeAcknowledged: z.literal(true),
   })
@@ -66,7 +66,7 @@ export function legalSnapshot(
     noticeText: CHECKOUT_NOTICE,
     requestText: '',
     acknowledgementText: '',
-    termsText: policyText(POLICIES.terms),
-    refundText: policyText(POLICIES.refunds),
+    termsText: policyText(POLICY_VERSIONS[accepted.version].terms, accepted.version),
+    refundText: policyText(POLICY_VERSIONS[accepted.version].refunds, accepted.version),
   };
 }

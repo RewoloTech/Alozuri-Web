@@ -2,7 +2,7 @@ import { parseFeaturedBundles } from '@voyaspan/shared/featured';
 import { cache } from 'react';
 import { notFound } from 'next/navigation';
 const MISSING = Symbol('missing-public-resource');
-import { isCountryCode, type Plan, type Country } from '@voyaspan/shared';
+import { isCountryCode, uniqueDestinations, type Plan, type Country } from '@voyaspan/shared';
 const record = (v: unknown): v is Record<string, unknown> =>
   !!v && typeof v === 'object' && !Array.isArray(v);
 const strings = (v: unknown): v is string[] =>
@@ -23,15 +23,17 @@ async function publicJson(path: string): Promise<unknown> {
 export const getPublicCountries = cache(async (): Promise<Country[]> => {
   const body = await publicJson('/v1/countries');
   if (!record(body) || !Array.isArray(body.countries)) return [];
-  return body.countries.flatMap((c: unknown) =>
-    record(c) &&
-    typeof c.code === 'string' &&
-    isCountryCode(c.code) &&
-    typeof c.name === 'string' &&
-    typeof c.flag === 'string' &&
-    typeof c.region === 'string'
-      ? [{ code: c.code, name: c.name, flag: c.flag, region: c.region }]
-      : [],
+  return uniqueDestinations(
+    body.countries.flatMap((c: unknown) =>
+      record(c) &&
+      typeof c.code === 'string' &&
+      isCountryCode(c.code) &&
+      typeof c.name === 'string' &&
+      typeof c.flag === 'string' &&
+      typeof c.region === 'string'
+        ? [{ code: c.code, name: c.name, flag: c.flag, region: c.region }]
+        : [],
+    ),
   );
 });
 export function parsePublicPlan(input: unknown, id: string): Plan | null {

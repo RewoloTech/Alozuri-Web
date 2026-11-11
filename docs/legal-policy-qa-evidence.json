@@ -1,0 +1,298 @@
+{
+  "reviewDate": "2026-11-11",
+  "mode": "local editorial changes; read-only production audits",
+  "before": {
+    "terms": {
+      "title": "Terms and Conditions",
+      "sections": 36,
+      "words": 1711
+    },
+    "privacy": {
+      "title": "Privacy Policy",
+      "sections": 15,
+      "words": 941
+    },
+    "cookies": {
+      "title": "Cookie Policy",
+      "sections": 9,
+      "words": 482
+    },
+    "refunds": {
+      "title": "Refund and Cancellation Policy",
+      "sections": 15,
+      "words": 827
+    },
+    "compatibility": {
+      "title": "eSIM Compatibility and Installation",
+      "sections": 7,
+      "words": 338
+    },
+    "acceptable-use": {
+      "title": "Acceptable Use, Fair Usage and Network Coverage",
+      "sections": 5,
+      "words": 241
+    },
+    "contact": {
+      "title": "Contact, Support and Complaints",
+      "sections": 5,
+      "words": 240
+    }
+  },
+  "after": {
+    "terms": {
+      "sections": 18,
+      "words": 981
+    },
+    "privacy": {
+      "sections": 9,
+      "words": 722
+    },
+    "cookies": {
+      "sections": 5,
+      "words": 468
+    },
+    "refunds": {
+      "sections": 9,
+      "words": 642
+    },
+    "compatibility": {
+      "sections": 8,
+      "words": 476
+    },
+    "acceptable-use": {
+      "sections": 4,
+      "words": 159
+    },
+    "contact": {
+      "sections": 5,
+      "words": 290
+    }
+  },
+  "historicalHashesUnchanged": true,
+  "historicalHashes": {
+    "2026-11-11.1": "f7bf3483e109241464ca541c9f01a913e9d2b5b888e5065790f19967cf207439",
+    "2026-11-11.2": "cb44d25f142d39860d470e389964e04e78fd7d1c75b5be3d5672f86aaf6d3f08"
+  },
+  "browserStorage": {
+    "checkedAt": "2026-11-11T05:01:54.022Z",
+    "states": [
+      {
+        "stage": "before-choice",
+        "hostsSincePreviousCapture": ["alozuri-api-rnm3hsyqia-ez.a.run.app", "alozuri.com"],
+        "chatFrames": 0,
+        "cookies": [],
+        "storage": {
+          "localStorageKeys": ["alozuri-cart"],
+          "sessionStorageKeys": [],
+          "indexedDatabases": ["firebase-heartbeat-database", "firebaseLocalStorageDb"]
+        }
+      },
+      {
+        "stage": "rejected",
+        "hostsSincePreviousCapture": [],
+        "chatFrames": 0,
+        "cookies": [
+          {
+            "name": "alozuri_consent",
+            "domain": "alozuri.com",
+            "expires": 1809925311.229589,
+            "secure": true,
+            "sameSite": "Lax"
+          }
+        ],
+        "storage": {
+          "localStorageKeys": ["alozuri-cart"],
+          "sessionStorageKeys": [],
+          "indexedDatabases": ["firebase-heartbeat-database", "firebaseLocalStorageDb"]
+        }
+      },
+      {
+        "stage": "accepted-before-open",
+        "hostsSincePreviousCapture": ["alozuri.com"],
+        "chatFrames": 0,
+        "cookies": [
+          {
+            "name": "alozuri_consent",
+            "domain": "alozuri.com",
+            "expires": 1809925311.357875,
+            "secure": true,
+            "sameSite": "Lax"
+          }
+        ],
+        "storage": {
+          "localStorageKeys": ["alozuri-cart"],
+          "sessionStorageKeys": [],
+          "indexedDatabases": ["firebase-heartbeat-database", "firebaseLocalStorageDb"]
+        }
+      },
+      {
+        "stage": "chat-open",
+        "hostsSincePreviousCapture": [
+          "alozuri.com",
+          "embed.tawk.to",
+          "static.cloudflareinsights.com",
+          "tawk.to"
+        ],
+        "chatFrames": 1,
+        "cookies": [
+          {
+            "name": "alozuri_consent",
+            "domain": "alozuri.com",
+            "expires": 1809925311.357875,
+            "secure": true,
+            "sameSite": "Lax"
+          }
+        ],
+        "storage": {
+          "localStorageKeys": ["alozuri-cart"],
+          "sessionStorageKeys": [],
+          "indexedDatabases": ["firebase-heartbeat-database", "firebaseLocalStorageDb"]
+        }
+      },
+      {
+        "stage": "withdrawn",
+        "hostsSincePreviousCapture": ["tawk.to"],
+        "chatFrames": 0,
+        "cookies": [
+          {
+            "name": "alozuri_consent",
+            "domain": "alozuri.com",
+            "expires": 1809925314.008964,
+            "secure": true,
+            "sameSite": "Lax"
+          }
+        ],
+        "storage": {
+          "localStorageKeys": ["alozuri-cart"],
+          "sessionStorageKeys": [],
+          "indexedDatabases": ["firebase-heartbeat-database", "firebaseLocalStorageDb"]
+        }
+      }
+    ]
+  },
+  "stripeStorage": {
+    "environment": "Stripe test mode with local emulator",
+    "observedAt": "2026-11-11T05:02:07.810Z",
+    "cookies": [
+      {
+        "name": "alozuri_consent",
+        "domain": "localhost",
+        "remainingSeconds": null,
+        "secure": false,
+        "sameSite": "Lax"
+      },
+      {
+        "name": "__cf_bm",
+        "domain": ".hcaptcha.com",
+        "remainingSeconds": 1800,
+        "secure": true,
+        "sameSite": "None"
+      }
+    ]
+  },
+  "supplier": {
+    "checkedAt": "2026-11-11T05:01:51.426Z",
+    "supplierRequest": "catalogue/list read only",
+    "supplierRecords": 3283,
+    "activationTypes": {
+      "1": 64,
+      "2": 3206,
+      "3": 13
+    },
+    "supportedRecords": 3283,
+    "groups": {
+      "fixed": 1809,
+      "dailyReduced": 1466,
+      "dailyCutoff": 0,
+      "unlimited": 8
+    },
+    "examples": [
+      {
+        "kind": "fixed",
+        "productId": "esim-90392b01f3c1e2b8d054f963",
+        "name": "Spain 3GB 30Days",
+        "dataGb": 3,
+        "days": 30,
+        "dataType": "fixed",
+        "dailyPolicy": null,
+        "activation": "Starts on first connection to a supported mobile network.",
+        "fairUse": "Fixed total data allowance. Data only; no local phone number.",
+        "verifiedNetworkCount": 2,
+        "supplierActiveType": 2,
+        "supplierDataType": 1,
+        "matchesCurrentPublicProduct": true
+      },
+      {
+        "kind": "dailyReduced",
+        "productId": "esim-bab5f7e60b3a30f273ffd4de",
+        "name": "Singapore 1GB/Day",
+        "dataGb": 1,
+        "days": 1,
+        "dataType": "daily",
+        "dailyPolicy": "reduced",
+        "activation": "Starts on first connection to a supported mobile network.",
+        "fairUse": "1 GB high-speed per day, then reduced speed (384 Kbps).",
+        "verifiedNetworkCount": 2,
+        "supplierActiveType": 2,
+        "supplierDataType": 2,
+        "matchesCurrentPublicProduct": true
+      },
+      {
+        "kind": "unlimited",
+        "productId": "esim-88e2c738c89830dd50818cdb",
+        "name": "Japan No-Throttling-Unlimited 3Days (KDDI)",
+        "dataGb": 999,
+        "days": 3,
+        "dataType": "unlimited",
+        "dailyPolicy": null,
+        "activation": "Validity starts after purchase. Buy only when you are ready to use it.",
+        "fairUse": "Supplier describes this plan as unlimited. Check plan name and supplier conditions for speed restrictions.",
+        "verifiedNetworkCount": 1,
+        "supplierActiveType": 3,
+        "supplierDataType": 1,
+        "matchesCurrentPublicProduct": true
+      }
+    ],
+    "supplierOrdersPlaced": 0,
+    "databaseWrites": 0
+  },
+  "ownerConfirmed": {
+    "supplier": "eSIM Access",
+    "offering": "prepaid data-only international travel eSIM resale",
+    "adrMembership": false,
+    "dedicatedComplaintsTelephone": false,
+    "complaintsEmail": "support@alozuri.com",
+    "ofcomExemptionNotClaimed": true
+  },
+  "scope": {
+    "liveDatabaseWrites": 0,
+    "productionDeployments": 0,
+    "livePaymentRequests": 0,
+    "supplierOrdersPlaced": 0,
+    "paymentOrFulfilmentLogicChanges": false,
+    "consentEvidenceChanges": false
+  },
+  "historicalPlaintextIdentical": true,
+  "destinationDuplicates": {
+    "sourceEntries": 205,
+    "uniqueDisplayDestinations": 204,
+    "groups": [
+      {
+        "name": "Curaçao",
+        "codes": ["CW", "AN"]
+      }
+    ],
+    "purchasingCodesRewritten": false
+  },
+  "tests": {
+    "unit": {
+      "shared": 29,
+      "api": 94,
+      "total": 123
+    },
+    "firestore": 26,
+    "playwrightFixtures": 25,
+    "cypress": 13,
+    "stripeSandbox": 1
+  }
+}

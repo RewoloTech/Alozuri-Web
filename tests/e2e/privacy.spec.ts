@@ -180,6 +180,131 @@ test('all policies contain company details, version and canonical metadata; lega
   expect(structured.join('')).not.toContain('private-test');
 });
 
+test('public policy copy omits implementation details while identifying relevant cookie providers', async ({
+  page,
+}) => {
+  for (const path of ['/terms', '/privacy', '/cookies']) {
+    await page.goto(path);
+    const text = await page.locator('main').innerText();
+    expect(text).not.toMatch(
+      /Firestore|webhooks?|IndexedDB|SDK|Next\.js|Google Cloud|eSIM Access/i,
+    );
+    if (path === '/cookies') {
+      expect(text).toContain('Stripe');
+      expect(text).toContain('Google Firebase');
+      expect(text).toContain('firebase-heartbeat-database');
+      expect(text).toContain('Tawk.to');
+      expect(text).toContain('__stripe_mid');
+      expect(text).toContain('180 days');
+      await expect(
+        page.getByRole('button', { name: 'Cookie settings', exact: true }).first(),
+      ).toBeVisible();
+    }
+  }
+  for (const version of ['2026-11-11.1', '2026-11-11.2']) {
+    const response = await page.goto('/legal/versions/' + version + '/terms');
+    expect(response?.status()).toBe(200);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+      'Previous Terms and Conditions',
+    );
+    await expect(page.locator('main')).toContainText(
+      'downloadable documents on your private order page',
+    );
+    if (!response) throw new Error('Archived notice must return a response.');
+    expect(await response.text()).not.toMatch(/Firebase|Firestore|webhooks/);
+  }
+});
+
+test('legal pages have usable headings, a scrollable cookie inventory and grouped footer links', async ({
+  page,
+}) => {
+  test.setTimeout(90000);
+  await page.context().addCookies([
+    {
+      name: CONSENT_COOKIE,
+      value: encodeURIComponent(JSON.stringify(privacyChoice(false))),
+      domain: 'localhost',
+      path: '/',
+    },
+  ]);
+  for (const policy of Object.values(POLICIES)) {
+    await page.goto(policy.path);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(policy.title);
+    const contents = page.getByRole('navigation', { name: 'On this page' });
+    for (let i = 0; i < policy.sections.length; i++) {
+      await expect(contents.locator(`a[href="#section-${i + 1}"]`)).toHaveCount(1);
+      await expect(page.locator(`#section-${i + 1} h2`)).toHaveText(
+        `${i + 1}. ${policy.sections[i].title}`,
+      );
+    }
+    const redirected = await page.request.get('/legal/' + policy.slug);
+    expect(new URL(redirected.url()).pathname).toBe(policy.path);
+    expect(redirected.ok()).toBe(true);
+    for (const width of [390, 1440]) {
+      await page.setViewportSize({ width, height: 950 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+    }
+  }
+  const footer = page.locator('footer');
+  await expect(footer.getByRole('navigation', { name: 'Legal', exact: true })).toBeVisible();
+  await expect(
+    footer.getByRole('navigation', { name: 'Help & Support', exact: true }),
+  ).toBeVisible();
+  for (const policy of Object.values(POLICIES))
+    await expect(footer.locator(`a[href="${policy.path}"]`)).toHaveCount(1);
+  await footer.getByRole('button', { name: 'Cookie settings', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Cookie settings' });
+  await expect(dialog.getByRole('checkbox')).not.toBeChecked();
+  await page.keyboard.press('Escape');
+  await expect(footer.getByRole('button', { name: 'Cookie settings', exact: true })).toBeFocused();
+  await page.goto('/cookies');
+  const table = page.getByRole('table', { name: 'Cookies and browser storage used by Alozuri' });
+  await expect(table.getByRole('columnheader')).toHaveText([
+    'Storage',
+    'Provider',
+    'Purpose',
+    'Duration',
+  ]);
+  await expect(table.getByRole('row')).toHaveCount(12);
+  for (const width of [375, 390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 950 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+  }
+  await page.setViewportSize({ width: 390, height: 950 });
+  const region = page.getByRole('region', { name: 'Cookies and browser storage used by Alozuri' });
+  await region.focus();
+  await expect(region).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(() => region.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+  await region.evaluate((element) =>
+    window.scrollTo({
+      top: window.scrollY + element.getBoundingClientRect().top - 120,
+      behavior: 'instant',
+    }),
+  );
+  await page.screenshot({ path: '/tmp/alozuri-legal-cookie-inventory-viewport.png' });
+  await page.screenshot({ path: '/tmp/alozuri-legal-cookie-inventory-mobile.png', fullPage: true });
+  await page.goto('/esim-compatibility');
+  for (const title of ['Install on iPhone', 'Install on Android']) {
+    const section = page
+      .locator('.policy-copy section')
+      .filter({ has: page.getByRole('heading', { name: new RegExp(title) }) });
+    await expect(section.locator('ol li')).toHaveCount(3);
+    if (title === 'Install on iPhone')
+      await section.screenshot({ path: '/tmp/alozuri-legal-iphone-steps.png' });
+  }
+  await page.screenshot({ path: '/tmp/alozuri-legal-installation-mobile.png', fullPage: true });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto('/terms');
+  await expect(page.locator('.policy-copy section')).toHaveCount(18);
+  await page.screenshot({ path: '/tmp/alozuri-legal-terms-desktop.png', fullPage: true });
+  await page.locator('footer').screenshot({ path: '/tmp/alozuri-legal-footer-desktop.png' });
+});
+
 test('public products render server-side with safe Product/Offer and breadcrumb data', async ({
   page,
 }) => {

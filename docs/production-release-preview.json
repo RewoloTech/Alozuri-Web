@@ -1,0 +1,143 @@
+{
+  "mode": "read-only-production-release-preview",
+  "project": "alozuri",
+  "pricingVersion": "tiered-usd-v1",
+  "productionWrites": 0,
+  "sourceSyncId": "d64aa3cd-3257-4769-a865-b2ce5aefd0c9",
+  "sourceSyncedAt": "2026-11-10T23:28:05.021Z",
+  "apiSourceSha256": "818ed9f3db68fad932d632e515f5b38cf779cf653721dd4af04dcb8589a9af35",
+  "scanned": 3283,
+  "metadataChanges": 3283,
+  "increased": 2677,
+  "decreased": 599,
+  "unchangedPrice": 7,
+  "reviewRequired": 0,
+  "currentPricingValid": 0,
+  "projectedPricingValid": 3283,
+  "bundles": [
+    {
+      "region": "europe",
+      "status": "active",
+      "selectedPlanId": "esim-b0702e322fbcf8a23d9d69e8",
+      "options": [
+        {
+          "productId": "esim-50fb57ec1d51f8b289fca25d",
+          "supplierProductId": "PXU710SMN",
+          "dataGb": 5,
+          "validityDays": 30,
+          "countryCount": 33,
+          "projectedSellingPriceUsdCents": 599
+        },
+        {
+          "productId": "esim-b0702e322fbcf8a23d9d69e8",
+          "supplierProductId": "PGJBA365C",
+          "dataGb": 10,
+          "validityDays": 30,
+          "countryCount": 33,
+          "projectedSellingPriceUsdCents": 1099
+        },
+        {
+          "productId": "esim-e09d355469557f45b9e67a90",
+          "supplierProductId": "P9G6JMV1T",
+          "dataGb": 20,
+          "validityDays": 30,
+          "countryCount": 33,
+          "projectedSellingPriceUsdCents": 2049
+        }
+      ]
+    },
+    {
+      "region": "asia",
+      "status": "active",
+      "selectedPlanId": "esim-db0fb72526448cb80bf983d3",
+      "options": [
+        {
+          "productId": "esim-7c76c881fa8586642d4d1de5",
+          "supplierProductId": "JC178",
+          "dataGb": 5,
+          "validityDays": 30,
+          "countryCount": 20,
+          "projectedSellingPriceUsdCents": 1749
+        },
+        {
+          "productId": "esim-db0fb72526448cb80bf983d3",
+          "supplierProductId": "JC180",
+          "dataGb": 10,
+          "validityDays": 30,
+          "countryCount": 20,
+          "projectedSellingPriceUsdCents": 2749
+        },
+        {
+          "productId": "esim-33e5898da82bfb835aefb766",
+          "supplierProductId": "PALTQIBLC",
+          "dataGb": 20,
+          "validityDays": 30,
+          "countryCount": 20,
+          "projectedSellingPriceUsdCents": 4649
+        }
+      ]
+    },
+    {
+      "region": "north-america",
+      "status": "active",
+      "selectedPlanId": "esim-c525b3fa0ca7f258c7dd956c",
+      "options": [
+        {
+          "productId": "esim-abf5c287fe49a3dcc0f1e3d5",
+          "supplierProductId": "P8H3NEG7T",
+          "dataGb": 5,
+          "validityDays": 30,
+          "countryCount": 2,
+          "projectedSellingPriceUsdCents": 1549
+        },
+        {
+          "productId": "esim-c525b3fa0ca7f258c7dd956c",
+          "supplierProductId": "CKH494",
+          "dataGb": 10,
+          "validityDays": 30,
+          "countryCount": 3,
+          "projectedSellingPriceUsdCents": 2749
+        },
+        {
+          "productId": "esim-5dcbceeaf47fe914762ac36e",
+          "supplierProductId": "CKH535",
+          "dataGb": 20,
+          "validityDays": 30,
+          "countryCount": 3,
+          "projectedSellingPriceUsdCents": 4249
+        }
+      ]
+    },
+    {
+      "region": "global",
+      "status": "active",
+      "selectedPlanId": "esim-faf726618a4c44744c58d8d3",
+      "options": [
+        {
+          "productId": "esim-c10f8b63b7b242596415c939",
+          "supplierProductId": "PEW54FVD9",
+          "dataGb": 5,
+          "validityDays": 30,
+          "countryCount": 117,
+          "projectedSellingPriceUsdCents": 2999
+        },
+        {
+          "productId": "esim-faf726618a4c44744c58d8d3",
+          "supplierProductId": "P34FHRF8J",
+          "dataGb": 10,
+          "validityDays": 30,
+          "countryCount": 117,
+          "projectedSellingPriceUsdCents": 5149
+        },
+        {
+          "productId": "esim-5ad04940a09a8cc95e63cace",
+          "supplierProductId": "PR3JZMC20",
+          "dataGb": 20,
+          "validityDays": 30,
+          "countryCount": 117,
+          "projectedSellingPriceUsdCents": 9049
+        }
+      ]
+    }
+  ]
+}

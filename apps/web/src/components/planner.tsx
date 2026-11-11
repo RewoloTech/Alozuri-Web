@@ -25,6 +25,8 @@ import {
 import {
   countries,
   countryName,
+  countryFlag,
+  uniqueDestinations,
   matchPlans,
   money,
   type PlanSummary,
@@ -102,7 +104,7 @@ export function Planner({
   useEffect(() => {
     if (!demoMode)
       void api<{ countries: Country[] }>('/v1/countries')
-        .then((r) => setAvailableCountries(r.countries))
+        .then((r) => setAvailableCountries(uniqueDestinations(r.countries)))
         .catch(() => setError('Destinations could not be loaded. Refresh the page and try again.'))
         .finally(() => setCountriesLoading(false));
   }, []);
@@ -374,7 +376,7 @@ export function Planner({
               <div className="country-chips">
                 {selected.map((code) => (
                   <span className="country-chip" key={code}>
-                    <span>{availableCountries.find((c) => c.code === code)?.flag}</span>
+                    <span>{countryFlag(code)}</span>
                     {countryName(code)}
                     <button
                       aria-label={`Remove ${countryName(code)}`}
@@ -469,7 +471,7 @@ export function Planner({
                     {filtered.map((c) => (
                       <button key={c.code} onClick={() => add(c.code)}>
                         <span>
-                          {c.flag} {c.name}
+                          {countryFlag(c.code)} {c.name}
                         </span>
                         <Plus size={14} />
                       </button>

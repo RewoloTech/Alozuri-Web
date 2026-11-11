@@ -132,6 +132,36 @@ async function selectCountry(page: Page, name: string) {
     .last()
     .click();
 }
+test('destination directory and picker show each country once even when a legacy API sends aliases', async ({
+  page,
+}) => {
+  await setup(page);
+  await page.route('http://127.0.0.1:8189/v1/countries', (route) =>
+    route.fulfill({
+      headers: { 'Access-Control-Allow-Origin': 'http://localhost:3100' },
+      json: {
+        countries: [
+          { code: 'AN', name: 'Curaçao', flag: '🇦🇳', region: 'Americas' },
+          { code: 'CW', name: 'Curaçao', flag: '🇨🇼', region: 'Americas' },
+          { code: 'CW', name: 'Curaçao', flag: '🇨🇼', region: 'Americas' },
+          { code: 'FR', name: 'France', flag: '🇫🇷', region: 'Europe' },
+        ],
+      },
+    }),
+  );
+  await page.goto('/destinations');
+  await expect(page.locator('.country-tile')).toHaveCount(2);
+  await page.getByRole('searchbox', { name: 'Search destinations' }).fill('Curacao');
+  const curacao = page.locator('.country-tile');
+  await expect(curacao).toHaveCount(1);
+  await expect(curacao).toHaveAttribute('href', '/destinations/cw');
+  await expect(curacao).toContainText('🇨🇼');
+  await page.goto('/');
+  await page.getByRole('button', { name: /Choose destination/ }).click();
+  await page.getByRole('textbox', { name: 'Search countries' }).fill('Curacao');
+  await expect(page.getByRole('button', { name: '🇨🇼 Curaçao', exact: true })).toHaveCount(1);
+});
+
 test('single and multi destination selection survives mode changes, refresh and navigation', async ({
   page,
 }) => {

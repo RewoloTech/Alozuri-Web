@@ -1,7 +1,13 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { countries, filterDestinations, type Country } from '@voyaspan/shared';
+import {
+  countries,
+  countryFlag,
+  uniqueDestinations,
+  filterDestinations,
+  type Country,
+} from '@voyaspan/shared';
 import { api, demoMode } from '@/lib/api';
 export function DestinationDirectory() {
   const [items, setItems] = useState<Country[]>(demoMode ? countries : []),
@@ -12,7 +18,7 @@ export function DestinationDirectory() {
     let active = true;
     void api<{ countries: Country[] }>('/v1/countries')
       .then((r) => {
-        if (active) setItems(r.countries);
+        if (active) setItems(uniqueDestinations(r.countries));
       })
       .catch(() => {
         if (active) setError('Could not load destinations. Please refresh and try again.');
@@ -43,7 +49,7 @@ export function DestinationDirectory() {
             key={c.code}
             href={`/destinations/${c.code.toLowerCase()}`}
           >
-            <span className="country-emoji">{c.flag}</span>
+            <span className="country-emoji">{countryFlag(c.code)}</span>
             <span>
               <strong>{c.name}</strong>
               <small>Compare data plans</small>

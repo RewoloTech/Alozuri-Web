@@ -1,0 +1,241 @@
+{
+  "completedAt": "2026-11-11T04:40:25.657Z",
+  "project": "alozuri",
+  "site": "https://alozuri.com",
+  "sourceCommit": "177d39e0c5accbeeb92de68938010cc3b559799c",
+  "apiImage": "europe-west4-docker.pkg.dev/alozuri/alozuri-api/api:177d39e0c5ac",
+  "apiBuildId": "6345a156-5012-4760-857b-2bfb347cc6e3",
+  "apiRevision": "projects/alozuri/locations/europe-west4/services/alozuri-api/revisions/alozuri-api-00007-ncv",
+  "frontendBuild": "build-2026-11-11-005",
+  "frontendRollout": "SUCCEEDED",
+  "checkout": {
+    "paymentMode": "live",
+    "catalogueMode": "live",
+    "cartCheckoutMode": "live",
+    "supportedCurrencies": ["USD", "GBP", "EUR"],
+    "fulfillmentMode": "esim_access"
+  },
+  "pricingMigration": {
+    "project": "alozuri",
+    "version": "tiered-usd-v1",
+    "applied": {
+      "version": "tiered-usd-v1",
+      "mode": "apply",
+      "scanned": 3283,
+      "changed": 3283,
+      "reviewRequired": 0,
+      "increased": 2677,
+      "decreased": 599
+    },
+    "verified": {
+      "version": "tiered-usd-v1",
+      "mode": "dry-run",
+      "scanned": 3283,
+      "changed": 0,
+      "reviewRequired": 0,
+      "increased": 0,
+      "decreased": 0
+    },
+    "backupCount": 3283,
+    "completedAt": "2026-11-11T04:30:47.385Z"
+  },
+  "catalogue": {
+    "runId": "78cd9157-8419-4152-bcdc-e5a41a7f3c61",
+    "status": "complete",
+    "syncedAt": "2026-11-11T04:31:33.729Z",
+    "active": 3283,
+    "reviewRequired": 0,
+    "dailyWorkflow": "https://github.com/RewoloTech/Alozuri-Web/actions/runs/42959737165",
+    "dailyCronUnchanged": "17 3 * * *"
+  },
+  "liveBundleChecks": {
+    "checkedAt": "2026-11-11T04:39:34.145Z",
+    "api": "https://alozuri-api-rnm3hsyqia-ez.a.run.app",
+    "currencies": ["USD", "GBP", "EUR"],
+    "productsVerified": 12,
+    "publicFieldsOnly": true,
+    "unsignedSyncDenied": true,
+    "regions": [
+      {
+        "region": "europe",
+        "defaultDataGb": 10,
+        "options": [
+          {
+            "productId": "esim-50fb57ec1d51f8b289fca25d",
+            "dataGb": 5,
+            "validityDays": 30,
+            "countryCount": 33,
+            "priceCents": 599,
+            "currency": "USD"
+          },
+          {
+            "productId": "esim-b0702e322fbcf8a23d9d69e8",
+            "dataGb": 10,
+            "validityDays": 30,
+            "countryCount": 33,
+            "priceCents": 1099,
+            "currency": "USD"
+          },
+          {
+            "productId": "esim-e09d355469557f45b9e67a90",
+            "dataGb": 20,
+            "validityDays": 30,
+            "countryCount": 33,
+            "priceCents": 2049,
+            "currency": "USD"
+          }
+        ]
+      },
+      {
+        "region": "asia",
+        "defaultDataGb": 10,
+        "options": [
+          {
+            "productId": "esim-7c76c881fa8586642d4d1de5",
+            "dataGb": 5,
+            "validityDays": 30,
+            "countryCount": 20,
+            "priceCents": 1749,
+            "currency": "USD"
+          },
+          {
+            "productId": "esim-db0fb72526448cb80bf983d3",
+            "dataGb": 10,
+            "validityDays": 30,
+            "countryCount": 20,
+            "priceCents": 2749,
+            "currency": "USD"
+          },
+          {
+            "productId": "esim-33e5898da82bfb835aefb766",
+            "dataGb": 20,
+            "validityDays": 30,
+            "countryCount": 20,
+            "priceCents": 4649,
+            "currency": "USD"
+          }
+        ]
+      },
+      {
+        "region": "north-america",
+        "defaultDataGb": 10,
+        "options": [
+          {
+            "productId": "esim-abf5c287fe49a3dcc0f1e3d5",
+            "dataGb": 5,
+            "validityDays": 30,
+            "countryCount": 2,
+            "priceCents": 1549,
+            "currency": "USD"
+          },
+          {
+            "productId": "esim-c525b3fa0ca7f258c7dd956c",
+            "dataGb": 10,
+            "validityDays": 30,
+            "countryCount": 3,
+            "priceCents": 2749,
+            "currency": "USD"
+          },
+          {
+            "productId": "esim-5dcbceeaf47fe914762ac36e",
+            "dataGb": 20,
+            "validityDays": 30,
+            "countryCount": 3,
+            "priceCents": 4249,
+            "currency": "USD"
+          }
+        ]
+      },
+      {
+        "region": "global",
+        "defaultDataGb": 10,
+        "options": [
+          {
+            "productId": "esim-c10f8b63b7b242596415c939",
+            "dataGb": 5,
+            "validityDays": 30,
+            "countryCount": 117,
+            "priceCents": 2999,
+            "currency": "USD"
+          },
+          {
+            "productId": "esim-faf726618a4c44744c58d8d3",
+            "dataGb": 10,
+            "validityDays": 30,
+            "countryCount": 117,
+            "priceCents": 5149,
+            "currency": "USD"
+          },
+          {
+            "productId": "esim-5ad04940a09a8cc95e63cace",
+            "dataGb": 20,
+            "validityDays": 30,
+            "countryCount": 117,
+            "priceCents": 9049,
+            "currency": "USD"
+          }
+        ]
+      }
+    ],
+    "quotes": [
+      {
+        "currency": "USD",
+        "totalCents": 11746
+      },
+      {
+        "currency": "GBP",
+        "totalCents": 8796
+      },
+      {
+        "currency": "EUR",
+        "totalCents": 10596
+      }
+    ]
+  },
+  "liveBrowser": {
+    "checkedAt": "2026-11-11T04:40:47.722Z",
+    "site": "https://alozuri.com",
+    "bundleCards": 4,
+    "selectedProductId": "esim-e09d355469557f45b9e67a90",
+    "currency": "GBP",
+    "verifiedCartPriceCents": 1549,
+    "compatibilityInitiallyUnchecked": true,
+    "checkoutTotalVerified": true,
+    "viewportWidths": [375, 390, 768, 1440],
+    "paymentRequests": 0,
+    "passed": true
+  },
+  "operations": {
+    "apiRevision": "projects/alozuri/locations/europe-west4/services/alozuri-api/revisions/alozuri-api-00007-ncv",
+    "checkoutPaused": "false",
+    "existingEnvironmentAndSecretsPreserved": true,
+    "schedulers": [
+      {
+        "name": "projects/alozuri/locations/europe-west4/jobs/alozuri-fulfillment",
+        "state": "ENABLED",
+        "schedule": "* * * * *"
+      }
+    ],
+    "latestWorker": [
+      {
+        "timestamp": "2026-11-11T04:39:01.247127Z",
+        "status": 200,
+        "revision": "alozuri-api-00006-m25"
+      }
+    ]
+  },
+  "anonymousFirestoreStatus": 403,
+  "unsignedStripeWebhookStatus": 400,
+  "supplierCredit": {
+    "checkedAt": "2026-11-11T04:38:16.584Z",
+    "supplier": "esimaccess",
+    "positiveBalance": true,
+    "coversAnySingleFeaturedVariant": false,
+    "coversOneOfEachDefaultBundle": false,
+    "readOnly": true,
+    "ordersPlaced": 0,
+    "ownerDecision": "Continue with the current balance",
+    "capacityGateRetained": true
+  },
+  "realPaymentsSubmittedByReleaseChecks": 0
+}

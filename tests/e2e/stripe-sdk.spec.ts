@@ -1,5 +1,6 @@
 import { privacyChoice, CONSENT_COOKIE } from '../../packages/shared/src/privacy';
 import { test, expect, type Frame } from '@playwright/test';
+import { writeFileSync } from 'node:fs';
 test.skip(
   process.env.STRIPE_INTEGRATION !== '1',
   'Run with npm run test:stripe and matching local Stripe test keys.',
@@ -58,6 +59,29 @@ test('real Stripe Payment Element declines a test card, retries the same intent 
     )
     .toBe(true);
   if (!paymentFrame) throw new Error('Stripe card form did not load.');
+  // Record names/lifetimes only; never include cookie values or payment credentials.
+  const observedAt = Date.now() / 1000;
+  writeFileSync(
+    '/tmp/alozuri-stripe-storage-audit.json',
+    JSON.stringify(
+      {
+        environment: 'Stripe test mode with local emulator',
+        observedAt: new Date().toISOString(),
+        cookies: (await page.context().cookies()).map(
+          ({ name, domain, expires, secure, sameSite }) => ({
+            name,
+            domain,
+            remainingSeconds: expires < 0 ? null : Math.round(expires - observedAt),
+            secure,
+            sameSite,
+          }),
+        ),
+      },
+      null,
+      2,
+    ),
+    { mode: 0o600 },
+  );
   const frame = paymentFrame;
   const country = frame.getByRole('combobox', { name: 'Country/Territory', exact: true });
   if (await country.count()) await country.selectOption('US');

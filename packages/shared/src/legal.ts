@@ -9,12 +9,13 @@ export const BUSINESS = {
   identity:
     'Alozuri is a trading name of Rewolo Technologies Ltd, a company registered in England and Wales under company number 16297656.',
 } as const;
-export const LEGAL_VERSION = '2026-11-11.2';
+export const LEGAL_VERSION = '2026-11-11.3';
+export const NOTICE_LEGAL_VERSIONS = [LEGAL_VERSION, '2026-11-11.2'] as const;
 export const LEGAL_EFFECTIVE_DATE = '2026-11-11';
 export const CHECKOUT_NOTICE =
   'By placing your order, you agree to our Terms & Conditions and acknowledge our Refund Policy, Privacy Policy and eSIM Compatibility Requirements.';
 export type CheckoutLegalAcceptance = {
-  version: typeof LEGAL_VERSION;
+  version: (typeof NOTICE_LEGAL_VERSIONS)[number];
   method: 'order_placement';
   noticeAcknowledged: true;
 };

@@ -14,7 +14,13 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import { z } from 'zod';
-import { matchPlans, isCountryCode, countryName } from '../../../packages/shared/src/index.ts';
+import {
+  matchPlans,
+  isCountryCode,
+  countryName,
+  countryFlag,
+  uniqueDestinations,
+} from '../../../packages/shared/src/index.ts';
 import { createRepository, type Repository, type Principal } from './lib/repository.js';
 import { verifyToken } from './lib/firebase.js';
 import { syncCatalogue, verifySyncIdentity } from './lib/catalogue-sync.js';
@@ -238,15 +244,17 @@ export async function createApp(
   app.get('/v1/countries', async () => {
     const codes = [...new Set((await repository.plans()).flatMap((p) => p.countries))];
     return {
-      countries: codes
-        .filter(isCountryCode)
-        .map((code) => ({
-          code,
-          name: countryName(code),
-          flag: String.fromCodePoint(...[...code].map((c) => 127397 + c.charCodeAt(0))),
-          region: 'Available destinations',
-        }))
-        .sort((a, b) => a.name.localeCompare(b.name)),
+      countries: uniqueDestinations(
+        codes
+          .filter(isCountryCode)
+          .map((code) => ({
+            code,
+            name: countryName(code),
+            flag: countryFlag(code),
+            region: 'Available destinations',
+          }))
+          .sort((a, b) => a.name.localeCompare(b.name)),
+      ),
     };
   });
   app.get('/health', async () => ({

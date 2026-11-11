@@ -87,3 +87,11 @@ An empty result now distinguishes a restrictive data allowance from missing comp
 ## Persistent trip editing
 
 Choosing multi-country mode is now preserved when stops are removed down to one or zero. That state remains a draft trip, including across refresh/session restoration, and asks for another country before searching. It changes to single destination only when the customer selects that tab. European and global bundles remain eligible together whenever each covers every selected country; package labels do not exclude matching coverage.
+
+## Country flag display follow-up
+
+The shared `countryFlag` helper now uses the same Unicode canonical region aliases as `Intl.DisplayNames`. For example, supplier code `AN` already displays the name Curaçao; its displayed flag now uses `CW` (🇨🇼) rather than an unsupported AN sequence. The API, destination heading, directory and itinerary picker share this display rule. Actual supplier coverage codes, URLs, product IDs and purchasing identifiers are preserved. Shared tests cover aliases, existing flags and invalid inputs; an API regression verifies both AN/CW retain their original codes and return the Curaçao flag. This follow-up is local until its next deployment.
+
+## Duplicate destination display follow-up
+
+The country directory, picker, public country API and server-rendered country reader now use shared canonical display deduplication. The current public catalogue had 205 entries; its only duplicate group was CW/AN, both named Curaçao. The display list now has 204 entries and prefers the actual current CW record. If only an older supplier code exists, that entry remains available. Supplier coverage arrays and purchase identifiers are not rewritten, and distinct countries sharing a name are not merged. A browser regression checks an older API response with both aliases and a repeated code: Curacao search returns one 🇨🇼 destination linking to `/destinations/cw`, and the picker has one matching choice. This follow-up is local, not deployed.
