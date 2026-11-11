@@ -1,6 +1,7 @@
 import { createServer, type Server } from 'node:http';
 import { test, expect } from '@playwright/test';
 import { CONSENT_COOKIE, privacyChoice } from '../../packages/shared/src/privacy';
+import { LEGAL_VERSION, CHECKOUT_LEGAL_ACCEPTANCE } from '../../packages/shared/src/legal';
 import { POLICIES } from '../../packages/shared/src/policies';
 
 let catalogue: Server;
@@ -32,18 +33,29 @@ test.beforeAll(async () => {
       return;
     }
     const path = new URL(req.url || '/', 'http://localhost').pathname;
+    const quote = {
+      items: [{ plan: seoPlan, quantity: 1 }],
+      subtotalCents: seoPlan.priceCents,
+      totalCents: seoPlan.priceCents,
+      taxCents: 0,
+      currency: 'USD',
+    };
     const data =
-      path === '/v1/config'
-        ? { supportedCurrencies: ['USD'], cartCheckoutMode: 'test', paymentMode: 'test' }
-        : path === '/v1/countries'
-          ? { countries: [{ code: 'FR', name: 'France', flag: '🇫🇷', region: 'Europe' }] }
-          : path === '/v1/packages/seo-plan'
-            ? { plan: seoPlan }
-            : path === '/v1/packages/match'
-              ? { plans: [seoPlan] }
-              : path === '/v1/catalogue/sitemap'
-                ? { plans: [{ id: 'seo-plan', syncedAt: seoPlan.syncedAt }] }
-                : null;
+      path === '/v2/quote'
+        ? { quote }
+        : path === '/v2/checkout'
+          ? { fixtureCheckout: true }
+          : path === '/v1/config'
+            ? { supportedCurrencies: ['USD'], cartCheckoutMode: 'test', paymentMode: 'test' }
+            : path === '/v1/countries'
+              ? { countries: [{ code: 'FR', name: 'France', flag: '🇫🇷', region: 'Europe' }] }
+              : path === '/v1/packages/seo-plan'
+                ? { plan: seoPlan }
+                : path === '/v1/packages/match'
+                  ? { plans: [seoPlan] }
+                  : path === '/v1/catalogue/sitemap'
+                    ? { plans: [{ id: 'seo-plan', syncedAt: seoPlan.syncedAt }] }
+                    : null;
     if (!data) res.statusCode = 404;
     res.end(JSON.stringify(data || { error: 'Not found' }));
   });
@@ -77,19 +89,28 @@ test('optional providers stay unloaded before consent, after rejection, acceptan
   await expect(dialog.getByRole('checkbox')).not.toBeChecked();
   await dialog.getByRole('button', { name: 'Accept all', exact: true }).click();
   await page.goto('/contact');
-  const chat = page.getByRole('link', { name: 'Open Tawk.to chat in a new tab' });
-  await expect(chat).toHaveAttribute('rel', 'noopener noreferrer');
+  expect(optional).toEqual([]);
+  await page.route('https://tawk.to/chat/**', (route) =>
+    route.fulfill({ contentType: 'text/html', body: '<p>Chat provider fixture</p>' }),
+  );
+  await page.getByRole('button', { name: 'Chat', exact: true }).click();
+  const chat = page.getByTitle('Alozuri customer chat');
   await expect(chat).toHaveAttribute(
-    'href',
+    'src',
     'https://tawk.to/chat/6af3c3323853833c48d84ca1/1k7434vas',
   );
+  await expect(chat).toHaveAttribute(
+    'sandbox',
+    'allow-scripts allow-same-origin allow-forms allow-popups allow-downloads',
+  );
+  await expect(chat).toHaveAttribute('referrerpolicy', 'no-referrer');
   await page.getByRole('button', { name: 'Cookie settings', exact: true }).click();
   await page
-    .getByRole('dialog')
+    .getByRole('dialog', { name: 'Cookie settings' })
     .getByRole('button', { name: 'Reject optional', exact: true })
     .click();
   await expect(chat).toHaveCount(0);
-  expect(optional).toEqual([]);
+  expect(optional).toHaveLength(1);
 });
 
 test('privacy settings support keyboard dismissal, expired consent and mobile layouts', async ({
@@ -141,7 +162,7 @@ test('all policies contain company details, version and canonical metadata; lega
       'href',
       'https://alozuri.com' + policy.path,
     );
-    await expect(page.locator('.policy-version')).toContainText('2026-11-11.1');
+    await expect(page.locator('.policy-version')).toContainText(LEGAL_VERSION);
   }
   await page.goto('/legal/privacy');
   await expect(page).toHaveURL(/\/privacy$/);
@@ -226,12 +247,149 @@ test('sign-up hover keeps readable text and checkbox labels align on desktop and
     if (width === 390)
       await page.screenshot({ path: '/tmp/alozuri-register-checkbox-mobile.png', fullPage: true });
     await page.goto('/destinations/fr');
-    const regional = page
-      .locator('label.checkbox-label')
-      .filter({ hasText: 'Also show regional and global plans' });
-    await aligned(regional);
-    await expect(regional.getByRole('checkbox')).not.toBeChecked();
+    await expect(page.getByText('Also show regional and global plans')).toHaveCount(0);
+    await expect(page.locator('label.checkbox-label')).toHaveCount(0);
     if (width === 390)
-      await page.screenshot({ path: '/tmp/alozuri-regional-checkbox-mobile.png', fullPage: true });
+      await page.screenshot({ path: '/tmp/alozuri-simple-search-mobile.png', fullPage: true });
   }
+});
+
+test('chat stays compact on desktop, fills mobile screens and closes with focus restored', async ({
+  page,
+}) => {
+  await page.context().addCookies([
+    {
+      name: CONSENT_COOKIE,
+      value: encodeURIComponent(JSON.stringify(privacyChoice(false))),
+      domain: 'localhost',
+      path: '/',
+    },
+  ]);
+  await page.goto('/');
+  const launcher = page.getByRole('button', { name: 'Chat', exact: true });
+  await launcher.click();
+  const panel = page.getByRole('dialog', { name: 'Chat', exact: true });
+  await expect(panel.getByRole('button', { name: 'Enable chat' })).toBeVisible();
+  await expect(page.getByTitle('Alozuri customer chat')).toHaveCount(0);
+  const box = await panel.boundingBox();
+  expect(box?.width).toBe(380);
+  await page.screenshot({ path: '/tmp/alozuri-chat-desktop.png' });
+  for (const width of [375, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    await expect.poll(async () => Math.round((await panel.boundingBox())?.width || 0)).toBe(width);
+    const bounds = await panel.boundingBox();
+    expect(bounds?.x).toBe(0);
+    expect(bounds?.y).toBe(0);
+    expect(bounds?.height).toBe(844);
+  }
+  await page.screenshot({ path: '/tmp/alozuri-chat-mobile.png' });
+  await panel.getByRole('button', { name: 'Close chat' }).click();
+  await expect(panel).toHaveCount(0);
+  await expect(launcher).toBeFocused();
+  await launcher.click();
+  await page.keyboard.press('Escape');
+  await expect(panel).toHaveCount(0);
+  await expect(page.locator('footer').getByRole('link', { name: 'Help centre' })).toBeVisible();
+});
+
+test('blocked cross-origin requests recover through the same-site store for add, cart and checkout', async ({
+  page,
+}) => {
+  await page.context().addCookies([
+    {
+      name: CONSENT_COOKIE,
+      value: encodeURIComponent(JSON.stringify(privacyChoice(false))),
+      domain: 'localhost',
+      path: '/',
+    },
+  ]);
+  await page.route('http://127.0.0.1:8189/**', (route) => route.abort('failed'));
+  await page.goto('/plans/seo-plan');
+  await page.getByRole('button', { name: 'Add to cart', exact: true }).click();
+  await expect(page.getByRole('link', { name: 'Shopping cart, 1 item' })).toBeVisible();
+  await page.goto('/cart');
+  await expect(page.getByRole('link', { name: 'Secure checkout' })).toBeEnabled();
+  await expect(page.locator('main [role="alert"]')).toHaveCount(0);
+  await page.goto('/checkout');
+  const compatibility = page.getByRole('checkbox');
+  await expect(compatibility).toHaveCount(1);
+  await expect(compatibility).not.toBeChecked();
+  await page.getByRole('textbox', { name: 'Email address', exact: true }).fill('guest@example.com');
+  await page.getByRole('textbox', { name: 'Confirm email address' }).fill('guest@example.com');
+  await compatibility.check();
+  await expect(page.getByRole('button', { name: 'Continue to payment' })).toBeEnabled();
+  await expect(page.locator('main [role="alert"]')).toHaveCount(0);
+  await expect(page.locator('.checkout-policy-notice')).toContainText('By placing your order');
+  const result = await page.request.post('/api/store/v2/checkout', {
+    data: {
+      items: [{ planId: 'seo-plan', quantity: 1 }],
+      currency: 'USD',
+      email: 'guest@example.com',
+      emailConfirmation: 'guest@example.com',
+      requestId: crypto.randomUUID(),
+      compatible: true,
+      legal: CHECKOUT_LEGAL_ACCEPTANCE,
+      expectedTotalCents: 2849,
+    },
+  });
+  expect(result.status()).toBe(200);
+  expect(await result.json()).toEqual({ fixtureCheckout: true });
+  expect((await page.request.get('/api/store/internal/fulfillment/run')).status()).toBe(404);
+  expect(
+    (
+      await page.request.get('/api/store/v1/config', {
+        headers: { origin: 'https://attacker.example' },
+      })
+    ).status(),
+  ).toBe(403);
+  expect(
+    (
+      await page.request.post('/api/store/v2/checkout', { data: { padding: 'x'.repeat(70000) } })
+    ).status(),
+  ).toBe(413);
+});
+
+test('an API error is shown without an automatic replay and prices can be retried explicitly', async ({
+  page,
+}) => {
+  await page.context().addCookies([
+    {
+      name: CONSENT_COOKIE,
+      value: encodeURIComponent(JSON.stringify(privacyChoice(false))),
+      domain: 'localhost',
+      path: '/',
+    },
+  ]);
+  let quotes = 0,
+    proxies = 0;
+  await page.route('**/api/store/**', async (route) => {
+    proxies++;
+    await route.continue();
+  });
+  await page.route('http://127.0.0.1:8189/v2/quote', async (route) => {
+    quotes++;
+    if (quotes === 1)
+      await route.fulfill({
+        status: 503,
+        headers: { 'Access-Control-Allow-Origin': 'http://localhost:3100' },
+        json: { error: 'Quote temporarily unavailable. Please retry.' },
+      });
+    else await route.continue();
+  });
+  await page.goto('/plans/seo-plan');
+  await page.getByRole('button', { name: 'Add to cart', exact: true }).click();
+  await expect(page.getByRole('link', { name: 'Shopping cart, 1 item' })).toBeVisible();
+  await page.goto('/cart');
+  await expect(page.locator('main [role="alert"]')).toContainText('Quote temporarily unavailable.');
+  expect(quotes).toBe(1);
+  expect(proxies).toBe(0);
+  await page.getByRole('button', { name: 'Retry prices' }).click();
+  await expect(page.locator('main [role="alert"]')).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Secure checkout' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Secure checkout' })).toHaveAttribute(
+    'aria-disabled',
+    'false',
+  );
+  expect(quotes).toBe(2);
+  expect(proxies).toBe(0);
 });

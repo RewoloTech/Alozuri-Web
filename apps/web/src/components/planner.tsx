@@ -63,11 +63,9 @@ export function Planner({
   // Tabs show the user's choice immediately; draft validation stays in the shared state.
   const mode = saved.chooseSingle ? 'country' : saved.chooseTrip ? 'trip' : saved.mode;
   const selected = saved.chooseSingle ? [] : saved.countries;
-  const [includeRegional, setIncludeRegional] = useState(false);
   const initialKey = initialCountries.join(',');
   useEffect(() => {
     const restore = () => {
-      setIncludeRegional(new URLSearchParams(window.location.search).get('coverage') === 'all');
       const parsed = readSearch(new URLSearchParams(window.location.search));
       if (parsed) dispatch(restoreSearch(parsed));
     };
@@ -81,15 +79,22 @@ export function Planner({
     const url = new URL(window.location.href);
     const next = new URLSearchParams(url.search);
     next.set('mode', saved.mode);
+    next.set('coverage', mode === 'country' ? 'local' : 'all');
     next.set('countries', saved.countries.join(','));
     next.set('single', saved.single || '');
     next.set('trip', saved.trip.join(','));
     next.set('intent', saved.chooseSingle ? 'country' : saved.chooseTrip ? 'trip' : '');
     if (next.toString() !== url.searchParams.toString()) {
+      const selectionUnchanged =
+        next.get('mode') === url.searchParams.get('mode') &&
+        next.get('countries') === url.searchParams.get('countries') &&
+        (next.get('intent') || '') === (url.searchParams.get('intent') || '');
       url.search = next.toString();
-      window.history.pushState({}, '', url);
+      // Normalising an old coverage URL must not trap the browser's Back button.
+      if (selectionUnchanged) window.history.replaceState({}, '', url);
+      else window.history.pushState({}, '', url);
     }
-  }, [saved]);
+  }, [saved, mode]);
   const [countriesLoading, setCountriesLoading] = useState(!demoMode);
   const [availableCountries, setAvailableCountries] = useState<Country[]>(
     demoMode ? countries : [],
@@ -131,6 +136,7 @@ export function Planner({
   }, []);
   const selectionKey = selected.join(',');
   const picker = useRef<HTMLDivElement>(null);
+  const restorePickerFocus = useRef(false);
   const pickerId = useId();
   const resultRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -146,13 +152,22 @@ export function Planner({
   );
   const sorted = results;
   const total = page?.total ?? 0;
+  const coveringTotal = page?.facets.all ?? 0;
   function add(code: string) {
     dispatch(chooseCountry(code));
     setOpen(false);
     setQuery('');
     setPage(null);
-    picker.current?.querySelector<HTMLButtonElement>('.add-country')?.focus();
+    restorePickerFocus.current = true;
   }
+  useEffect(() => {
+    if (open || !restorePickerFocus.current) return;
+    const frame = requestAnimationFrame(() => {
+      picker.current?.querySelector<HTMLButtonElement>('.add-country')?.focus();
+      restorePickerFocus.current = false;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [open, selectionKey]);
   useEffect(() => {
     requestVersion.current++;
     controller.current?.abort();
@@ -171,7 +186,6 @@ export function Planner({
   );
   async function search(
     value: DataAllowance = allowance,
-    regional = includeRegional,
     order: SearchSort = sort,
     cursor?: string,
   ) {
@@ -182,7 +196,7 @@ export function Planner({
     controller.current = abort;
     const url = new URL(window.location.href);
     url.searchParams.set('allowance', value);
-    url.searchParams.set('coverage', regional ? 'all' : 'local');
+    url.searchParams.set('coverage', mode === 'country' ? 'local' : 'all');
     url.searchParams.set('sort', order);
     if (!cursor && url.href !== window.location.href) window.history.pushState({}, '', url);
     if (saved.chooseTrip || saved.chooseSingle || !selected.length) {
@@ -209,7 +223,7 @@ export function Planner({
       if (demoMode) {
         if (currency !== 'USD') throw new Error('Sample plans are available in USD only.');
         const matches = matchPlans(demoPlans, selected, minGb, dataType).filter(
-          (p) => mode === 'trip' || regional || p.countries.length === 1,
+          (p) => mode === 'trip' || p.countries.length === 1,
         );
         matches.sort(
           order === 'value'
@@ -224,7 +238,7 @@ export function Planner({
             return [
               k,
               matchPlans(demoPlans, selected, f.minGb, f.dataType).filter(
-                (p) => mode === 'trip' || regional || p.countries.length === 1,
+                (p) => mode === 'trip' || p.countries.length === 1,
               ).length,
             ];
           }),
@@ -241,7 +255,7 @@ export function Planner({
           countries: selected.join(','),
           minGb: String(minGb),
           dataType,
-          coverage: mode === 'country' && !regional ? 'local' : 'all',
+          coverage: mode === 'country' ? 'local' : 'all',
           sort: order,
           pageSize: '12',
         });
@@ -341,8 +355,9 @@ export function Planner({
           </div>
           {saved.chooseTrip && (
             <p className="notice" role="status">
-              Add another destination to start a multi-country trip. Your single destination is
-              kept.
+              {selected.length
+                ? 'Add another destination to compare multi-country plans.'
+                : 'Choose at least two destinations for a multi-country trip.'}
             </p>
           )}
           {saved.chooseSingle && (
@@ -507,24 +522,6 @@ export function Planner({
               <ArrowRight size={18} />
             </button>
           </div>
-          {mode === 'country' && (
-            <label className="checkbox-label" style={{ marginTop: 16 }}>
-              <input
-                type="checkbox"
-                checked={includeRegional}
-                onChange={(e) => {
-                  setIncludeRegional(e.target.checked);
-                  if (results !== null || loading) void search(allowance, e.target.checked);
-                }}
-              />
-              <span>
-                Also show regional and global plans
-                <small className="regional-plan-explanation">
-                  Off: plans for this country only. On: multi-country plans that also cover it.
-                </small>
-              </span>
-            </label>
-          )}
           <div className="planner-note">
             <span>
               <ShieldCheck size={14} />
@@ -558,18 +555,24 @@ export function Planner({
                 <h2>
                   {total
                     ? mode === 'country'
-                      ? `${total} ${includeRegional ? 'matching' : 'local'} ${total === 1 ? 'plan' : 'plans'} for ${selected.map(countryName).join(', ')}.`
+                      ? `${total} local ${total === 1 ? 'plan' : 'plans'} for ${selected.map(countryName).join(', ')}.`
                       : `${total} ${total === 1 ? 'plan' : 'plans'}. Every stop covered.`
-                    : 'No complete match for this itinerary'}
+                    : coveringTotal > 0
+                      ? 'No plans match this data allowance'
+                      : mode === 'country'
+                        ? 'No local plans available'
+                        : 'No plan covers all selected countries'}
                 </h2>
                 <p>
                   {total
-                    ? mode === 'country' && !includeRegional
-                      ? 'These plans cover only your selected country. Enable regional plans to compare broader coverage.'
+                    ? mode === 'country'
+                      ? 'These plans cover only your selected country.'
                       : `Covers all your selected countries: ${selected.map(countryName).join(', ')}.`
-                    : mode === 'country' && !includeRegional
-                      ? 'No local plan matches this allowance. Enable regional and global plans to compare other options covering this country.'
-                      : 'No plans match every selected country and this allowance. Try another allowance or destination combination.'}
+                    : coveringTotal > 0
+                      ? `${coveringTotal} ${coveringTotal === 1 ? 'plan covers' : 'plans cover'} ${mode === 'country' ? 'your selected country' : 'all your selected countries'}, but none match the selected data allowance.`
+                      : mode === 'country'
+                        ? 'No local plans are currently available for this country.'
+                        : 'No single plan currently covers every selected country. Try another destination combination.'}
                 </p>
               </div>
               {sorted.length > 0 && (
@@ -581,7 +584,7 @@ export function Planner({
                     onChange={(e) => {
                       const order = SEARCH_SORTS.find((v) => v === e.target.value) || 'recommended';
                       setSort(order);
-                      void search(allowance, includeRegional, order);
+                      void search(allowance, order);
                     }}
                   >
                     <option value="recommended">Recommended data sizes</option>
@@ -592,6 +595,18 @@ export function Planner({
                 </label>
               )}
             </div>
+            {!total && coveringTotal > 0 && allowance !== 'all' && (
+              <button
+                type="button"
+                className="button"
+                onClick={() => {
+                  setAllowance('all');
+                  void search('all');
+                }}
+              >
+                Show all data plans
+              </button>
+            )}
             <p className="muted" role="status">
               Showing {sorted.length} of {total} matching plans
             </p>
@@ -602,9 +617,9 @@ export function Planner({
             </div>
             {page?.nextCursor && (
               <button
-                className="button"
+                className="button show-more-plans"
                 disabled={loadingMore}
-                onClick={() => void search(allowance, includeRegional, sort, page.nextCursor!)}
+                onClick={() => void search(allowance, sort, page.nextCursor!)}
               >
                 {loadingMore ? 'Loading more…' : `Show more plans (${sorted.length} of ${total})`}
               </button>

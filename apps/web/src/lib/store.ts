@@ -28,11 +28,15 @@ const itinerary = createSlice({
         return;
       }
       if (action.payload === 'trip' && state.trip.length < 2) {
-        state.trip = state.single ? [state.single] : [];
+        state.trip = state.trip.length ? state.trip : state.single ? [state.single] : [];
+        state.mode = 'trip';
+        state.countries = [...state.trip];
         state.chooseTrip = true;
         state.chooseSingle = false;
         return;
       }
+      if (action.payload === 'country' && state.mode === 'trip' && state.trip.length === 1)
+        state.single = state.trip[0];
       state.mode = action.payload;
       state.countries =
         state.mode === 'trip' ? [...state.trip] : state.single ? [state.single] : [];
@@ -41,14 +45,9 @@ const itinerary = createSlice({
     chooseCountry(state, action: PayloadAction<string>) {
       if (state.chooseTrip) {
         state.trip = [...new Set([...state.trip, action.payload])];
-        if (state.trip.length > 1) {
-          state.mode = 'trip';
-          state.countries = [...state.trip];
-          state.chooseTrip = false;
-        } else {
-          state.single = action.payload;
-          state.countries = [action.payload];
-        }
+        state.mode = 'trip';
+        state.countries = [...state.trip];
+        state.chooseTrip = state.trip.length < 2;
         state.initialized = true;
         return;
       }
@@ -67,10 +66,7 @@ const itinerary = createSlice({
       if (state.mode === 'trip') {
         state.trip = state.trip.filter((c) => c !== action.payload);
         state.countries = [...state.trip];
-        if (state.trip.length < 2) {
-          state.mode = 'country';
-          state.single = state.trip[0] ?? null;
-        }
+        state.chooseTrip = state.trip.length < 2;
       } else {
         state.single = null;
         state.countries = [];

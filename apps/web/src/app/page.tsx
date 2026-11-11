@@ -1,7 +1,9 @@
 import { publicMetadata } from '@/lib/seo';
+import { FeaturedBundles } from '@/components/featured-bundles';
+import { getPublicFeaturedBundles } from '@/lib/catalogue-server';
 import { Home } from '@/components/home';
-export default function Page() {
-  return <Home />;
+export default async function Page() {
+  return <Home featuredBundles={<FeaturedBundles initial={await getPublicFeaturedBundles()} />} />;
 }
 
 export const metadata = publicMetadata(

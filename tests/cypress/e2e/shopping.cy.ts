@@ -83,7 +83,7 @@ for (const wallet of ['Apple Pay', 'Google Pay']) {
       openGuestPayment();
       button('Apple Pay').should('be.visible');
       button('Google Pay').should('be.visible');
-      button('Pay securely').click();
+      button(/^Pay /).click();
       cy.contains('[role="alert"]', 'Your card was declined.').should('be.visible');
       button(wallet).click();
       cy.contains('h1', 'Your test order').should('be.visible');
@@ -103,7 +103,7 @@ describe('card fallback', () => {
     cy.contains('button', 'Apple Pay').should('not.exist');
     cy.contains('button', 'Google Pay').should('not.exist');
     cy.get('input[aria-label="Card number"]').should('be.visible');
-    button('Pay securely').should('be.enabled');
+    button(/^Pay /).should('be.enabled');
     for (const width of [375, 390, 768]) {
       cy.viewport(width, 900);
       cy.document().then((doc) => expect(doc.documentElement.scrollWidth).to.be.at.most(width));
@@ -208,10 +208,12 @@ describe('single-country plans', () => {
     cy.wait('@localOnly');
     cy.contains('h3', localPlan.name).should('be.visible');
     cy.contains('h3', plan.name).should('not.exist');
-    cy.contains('label', 'Also show regional and global plans').find('input').check();
-    cy.wait('@includeRegions');
-    cy.contains('h3', plan.name).should('be.visible');
-    cy.contains('Multi-country coverage').should('be.visible');
+    cy.contains('Also show regional and global plans').should('not.exist');
+    cy.visit('/?mode=country&countries=FR&coverage=all');
+    button('Find my eSIM').click();
+    cy.wait('@localOnly');
+    cy.location('search').should('contain', 'coverage=local');
+    cy.contains('h3', plan.name).should('not.exist');
   });
 });
 
@@ -390,14 +392,14 @@ describe('server-authoritative customer currencies', () => {
     cy.get('.commerce-total').should('contain', 'EUR').and('contain', '€11.99');
     cy.get('button[aria-label^="Increase quantity"]').click();
     cy.get('.commerce-total').should('contain', '€23.98');
-    cy.contains('a', 'Secure checkout').click();
+    cy.contains('a', 'Secure checkout').should('have.attr', 'aria-disabled', 'false').click();
     cy.contains('label', 'Email address').find('input').type('currency@example.com');
     cy.contains('label', 'Confirm email address').find('input').type('currency@example.com');
     cy.get('input[type="checkbox"]').check();
     button('Continue to payment').click();
     cy.wait('@currencyCheckout');
     cy.get('select[aria-label="Currency"]').should('be.disabled').and('have.value', 'EUR');
-    button('Pay securely').should('be.visible');
+    button(/^Pay /).should('be.visible');
     cy.screenshot('currency-eur-checkout-mobile', { capture: 'fullPage' });
   });
 });
@@ -439,7 +441,7 @@ describe('currency-specific checkout idempotency', () => {
       cy.get('input[type="checkbox"]').check();
       button('Continue to payment').click();
       cy.wait('@sameAmountCheckout');
-      button('Pay securely').should('be.visible');
+      button(/^Pay /).should('be.visible');
     };
     cy.visit('/plans/' + localPlan.id);
     button('Add to cart').click();
@@ -448,7 +450,7 @@ describe('currency-specific checkout idempotency', () => {
     cy.visit('/cart');
     cy.get('select[aria-label="Currency"]').select('EUR');
     cy.get('.commerce-total').should('contain', 'EUR');
-    cy.contains('a', 'Secure checkout').click();
+    cy.contains('a', 'Secure checkout').should('have.attr', 'aria-disabled', 'false').click();
     start();
     cy.get<Interception[]>('@sameAmountCheckout.all').then((requests) => {
       expect(requests).to.have.length(2);

@@ -78,7 +78,7 @@ For this release, 19 shared tests, 52 API tests, 11 Firestore tests, 11 Cypress 
 
 ## Legal, privacy, customer support and SEO (2026-11-11)
 
-Tawk.to now uses an explicitly opened hosted chat link after optional support consent. No vendor script runs on Alozuri account/checkout pages. Necessary-only shopping remains available after rejection; Cookie settings in the footer supports withdrawal. Fonts and destination images are served locally. The earlier global lazy-loaded Tawk embed has been replaced.
+Tawk.to now uses an explicitly opened, sandboxed third-party frame after optional support consent. Vendor code cannot read the parent Alozuri account/checkout page. Necessary-only shopping remains available after rejection; Cookie settings in the footer supports withdrawal. Fonts and destination images are served locally. The earlier global lazy-loaded Tawk embed has been replaced. The corner Chat launcher opens a 380px desktop panel and full-screen mobile chat; Help remains in the footer.
 
 The seven canonical legal pages, version archives, company footer, checkout acknowledgements, immutable order/contract snapshots, durable confirmation emails, confirmation-before-provisioning gate, public metadata/JSON-LD, robots and sitemap are documented in [LEGAL_COMPLIANCE.md](../LEGAL_COMPLIANCE.md). That document also lists legal, supplier and operational questions; this implementation is not a compliance certification.
 
@@ -97,3 +97,43 @@ Lint, app/test TypeScript, changed-file formatting and the production build pass
 ## Checkbox, hover and security follow-up (2026-11-11)
 
 The latest shared/API count is 102 passing tests; Firestore remains 21 passing tests, with direct authenticated and anonymous access checks expanded to customer collections and catalogue listing. The full browser fixture suite passed 11 cases, including the new desktop/mobile hover and checkbox regression. Sign-in redirect validation now covers literal/encoded controls and external URL variants. A read-only inspection confirmed deployed Firestore deny-all client rules; `npm audit` reported zero known advisories. See [security review](security-review.md) for the scope and limitations.
+
+## Responsive chat follow-up
+
+The Chat launcher opens an isolated provider frame only after an explicit action and optional support permission. Desktop uses a compact corner panel; mobile uses a full-screen modal with safe-area spacing and a close control. Tests cover no provider calls before opening, consent withdrawal removing the frame, sandbox/referrer restrictions, 375/390px full-screen dimensions, desktop sizing and focus restoration. Provider rendering and operator availability are separate from layout fixture checks; no customer message is sent by the tests.
+
+Responsive chat verification: all six privacy/chat browser cases passed, along with 102 shared/API unit tests, lint, TypeScript and the production build. Desktop and mobile panel screenshots were reviewed. The real provider page returned HTTP 200 to the HTTP client, but Chromium blocked its embed script for a missing CORS response header; the same failure occurred on Tawk's standalone chat page outside Alozuri. The live iframe remained blank, so provider rendering and an operator conversation are **not verified**. No message was sent, no browser security restriction was bypassed, and no deployment was performed. Email fallback remains visible in the panel.
+
+## Simplified checkout and network fallback
+
+Version `2026-11-11.2` uses one initially unchecked device-compatibility checkbox and a concise policy-link notice. The notice is also present before card/wallet confirmation. Removed early-supply/waiver controls are not recorded as consent: new order snapshots explicitly retain false flags. Strict version-one compatibility supports already-open checkout forms and their archived documents.
+
+Tests now cover compatibility-row alignment at 375/390/768/1440px; blocked cross-origin catalogue/quote calls recovered through the same-origin store route; origin rejection, operation allowlisting and request-size limits; and new-versus-historical legal snapshots. Run the full unit/Firestore/Cypress/Playwright checks plus the real local Stripe TEST runner before release. That runner does not purchase an eSIM, send delivery email or charge real money. Updated backend and frontend must both be released for the new checkout notice; no deployment is implied by these local checks.
+
+Observed follow-up results: 105 shared/API unit tests, 21 Firestore tests and 13 Cypress cases passed. Six shopping browser cases passed with the single compatibility checkbox; all eight privacy/network browser cases passed, and the two transport recovery/error-retry cases passed again after the final origin check. Real Stripe TEST decline, same-intent retry and successful USD payment passed with the simplified checkout. Lint, application/test TypeScript and the production build passed. Mobile checkout screenshots were reviewed; no live payment, supplier purchase, pricing migration or deployment was performed.
+
+## Buying-flow simplification
+
+Single-destination mode now always sends `coverage=local`; the removed regional/global checkbox cannot be restored by an old `coverage=all` URL. Multi-country mode still requests complete multi-country matches. Allowance, sorting, pagination and back/forward state retain the same search paths.
+
+Buy now goes directly to guest checkout; Add to cart keeps browsing available. Device compatibility stays initially unchecked, with one short policy notice linking Terms, Refunds, Privacy and Compatibility. The payment button shows the exact server-verified order total, including currency, beside the payment choices. Additional supplier notes use a Plan conditions disclosure while coverage, activation, allowance, fair use and final pricing remain visible. Confirmation-page legal version/audit details and the contract download remain available under Order documents. Optional cookies/chat still use the separate preference system; no marketing or cancellation waiver is inferred.
+
+The flow regression checks direct Buy now, collapsed/expandable conditions, one policy notice at payment, no account requirement, amount-labelled payment, and desktop/mobile widths. Cypress checks removed controls and strict local coverage even from an old wider-coverage URL.
+
+Buying-flow results: 105 unit/API tests, 13 Cypress cases and the 15-case browser fixture run passed (real Stripe intentionally skipped there). The eight shopping cases passed again after adding the old-URL/Back regression. The separate real Stripe TEST run passed decline, same-intent retry, amount-labelled payment and access to the confirmation contract download. Desktop/mobile screenshots at 375/390/768/1440px were reviewed. Lint, app/test TypeScript and production build passed. No deployment, real charge, supplier purchase or live pricing change was performed.
+
+## Regional/global bundle visibility
+
+The current fix normalises multi-country API requests to all-coverage matching, including a stale local-only flag. A restrictive allowance is now distinguished from absent coverage, with Show all data plans offered only when complete-coverage plans exist. No partial-coverage substitute is introduced.
+
+Verification: 106 shared/API unit tests, nine shopping browser tests and 13 Cypress cases passed; lint, TypeScript and production build passed. A local production build using the live catalogue was checked at 390px: UK/USA with fixed 50 GB had no match, then Show all data plans returned 17 plans with Global bundles and no horizontal overflow. Direct live checks found 63 France/Germany matches when all coverage was requested. No deployment or database modification was performed.
+
+## Stable quantity updates and trip-mode persistence
+
+Cart and checkout keep their summary mounted while an updated quote is requested. Quantity changes immediately preview the current quantity using cached prices in the correct currency; this preview never authorises payment. A reserved status line avoids layout movement, the checkout control remains in place, and payment is disabled until the latest cart signature/currency is verified. Rapid updates are debounced for 180 ms and obsolete requests are cancelled. Failed quote checks retain the cart and keep checkout disabled. Cached USD amounts are never relabelled as GBP/EUR.
+
+Removing trip stops no longer selects the single-country filter automatically. One/zero-country draft trips retain their selected tab across refresh and wait for a second country or an explicit single-destination choice. Coverage intersection continues to include both European and global products with full coverage.
+
+Unit tests cover the retained mode, restoration, exact minor-unit previews, currency safety and matching European/global bundles. Browser regressions measure a persistent summary node and unchanged height during delayed rapid quantity updates, verify payment remains disabled until confirmation, and confirm explicit tab switching after removing all stops.
+
+Observed results for this follow-up: 108 unit/API tests, 11 shopping browser cases and all 13 Cypress cases passed. The two new mode/quantity browser regressions passed again after the stale-response guard, including a forced click that cannot leave the cart while prices are pending. The real Stripe TEST decline/retry/payment and order-document checks passed. Lint, application/test TypeScript and the production build passed; mobile/desktop cart screenshots were reviewed. No real charge, supplier purchase, live data change or deployment was performed.

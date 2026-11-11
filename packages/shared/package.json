@@ -8,7 +8,8 @@
     "./demo": "./src/demo.ts",
     "./legal": "./src/legal.ts",
     "./privacy": "./src/privacy.ts",
-    "./policies": "./src/policies.ts"
+    "./policies": "./src/policies.ts",
+    "./featured": "./src/featured.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

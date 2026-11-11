@@ -1,3 +1,4 @@
+import { POLICIES_V1 } from './policies-v1.ts';
 import { BUSINESS, LEGAL_VERSION, LEGAL_EFFECTIVE_DATE } from './legal.ts';
 export type PolicySection = { title: string; paragraphs: string[] };
 export type Policy = {
@@ -119,7 +120,7 @@ export const POLICIES: Record<string, Policy> = {
       ),
       section(
         'Cancellation and refunds',
-        'Read the Refund and Cancellation Policy. Delivery of a QR code, installation or activation does not automatically remove statutory rights. Early supply requires the applicable express request and acknowledgement; service and digital-content cancellation rules differ. Faulty, misdescribed or unusable products remain subject to mandatory remedies.',
+        'Read the Refund and Cancellation Policy. Delivery of a QR code, installation or activation does not automatically remove statutory rights. Service and digital-content cancellation rules differ; we do not treat order placement as an express request or acknowledgement removing cancellation rights. Faulty, misdescribed or unusable products remain subject to mandatory remedies.',
       ),
       section(
         'Email and delivery information',
@@ -204,7 +205,7 @@ export const POLICIES: Record<string, Policy> = {
       ),
       section(
         'Support privacy',
-        'Optional Tawk.to chat opens on the provider’s separate site after your support choice; its code is not injected into Alozuri checkout/account pages. The link uses no opener/referrer and does not include your order token, email or installation details. Tawk handles what you enter there under its own service/privacy arrangements. Email support remains available without optional consent. Never send passwords, full card details, QR codes or activation strings in an initial support message.',
+        'Optional Tawk.to chat opens in an isolated third-party frame after your support choice and an explicit chat action. It appears in the corner on desktop and full screen on mobile. Its code runs separately from Alozuri account/checkout content. The frame sends no referrer and does not include your order token, email or installation details. Tawk handles what you enter there under its own service/privacy arrangements. Email support remains available without optional consent. Never send passwords, full card details, QR codes or activation strings in an initial support message.',
       ),
       section(
         'International processing',
@@ -265,7 +266,7 @@ export const POLICIES: Record<string, Policy> = {
       ),
       section(
         'Optional support',
-        'The optional category is Tawk.to customer support. Allowing it enables the hosted chat link; the provider is contacted only when you open chat. Tawk code is not injected into Alozuri pages, and no chat cookie is intentionally installed by this integration on Alozuri. Tawk’s own site may use its cookies/storage; exact provider names/lifetimes were not verified locally. See https://www.tawk.to/privacy-policy/. Withdrawing support permission disables future chat launches from this site; close an existing chat tab and use Tawk’s privacy controls for data already held there.',
+        'The optional category is Tawk.to customer support. Allowing it enables chat; the provider is contacted only when you open the panel. Tawk runs inside a sandboxed frame on its separate origin, not in the parent Alozuri account/checkout page. The provider may use cookies/storage within that frame; exact provider names/lifetimes were not verified locally. See https://www.tawk.to/privacy-policy/. Withdrawing support permission removes the active frame and stops future loading until permission is given again. Use Tawk’s privacy controls for data already held there.',
       ),
       section(
         'Analytics, advertising and Cloudflare',
@@ -297,8 +298,8 @@ export const POLICIES: Record<string, Policy> = {
         'UK distance-contract cancellation rights commonly run for 14 days from contract conclusion for services or intangible digital content, subject to the legal rules and exceptions. An eSIM purchase can involve connectivity services and digital profile delivery; classification must be assessed for the specific supply rather than assumed from the QR format. Mandatory rights in your country may differ and are preserved.',
       ),
       section(
-        'Immediate supply request',
-        'The online flow is for immediately supplied plans. Before payment, it separately requests your express early-supply request and cancellation acknowledgement. If you do not want early supply, do not select those boxes; contact us before ordering to discuss whether later supply can be arranged. The current storefront does not automatically schedule a delayed 14-day delivery. No consent is obtained by a preselected box or by cookie consent.',
+        'Delivery and cancellation rights',
+        'Plans are normally supplied after successful payment. Placing an order, receiving a QR code, installing a profile or confirming device compatibility is not treated as a waiver of statutory cancellation or remedy rights. Contact support promptly if you wish to cancel or report a problem.',
       ),
       section(
         'Digital content versus services',
@@ -425,7 +426,7 @@ export const POLICIES: Record<string, Policy> = {
       ),
       section(
         'Optional live chat',
-        'The Tawk.to hosted chat link is optional and opens separately from this website only when you choose it. Availability depends on the provider and agents; if unavailable, use email. We do not inject chat code into payment/account pages or automatically attach your customer profile. Never post a QR code, activation string, password or full card information.',
+        'Tawk.to chat is optional and opens in a compact panel on desktop or full screen on mobile only when you choose it. Availability depends on the provider and agents; if unavailable, use email. The provider runs in an isolated frame and we do not automatically attach your customer profile. Never post a QR code, activation string, password or full card information.',
       ),
       section(
         'Refunds and formal complaints',
@@ -444,11 +445,12 @@ export const POLICIES: Record<string, Policy> = {
   },
 };
 export const POLICY_VERSIONS: Record<string, Record<string, Policy>> = {
+  '2026-11-11.1': POLICIES_V1,
   [LEGAL_VERSION]: POLICIES,
 };
-export function policyText(policy: Policy): string {
+export function policyText(policy: Policy, version: string = LEGAL_VERSION): string {
   return (
-    `${policy.title}\nVersion ${LEGAL_VERSION} — effective ${LEGAL_EFFECTIVE_DATE}\n${BUSINESS.identity}\n${BUSINESS.address}\n${BUSINESS.email}\n\n` +
+    `${policy.title}\nVersion ${version} — effective ${LEGAL_EFFECTIVE_DATE}\n${BUSINESS.identity}\n${BUSINESS.address}\n${BUSINESS.email}\n\n` +
     policy.sections.map((s, i) => `${i + 1}. ${s.title}\n${s.paragraphs.join('\n\n')}`).join('\n\n')
   );
 }

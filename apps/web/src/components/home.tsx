@@ -44,7 +44,7 @@ const destinations = [
     image: '/images/turkey.jpg',
   },
 ];
-export function Home() {
+export function Home({ featuredBundles }: { featuredBundles?: React.ReactNode }) {
   return (
     <>
       <section className="hero">
@@ -139,6 +139,7 @@ export function Home() {
           </span>
         </div>
       </section>
+      {featuredBundles}
       <section className="section container destinations-section">
         <div className="section-heading">
           <div>

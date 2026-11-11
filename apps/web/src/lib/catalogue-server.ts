@@ -1,3 +1,4 @@
+import { parseFeaturedBundles } from '@voyaspan/shared/featured';
 import { cache } from 'react';
 import { notFound } from 'next/navigation';
 const MISSING = Symbol('missing-public-resource');
@@ -107,4 +108,9 @@ export const getSitemapPlanIds = cache(async (): Promise<string[]> => {
   return body.plans.flatMap((p: unknown) =>
     record(p) && typeof p.id === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(p.id) ? [p.id] : [],
   );
+});
+
+export const getPublicFeaturedBundles = cache(async () => {
+  const body = await publicJson('/v1/featured-bundles?currency=USD');
+  return record(body) ? parseFeaturedBundles(body.bundles, 'USD') : null;
 });

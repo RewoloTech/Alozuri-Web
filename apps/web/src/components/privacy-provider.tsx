@@ -1,6 +1,7 @@
 'use client';
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { MessageCircle, X } from 'lucide-react';
 import {
   CONSENT_COOKIE,
   CONSENT_MAX_AGE,
@@ -10,13 +11,16 @@ import {
   type PrivacyChoice,
 } from '@voyaspan/shared/privacy';
 import { BUSINESS } from '@voyaspan/shared/legal';
-const PrivacyContext = createContext({ support: false, openSettings: () => {} });
+const PrivacyContext = createContext({ openChat: () => {}, openSettings: () => {} });
 export function PrivacyProvider({ children }: { children: React.ReactNode }) {
   const [choice, setChoice] = useState<PrivacyChoice | null>(null),
     [ready, setReady] = useState(false),
     [settings, setSettings] = useState(false),
     [support, setSupport] = useState(false),
-    [storageError, setStorageError] = useState('');
+    [storageError, setStorageError] = useState(''),
+    [chatOpen, setChatOpen] = useState(false);
+  const chatDialog = useRef<HTMLDialogElement>(null),
+    chatTrigger = useRef<HTMLElement | null>(null);
   const dialog = useRef<HTMLDialogElement>(null),
     trigger = useRef<HTMLElement | null>(null);
   useEffect(() => {
@@ -71,8 +75,43 @@ export function PrivacyProvider({ children }: { children: React.ReactNode }) {
     }
     close();
   }
+  function openChat() {
+    chatTrigger.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setChatOpen(true);
+  }
+  function closeChat() {
+    setChatOpen(false);
+  }
+  useEffect(() => {
+    if (!chatOpen) {
+      chatTrigger.current?.focus();
+      return;
+    }
+    const panel = chatDialog.current;
+    const mobile = window.matchMedia('(max-width: 600px)');
+    function resize() {
+      if (!panel) return;
+      panel.close();
+      if (mobile.matches) panel.showModal();
+      else panel.show();
+    }
+    resize();
+    const key = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !dialog.current?.open) {
+        event.preventDefault();
+        setChatOpen(false);
+      }
+    };
+    mobile.addEventListener('change', resize);
+    document.addEventListener('keydown', key);
+    return () => {
+      mobile.removeEventListener('change', resize);
+      document.removeEventListener('keydown', key);
+    };
+  }, [chatOpen]);
   return (
-    <PrivacyContext.Provider value={{ support: choice?.support ?? false, openSettings }}>
+    <PrivacyContext.Provider value={{ openChat, openSettings }}>
       {children}
       {ready && !choice && (
         <section className="cookie-banner" aria-label="Privacy choices">
@@ -129,8 +168,9 @@ export function PrivacyProvider({ children }: { children: React.ReactNode }) {
               onChange={(e) => setSupport(e.target.checked)}
             />
             <span>
-              <strong>Optional support — Tawk.to.</strong> Enable the hosted chat link. Tawk is
-              contacted only when you open chat; no widget code runs on Alozuri pages.
+              <strong>Optional support — Tawk.to.</strong> Enable chat in a separate, isolated
+              frame. Tawk is contacted only when you open chat; it cannot read your Alozuri account
+              or checkout page.
             </span>
           </label>
           <p>
@@ -153,9 +193,65 @@ export function PrivacyProvider({ children }: { children: React.ReactNode }) {
           </div>
         </dialog>
       )}
-      <Link className="support-shortcut" href="/contact" aria-label="Customer support">
-        Help & chat
-      </Link>
+      {chatOpen && (
+        <dialog
+          ref={chatDialog}
+          className="chat-panel"
+          aria-labelledby="chat-title"
+          onCancel={(event) => {
+            event.preventDefault();
+            closeChat();
+          }}
+        >
+          <header className="chat-panel-header">
+            <h2 id="chat-title">Chat</h2>
+            <button type="button" onClick={closeChat} aria-label="Close chat">
+              <X size={22} />
+            </button>
+          </header>
+          {choice?.support ? (
+            <iframe
+              title="Alozuri customer chat"
+              src={TAWK_CHAT_URL}
+              sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads"
+              referrerPolicy="no-referrer"
+            />
+          ) : (
+            <div className="chat-permission">
+              <MessageCircle size={32} aria-hidden="true" />
+              <h3>Chat with Alozuri</h3>
+              <p>
+                Chat is provided by Tawk.to and may use its cookies and storage. Enable optional
+                support to start. We do not share your account, order or installation details
+                automatically.
+              </p>
+              <button type="button" className="button primary" onClick={() => save(true)}>
+                Enable chat
+              </button>
+              <p>
+                Prefer email? <a href={'mailto:' + BUSINESS.email}>{BUSINESS.email}</a>
+              </p>
+              <Link href="/cookies" onClick={closeChat}>
+                Privacy and cookie choices
+              </Link>
+            </div>
+          )}
+          {choice?.support && (
+            <p className="chat-fallback">
+              Chat not loading? <a href={'mailto:' + BUSINESS.email}>Email us</a>.
+            </p>
+          )}
+        </dialog>
+      )}
+      <button
+        type="button"
+        className="support-shortcut"
+        onClick={openChat}
+        aria-haspopup="dialog"
+        aria-expanded={chatOpen}
+      >
+        <MessageCircle size={20} aria-hidden="true" /> Chat
+      </button>
     </PrivacyContext.Provider>
   );
 }
@@ -168,31 +264,19 @@ export function CookieSettingsButton() {
   );
 }
 export function SupportChoices() {
-  const { support, openSettings } = useContext(PrivacyContext);
+  const { openChat } = useContext(PrivacyContext);
   return (
     <div className="surface support-options">
       <h2>Choose how to contact us</h2>
       <p>
         <a href={'mailto:' + BUSINESS.email}>Email {BUSINESS.email}</a> without optional consent.
       </p>
-      {support ? (
-        <a
-          className="button"
-          href={TAWK_CHAT_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          referrerPolicy="no-referrer"
-        >
-          Open Tawk.to chat in a new tab
-        </a>
-      ) : (
-        <button className="button" onClick={openSettings}>
-          Choose optional chat
-        </button>
-      )}
+      <button className="button" onClick={openChat}>
+        Open chat
+      </button>
       <p>
-        Chat opens on Tawk.to’s separate site. Do not send passwords, full card details, QR codes or
-        activation credentials. Agent availability is not guaranteed.
+        Chat opens in the corner on desktop and full screen on mobile. Do not send passwords, full
+        card details, QR codes or activation credentials. Agent availability is not guaranteed.
       </p>
     </div>
   );

@@ -5,6 +5,8 @@ import { EsimAccessCatalogue, type CatalogueProvider } from './catalogue-provide
 import type { Firestore } from 'firebase-admin/firestore';
 import { Timestamp } from 'firebase-admin/firestore';
 import { pricePackage, samePackage, packageWrite } from './package-pricing.js';
+import { publishFeaturedBundles } from './featured-bundles.js';
+import type { StoredPlan } from '../../../../packages/shared/src/index.ts';
 import { storedPlanSchema } from './validation.js';
 export async function verifySyncIdentity(header: string | undefined) {
   const audience = process.env.CATALOGUE_SYNC_AUDIENCE,
@@ -58,6 +60,7 @@ export async function syncCatalogue(
         .filter((d) => !ids.has(d.id) && d.get('active') === true)
         .map((d) => ({ ref: d.ref, data: { active: false, pricingStatus: 'review_required' } })),
     ];
+    const pricedSource: StoredPlan[] = [];
     let written = 0,
       available = 0,
       reviewRequired = 0;
@@ -66,13 +69,17 @@ export async function syncCatalogue(
         const chunk = writes.slice(offset, offset + 300);
         const [lease, ...docs] = await t.getAll(state, ...chunk.map((w) => w.ref));
         if (lease.get('runId') !== runId) throw new Error('Catalogue lease lost.');
+        const priced: StoredPlan[] = [];
         let count = 0,
           active = 0,
           review = 0;
         for (let i = 0; i < chunk.length; i++) {
           const w = chunk[i],
             previous = docs[i].data() || {};
-          const data = 'id' in w.data ? pricePackage(w.data, previous, Timestamp.now()) : w.data;
+          const calculated =
+            'id' in w.data ? pricePackage(w.data, previous, Timestamp.now()) : null;
+          const data = calculated ?? w.data;
+          if (calculated) priced.push(calculated);
           if ('id' in data) {
             if (data.active) active++;
             else review++;
@@ -82,8 +89,9 @@ export async function syncCatalogue(
             count++;
           }
         }
-        return { count, active, review };
+        return { count, active, review, priced };
       });
+      pricedSource.push(...counts.priced);
       written += counts.count;
       available += counts.active;
       reviewRequired += counts.review;
@@ -97,13 +105,25 @@ export async function syncCatalogue(
       unsupported: fetched - plans.length,
       syncedAt,
     };
-    await state.set({ ...result, status: 'complete', leaseUntil: 0, runId });
+    if (provider.id === 'esim-access')
+      await publishFeaturedBundles(db, pricedSource, runId, state, result);
+    else
+      await db.runTransaction(async (transaction) => {
+        const lease = await transaction.get(state);
+        if (lease.get('runId') !== runId) throw new Error('Catalogue lease lost.');
+        transaction.set(state, { ...result, status: 'complete', leaseUntil: 0, runId });
+      });
     return result;
   } catch (error) {
-    await state.set(
-      { status: 'failed', leaseUntil: 0, runId, lastAttemptAt: new Date().toISOString() },
-      { merge: true },
-    );
+    await db.runTransaction(async (transaction) => {
+      const lease = await transaction.get(state);
+      if (lease.get('runId') === runId)
+        transaction.set(
+          state,
+          { status: 'failed', leaseUntil: 0, runId, lastAttemptAt: new Date().toISOString() },
+          { merge: true },
+        );
+    });
     throw error;
   }
 }

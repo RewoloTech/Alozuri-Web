@@ -197,3 +197,26 @@ test('only the immediate private platform peer is trusted; forged earlier proxy 
     await app.close();
   }
 });
+
+test('multi-country requests include regional/global coverage by default without broadening single-country searches', () => {
+  const multi = searchQuerySchema.parse({ countries: 'FR,CH,IT' });
+  assert.equal(multi.coverage, 'all');
+  const result = new SearchCatalogue(plans).search(multi);
+  assert.equal(result.total, 29);
+  assert.ok(
+    result.plans.every((p) => ['FR', 'CH', 'IT'].every((code) => p.countries.includes(code))),
+  );
+  assert.equal(searchQuerySchema.parse({ countries: 'FR' }).coverage, 'local');
+  assert.equal(searchQuerySchema.parse({ countries: 'FR,FR' }).coverage, 'local');
+  assert.equal(searchQuerySchema.parse({ countries: 'FR,CH', coverage: 'local' }).coverage, 'all');
+});
+
+test('European and global bundles are both returned when each covers every selected country', () => {
+  const rows = [
+    { ...base, id: 'europe', name: 'Europe', countries: ['FR', 'DE', 'IT'] },
+    { ...base, id: 'global', name: 'Global', countries: ['FR', 'DE', 'US', 'GB'] },
+    { ...base, id: 'partial', name: 'Partial coverage', countries: ['FR', 'US'] },
+  ];
+  const result = new SearchCatalogue(rows).search(searchQuerySchema.parse({ countries: 'FR,DE' }));
+  assert.deepEqual(new Set(result.plans.map((plan) => plan.id)), new Set(['europe', 'global']));
+});

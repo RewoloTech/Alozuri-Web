@@ -15,7 +15,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         if (saved && typeof saved.single !== 'undefined' && Array.isArray(saved.trip))
           store.dispatch(
             restoreSearch(
-              searchState(saved.single, saved.trip, saved.mode === 'trip' ? 'trip' : 'country'),
+              searchState(
+                saved.single,
+                saved.trip,
+                saved.chooseTrip || saved.mode === 'trip' ? 'trip' : 'country',
+              ),
             ),
           );
       } catch {}

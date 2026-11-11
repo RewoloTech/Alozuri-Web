@@ -1,4 +1,4 @@
-import type { Plan } from './index.ts';
+import type { Plan, Currency } from './index.ts';
 export type CartLine = { plan: Plan; quantity: number; unavailable?: boolean };
 export type CartItem = { planId: string; quantity: number };
 export const MAX_QUANTITY = 5;
@@ -43,10 +43,6 @@ export function searchState(
   mode: 'country' | 'trip' = trip.length > 1 ? 'trip' : 'country',
 ): SearchState {
   trip = [...new Set(trip)];
-  if (mode === 'trip' && trip.length < 2) {
-    mode = 'country';
-    single = trip[0] ?? single;
-  }
   return {
     single,
     trip: [...new Set(trip)],
@@ -54,7 +50,7 @@ export function searchState(
     countries: mode === 'trip' ? [...new Set(trip)] : single ? [single] : [],
     initialized: true,
     chooseSingle: false,
-    chooseTrip: false,
+    chooseTrip: mode === 'trip' && trip.length < 2,
   };
 }
 export function readSearch(params: URLSearchParams): SearchState | null {
@@ -63,9 +59,36 @@ export function readSearch(params: URLSearchParams): SearchState | null {
   if (!params.has('countries') && !params.has('trip') && !params.has('single')) return null;
   const trip = (params.get('trip') || selected.join(',')).split(',').filter(valid);
   const single = params.get('single') || (selected.length === 1 ? selected[0] : null);
-  const mode = selected.length > 1 ? 'trip' : params.get('mode') === 'trip' ? 'trip' : 'country';
+  const mode =
+    selected.length > 1 || params.get('mode') === 'trip' || params.get('intent') === 'trip'
+      ? 'trip'
+      : 'country';
   const state = searchState(single && valid(single) ? single : null, trip, mode);
-  state.chooseTrip = params.get('intent') === 'trip' && state.countries.length < 2;
+  state.chooseTrip = state.mode === 'trip' && state.countries.length < 2;
   state.chooseSingle = params.get('intent') === 'country' && state.mode === 'trip';
   return state;
+}
+
+// Display-only estimate while the server verifies the latest cart. Never converts
+// currencies or authorises payment from a cached/client amount.
+export function previewCartPrices(lines: CartLine[], priced: CartLine[], currency: Currency) {
+  const prices = new Map(priced.map((line) => [line.plan.id, line.plan]));
+  const items = lines.map((line) => {
+    const plan = prices.get(line.plan.id);
+    return { ...line, plan: plan?.currency === currency ? plan : line.plan };
+  });
+  const valid = items.every(
+    (line) =>
+      line.plan.currency === currency &&
+      Number.isSafeInteger(line.plan.priceCents) &&
+      line.plan.priceCents >= 0 &&
+      Number.isSafeInteger(line.quantity) &&
+      line.quantity > 0,
+  );
+  const amount = valid
+    ? items.reduce((sum, line) => sum + BigInt(line.plan.priceCents) * BigInt(line.quantity), 0n)
+    : null;
+  const total =
+    amount !== null && amount <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(amount) : null;
+  return { items, total };
 }

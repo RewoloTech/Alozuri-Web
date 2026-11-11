@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mergeCartItems, readSearch, matchPlans } from '../src/index.ts';
+import { mergeCartItems, readSearch, matchPlans, previewCartPrices } from '../src/index.ts';
 import { demoPlans } from '../src/demo.ts';
 import {
   makeStore,
@@ -72,24 +72,34 @@ test('cart aggregates products and enforces quantity and demonstration-product l
   );
 });
 
-test('search restoration normalizes duplicate countries and never calls one country a trip', () => {
+test('search restoration normalizes countries while preserving an explicitly selected trip filter', () => {
   const restored = readSearch(new URLSearchParams('mode=trip&countries=FR,FR&trip=FR,FR'))!;
-  assert.equal(restored.mode, 'country');
+  assert.equal(restored.mode, 'trip');
+  assert.equal(restored.chooseTrip, true);
   assert.deepEqual(restored.countries, ['FR']);
   assert.equal(readSearch(new URLSearchParams('utm_source=campaign')), null);
   const invalid = readSearch(new URLSearchParams('mode=trip&countries=France,xx&single=invalid'))!;
-  assert.equal(invalid.mode, 'country');
+  assert.equal(invalid.mode, 'trip');
+  assert.equal(invalid.chooseTrip, true);
   assert.deepEqual(invalid.countries, []);
 });
 
-test('removing the final trip stops returns to a consistent single or empty search', () => {
+test('removing trip stops preserves the filter with one or zero countries until an explicit switch', () => {
   const store = makeStore();
   store.dispatch(setCountries(['FR', 'CH']));
   store.dispatch(removeCountry('CH'));
-  assert.equal(store.getState().itinerary.mode, 'country');
+  assert.equal(store.getState().itinerary.mode, 'trip');
+  assert.equal(store.getState().itinerary.chooseTrip, true);
   assert.deepEqual(store.getState().itinerary.countries, ['FR']);
   store.dispatch(removeCountry('FR'));
   assert.deepEqual(store.getState().itinerary.countries, []);
+  assert.equal(store.getState().itinerary.mode, 'trip');
+  assert.equal(store.getState().itinerary.chooseTrip, true);
+  store.dispatch(chooseCountry('DE'));
+  assert.equal(store.getState().itinerary.mode, 'trip');
+  store.dispatch(switchSearch('country'));
+  assert.equal(store.getState().itinerary.mode, 'country');
+  assert.deepEqual(store.getState().itinerary.countries, ['DE']);
 });
 
 test('cart merging does not mutate inputs and accepts exactly ten units', () => {
@@ -122,4 +132,28 @@ test('draft tab intent survives URL restoration without discarding a saved itine
   )!;
   assert.equal(singleDraft.chooseSingle, true);
   assert.deepEqual(singleDraft.trip, ['FR', 'CH', 'IT']);
+});
+
+test('pending cart display uses the current quantity and cached price without relabelling currency', () => {
+  const plan = { ...demoPlans[0], demo: false, priceCents: 500 };
+  const lines = [{ plan, quantity: 3 }];
+  const cached = [{ plan: { ...plan, priceCents: 600 }, quantity: 1 }];
+  const preview = previewCartPrices(lines, cached, 'USD');
+  assert.equal(preview.items[0].quantity, 3);
+  assert.equal(preview.total, 1800);
+  assert.equal(previewCartPrices(lines, cached, 'GBP').total, null);
+  assert.equal(lines[0].plan.priceCents, 500);
+  assert.equal(cached[0].quantity, 1);
+  assert.equal(
+    previewCartPrices([{ plan: { ...plan, priceCents: NaN }, quantity: 1 }], [], 'USD').total,
+    null,
+  );
+  assert.equal(
+    previewCartPrices(
+      [{ plan: { ...plan, priceCents: Number.MAX_SAFE_INTEGER }, quantity: 2 }],
+      [],
+      'USD',
+    ).total,
+    null,
+  );
 });

@@ -1,5 +1,5 @@
 import { legalSnapshot, legalSnapshotSchema } from './legal.js';
-import { BUSINESS, type CheckoutLegalAcceptance } from '../../../../packages/shared/src/legal.ts';
+import { BUSINESS, type CheckoutLegalInput } from '../../../../packages/shared/src/legal.ts';
 import {
   ExchangeRates,
   currencySchema,
@@ -260,7 +260,7 @@ export class CommerceService {
       emailConfirmation: string;
       requestId: string;
       compatible: true;
-      legal: CheckoutLegalAcceptance;
+      legal: CheckoutLegalInput;
       currency: Currency;
       expectedTotalCents: number;
     },
@@ -661,7 +661,7 @@ export class CommerceService {
           const n = BigInt(cents);
           return `${n / 100n}.${String(n % 100n).padStart(2, '0')}`;
         };
-        const text = `${BUSINESS.identity}\n${BUSINESS.address}\n${BUSINESS.email}\n\nOrder ${doc.id}\nPaid total: ${amount(p.totalCents)} ${p.currency}\n${p.items.map((i) => `${i.quantity} × ${i.plan.name}: ${amount(i.plan.priceCents)} ${p.currency} each; ${dataLabel(i.plan)}; ${i.plan.days} days; ${i.plan.countries.join(', ')}; ${i.plan.activation}; ${i.plan.fairUse}`).join('\n')}\n\nLegal acceptance recorded ${p.legal.acceptedAt} (version ${p.legal.version}).\n${p.legal.requestText}\n${p.legal.acknowledgementText}\n\n${p.legal.termsText}\n\n${p.legal.refundText}\n\nKeep this confirmation. Your private installation link will follow after supplier allocation. You can contact ${BUSINESS.email} to cancel or request help; do not send activation secrets.`;
+        const text = `${BUSINESS.identity}\n${BUSINESS.address}\n${BUSINESS.email}\n\nOrder ${doc.id}\nPaid total: ${amount(p.totalCents)} ${p.currency}\n${p.items.map((i) => `${i.quantity} × ${i.plan.name}: ${amount(i.plan.priceCents)} ${p.currency} each; ${dataLabel(i.plan)}; ${i.plan.days} days; ${i.plan.countries.join(', ')}; ${i.plan.activation}; ${i.plan.fairUse}`).join('\n')}\n\nLegal acceptance recorded ${p.legal.acceptedAt} (version ${p.legal.version}).\n${p.legal.noticeText ?? ''}\n${p.legal.requestText}\n${p.legal.acknowledgementText}\n\n${p.legal.termsText}\n\n${p.legal.refundText}\n\nKeep this confirmation. Your private installation link will follow after supplier allocation. You can contact ${BUSINESS.email} to cancel or request help; do not send activation secrets.`;
         const receipt = await this.mailer.send({
           id: doc.id,
           email: p.email,

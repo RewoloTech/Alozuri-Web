@@ -72,7 +72,7 @@ test('real Stripe Payment Element declines a test card, retries the same intent 
     await postal.press('Tab');
   }
   await page.screenshot({ path: 'test-results/stripe-real-form.png', fullPage: true });
-  await page.getByRole('button', { name: 'Pay securely', exact: true }).click();
+  await page.getByRole('button', { name: /^Pay / }).click();
   await expect(page.getByRole('alert').filter({ hasText: /declined|insufficient/i })).toContainText(
     /declined|insufficient/i,
     { timeout: 30000 },
@@ -86,11 +86,19 @@ test('real Stripe Payment Element declines a test card, retries the same intent 
   const retryCvc = frame.getByRole('textbox', { name: 'Security code', exact: true });
   await retryCvc.fill('123');
   await retryCvc.press('Tab');
-  await page.getByRole('button', { name: 'Pay securely', exact: true }).click();
+  // Stripe can expand its optional Link fields when the replacement card blurs.
+  // Keyboard activation avoids racing that iframe's changing height.
+  const retryPayment = page.getByRole('button', { name: /^Pay / });
+  await retryPayment.focus();
+  await retryPayment.press('Enter');
   await expect(page.getByRole('heading', { name: 'Your test order', exact: true })).toBeVisible({
     timeout: 45000,
   });
   await expect(page.getByText('Payment: paid', { exact: true })).toBeVisible({ timeout: 30000 });
   expect(requests).toBe(1);
+  const documents = page.locator('details.order-documents');
+  await expect(documents).not.toHaveAttribute('open', '');
+  await documents.getByText('Order documents', { exact: true }).click();
+  await expect(documents.getByRole('button', { name: 'Download your contract' })).toBeVisible();
   await page.screenshot({ path: 'test-results/stripe-real-confirmation.png', fullPage: true });
 });

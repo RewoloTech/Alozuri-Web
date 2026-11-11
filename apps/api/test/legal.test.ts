@@ -1,14 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { checkoutLegalSchema, legalSnapshot } from '../src/lib/legal.js';
-import { CHECKOUT_LEGAL_ACCEPTANCE } from '../../../packages/shared/src/legal.ts';
-test('legal acceptance requires current terms and separately affirmative supply acknowledgements', () => {
+import { CHECKOUT_LEGAL_ACCEPTANCE, CHECKOUT_NOTICE } from '../../../packages/shared/src/legal.ts';
+test('order placement requires the current notice and rejects invented waiver flags', () => {
   assert.ok(checkoutLegalSchema.safeParse(CHECKOUT_LEGAL_ACCEPTANCE).success);
   for (const change of [
     { version: 'old' },
-    { termsAccepted: false },
-    { immediateSupplyRequested: false },
-    { cancellationAcknowledged: false },
+    { noticeAcknowledged: false },
+    { method: 'checkboxes' },
+    { termsAccepted: true },
+    { immediateSupplyRequested: true },
+    { cancellationAcknowledged: true },
     { extra: 'untrusted' },
   ])
     assert.equal(
@@ -22,11 +24,11 @@ test('the server snapshots the accepted text and time, retaining statutory-right
   assert.equal(snapshot.acceptedAt, '2026-11-11T12:00:00Z');
   assert.ok(snapshot.termsText.includes('Rewolo Technologies Ltd'));
   assert.ok(snapshot.refundText.includes('not an automatic waiver'));
-  assert.ok(
-    snapshot.acknowledgementText.includes(
-      'My rights for faulty or misdescribed products are not waived',
-    ),
-  );
+  assert.equal(snapshot.noticeText, CHECKOUT_NOTICE);
+  assert.equal(snapshot.immediateSupplyRequested, false);
+  assert.equal(snapshot.cancellationAcknowledged, false);
+  assert.equal(snapshot.requestText, '');
+  assert.equal(snapshot.acknowledgementText, '');
   assert.ok(snapshot.termsText.includes('Registered') || snapshot.termsText.includes('registered'));
 });
 
@@ -54,4 +56,23 @@ test('sitemap catalogue exposes only public identifiers and refresh dates', asyn
   } finally {
     await api.close();
   }
+});
+
+test('an already-open version-one checkout retains its real acknowledgements and archived text', () => {
+  const old = {
+    version: '2026-11-11.1' as const,
+    termsAccepted: true as const,
+    immediateSupplyRequested: true as const,
+    cancellationAcknowledged: true as const,
+  };
+  const snapshot = legalSnapshot(old);
+  assert.equal(snapshot.version, '2026-11-11.1');
+  assert.equal(snapshot.immediateSupplyRequested, true);
+  assert.equal(snapshot.cancellationAcknowledged, true);
+  assert.equal(snapshot.noticeText, undefined);
+  assert.ok(snapshot.termsText.includes('Version 2026-11-11.1'));
+  assert.equal(
+    checkoutLegalSchema.safeParse({ ...old, cancellationAcknowledged: false }).success,
+    false,
+  );
 });

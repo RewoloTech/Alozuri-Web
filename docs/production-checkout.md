@@ -127,3 +127,11 @@ References: [Stripe Express Checkout](https://docs.stripe.com/elements/express-c
 The frontend rollout `build-2026-11-10-017` succeeded for commit `2351505`. Hosted browser checks confirmed immediate tabs, 19 France-only plans, two local 50 GB plans, nine local unlimited options and 18 unlimited trip matches for France/Switzerland/Italy, with no browser exceptions.
 
 No live customer charge or supplier purchase was made by the agent. The owner-controlled charged purchase, actual eSIM allocation, delivery email and installation remain the final operational verification.
+
+## Simplified checkout / store transport rollout
+
+Deploy the updated API before the Next.js App Hosting frontend. The API accepts the concise `2026-11-11.2` order-placement notice and the strict prior `2026-11-11.1` checkbox format for already-open checkouts. New orders do not record express early-supply consent or cancellation-loss acknowledgement. Preserve archived policies and historical order snapshots.
+
+The browser normally calls `NEXT_PUBLIC_API_URL`. Blocked network requests to approved store operations can fall back to `/api/store/...` on the frontend origin; the Next.js server forwards to `ALOZURI_API_URL` when set, otherwise `NEXT_PUBLIC_API_URL`. Use the configured public `NEXT_PUBLIC_SITE_URL` for App Hosting origin checks. This route needs a server deployment and is unavailable with legacy static export. It forwards no website cookies or service-account credentials and never exposes internal worker/webhook operations. Checkout IDs and cart merge/version data must remain unchanged across transport fallback. HTTP errors are not automatically replayed.
+
+After release verify public configuration, add-to-cart, cart quote and guest checkout on the actual frontend domain. Test blocked direct API requests and explicit price retry; verify the authoritative paid amount, signed webhook and private order state. This release does not authorise or apply the separate live catalogue pricing migration.

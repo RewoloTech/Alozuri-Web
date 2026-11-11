@@ -15,7 +15,7 @@
     "dev:api": "npm run dev -w @voyaspan/api",
     "build": "npm run build -w @voyaspan/web && npm run build -w @voyaspan/api",
     "build:web": "npm run build -w @voyaspan/web",
-    "test:firestore": "firebase emulators:exec --only firestore --project demo-alozuri --config infra/production-emulator.json \"node --import tsx --test --test-concurrency=1 apps/api/test/production.firestore.mts apps/api/test/commerce.firestore.mts apps/api/test/catalogue.firestore.mts\"",
+    "test:firestore": "firebase emulators:exec --only firestore --project demo-alozuri --config infra/production-emulator.json \"node --import tsx --test --test-concurrency=1 apps/api/test/production.firestore.mts apps/api/test/commerce.firestore.mts apps/api/test/catalogue.firestore.mts apps/api/test/featured.firestore.mts\"",
     "test": "npm run test:unit",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "eslint .",
@@ -31,7 +31,8 @@
     "test:cypress": "start-server-and-test cypress:server http://localhost:3100 cypress:run",
     "test:cypress:open": "start-server-and-test cypress:server http://localhost:3100 \"node scripts/run-cypress.mjs open --e2e\"",
     "typecheck:tests": "tsc -p tests/cypress/tsconfig.json",
-    "test:stripe:deployed": "node --import tsx scripts/run-deployed-stripe-test.mts"
+    "test:stripe:deployed": "node --import tsx scripts/run-deployed-stripe-test.mts",
+    "featured:generate": "node --import tsx scripts/run-featured-bundles.mts"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.0",

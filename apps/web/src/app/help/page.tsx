@@ -1,5 +1,6 @@
 import { publicMetadata } from '@/lib/seo';
 import Link from 'next/link';
+import { BUSINESS } from '@voyaspan/shared/legal';
 export const metadata = publicMetadata(
   'Help and eSIM installation',
   'Get help checking device compatibility, installing your travel eSIM, understanding activation and contacting Alozuri.',
@@ -66,7 +67,8 @@ export default function Help() {
         </p>
       </div>
       <div className="notice">
-        <strong>Need more help?</strong> Email info@alozuri.com or visit our contact page.{' '}
+        <strong>Need more help?</strong> Email{' '}
+        <a href={'mailto:' + BUSINESS.email}>{BUSINESS.email}</a> or visit our contact page.{' '}
         <Link className="text-link" href="/contact">
           Contact support →
         </Link>

@@ -1,9 +1,5 @@
 'use client';
-import {
-  LEGAL_VERSION,
-  EARLY_SUPPLY_REQUEST,
-  CANCELLATION_ACKNOWLEDGEMENT,
-} from '@voyaspan/shared/legal';
+import { LEGAL_VERSION, CHECKOUT_LEGAL_ACCEPTANCE } from '@voyaspan/shared/legal';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -17,7 +13,7 @@ import {
 } from '@stripe/react-stripe-js';
 import { loadStripe } from '@stripe/stripe-js/pure';
 import type { StripeExpressCheckoutElementConfirmEvent } from '@stripe/stripe-js';
-import { cartItems, type CartLine, type Plan } from '@voyaspan/shared';
+import { cartItems, previewCartPrices, money, type CartLine, type Plan } from '@voyaspan/shared';
 import type { RootState } from '@/lib/store';
 import { api } from '@/lib/api';
 import { useCurrency } from './currency-provider';
@@ -26,14 +22,28 @@ import { OrderSummary, type Quote } from './cart';
 import { stripeCheckoutMode } from './stripe-checkout';
 const key = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '';
 let stripePromise: ReturnType<typeof loadStripe> | undefined;
+function CheckoutPolicyNotice() {
+  return (
+    <p className="checkout-policy-notice">
+      By placing your order, you agree to our <Link href="/terms">Terms &amp; Conditions</Link> and
+      acknowledge our <Link href="/refund-policy">Refund Policy</Link>,{' '}
+      <Link href="/privacy">Privacy Policy</Link> and{' '}
+      <Link href="/esim-compatibility">eSIM Compatibility Requirements</Link>.
+    </p>
+  );
+}
 function StripePayment({
   clientSecret,
   orderId,
   deliveryEmail,
+  totalCents,
+  currency,
 }: {
   clientSecret: string;
   orderId: string;
   deliveryEmail: string;
+  totalCents: number;
+  currency: string;
 }) {
   const stripe = useStripe(),
     elements = useElements(),
@@ -81,6 +91,7 @@ function StripePayment({
   }
   return (
     <div className="stack">
+      <CheckoutPolicyNotice />
       <div style={{ display: wallets ? 'block' : 'none' }}>
         <ExpressCheckoutElement
           options={{
@@ -121,7 +132,7 @@ function StripePayment({
         disabled={!stripe || !elements || !ready || processing}
         onClick={() => void pay()}
       >
-        {processing ? 'Processing payment…' : 'Pay securely'}
+        {processing ? 'Processing payment…' : `Pay ${money(totalCents, currency)}`}
       </button>
     </div>
   );
@@ -147,15 +158,18 @@ function CheckoutForIdentity() {
     [email, setEmail] = useState(user?.emailVerified ? user.email || '' : ''),
     [confirmation, setConfirmation] = useState(''),
     [compatible, setCompatible] = useState(false),
-    [session, setSession] = useState<{ clientSecret: string; orderId: string } | null>(null),
-    [mode, setMode] = useState('disabled');
+    [session, setSession] = useState<{
+      clientSecret: string;
+      orderId: string;
+      quote: Quote;
+    } | null>(null),
+    [mode, setMode] = useState('disabled'),
+    [quoteAttempt, setQuoteAttempt] = useState(0),
+    [quotedSignature, setQuotedSignature] = useState('');
   useEffect(() => {
     lock(Boolean(session) || starting);
     return () => lock(false);
   }, [session, starting, lock]);
-  const [termsAccepted, setTermsAccepted] = useState(false),
-    [immediateSupplyRequested, setImmediateSupplyRequested] = useState(false),
-    [cancellationAcknowledged, setCancellationAcknowledged] = useState(false);
   const request = useRef(crypto.randomUUID()),
     submitting = useRef(false);
   useEffect(() => {
@@ -164,8 +178,11 @@ function CheckoutForIdentity() {
   useEffect(() => {
     void api<{ cartCheckoutMode: string }>('/v1/config')
       .then((r) => setMode(r.cartCheckoutMode))
-      .catch(() => setMode('disabled'));
-  }, []);
+      .catch(() => {
+        setMode('disabled');
+        setError('We could not load payment availability. Please retry.');
+      });
+  }, [quoteAttempt]);
   useEffect(() => {
     if (!buy) return;
     let active = true;
@@ -196,33 +213,46 @@ function CheckoutForIdentity() {
       return;
     }
     let active = true;
-    setQuote(null);
+    const controller = new AbortController();
     setLoading(true);
     setError('');
-    void api<{ quote: Quote }>('/v2/quote', {
-      method: 'POST',
-      body: JSON.stringify({ items: JSON.parse(signature), currency }),
-    })
-      .then((r) => {
-        if (active) setQuote(r.quote);
+    const timer = setTimeout(() => {
+      void api<{ quote: Quote }>('/v2/quote', {
+        method: 'POST',
+        signal: controller.signal,
+        body: JSON.stringify({ items: JSON.parse(signature), currency }),
       })
-      .catch((e) => {
-        if (active) setError(e instanceof Error ? e.message : 'Could not check prices.');
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+        .then((r) => {
+          if (active) {
+            setQuote(r.quote);
+            setQuotedSignature(signature);
+          }
+        })
+        .catch((e) => {
+          if (active) {
+            setQuotedSignature('');
+            setError(e instanceof Error ? e.message : 'Could not check prices.');
+          }
+        })
+        .finally(() => {
+          if (active) setLoading(false);
+        });
+    }, 180);
     return () => {
       active = false;
+      clearTimeout(timer);
+      controller.abort();
     };
-  }, [signature, currency, refresh, session]);
+  }, [signature, currency, refresh, session, quoteAttempt]);
+  const quoteReady = quote?.currency === currency && quotedSignature === signature && !loading;
+  const preview = previewCartPrices(
+    lines,
+    quote?.currency === currency ? quote.items : [],
+    currency,
+  );
   async function start(e: React.FormEvent) {
     e.preventDefault();
-    if (submitting.current || !quote) return;
-    if (!termsAccepted || !immediateSupplyRequested || !cancellationAcknowledged) {
-      setError('Please review the terms and immediate-supply choices before payment.');
-      return;
-    }
+    if (submitting.current || !quote || !compatible || !quoteReady) return;
     if (email.trim().toLowerCase() !== confirmation.trim().toLowerCase()) {
       setError('Email addresses do not match.');
       return;
@@ -265,12 +295,7 @@ function CheckoutForIdentity() {
             email: email.trim(),
             emailConfirmation: confirmation.trim(),
             compatible,
-            legal: {
-              version: LEGAL_VERSION,
-              termsAccepted,
-              immediateSupplyRequested,
-              cancellationAcknowledged,
-            },
+            legal: CHECKOUT_LEGAL_ACCEPTANCE,
             requestId: request.current,
             expectedTotalCents: quote.totalCents,
           }),
@@ -307,7 +332,10 @@ function CheckoutForIdentity() {
           method: 'POST',
           body: JSON.stringify({ items: JSON.parse(signature), currency }),
         }).catch(() => null);
-        if (fresh) setQuote(fresh.quote);
+        if (fresh) {
+          setQuote(fresh.quote);
+          setQuotedSignature(signature);
+        }
       }
     } finally {
       submitting.current = false;
@@ -367,6 +395,8 @@ function CheckoutForIdentity() {
                   clientSecret={session.clientSecret}
                   orderId={session.orderId}
                   deliveryEmail={email}
+                  totalCents={session.quote.totalCents}
+                  currency={session.quote.currency}
                 />
               </Elements>
             </>
@@ -412,55 +442,7 @@ function CheckoutForIdentity() {
                   <Link href="/help#compatibility">Check compatibility</Link>
                 </span>
               </label>
-              <fieldset className="checkout-legal">
-                <legend>Your agreement and supply choices</legend>
-                <p>
-                  Review the <Link href="/terms">Terms and Conditions</Link>,{' '}
-                  <Link href="/refund-policy">Refund and Cancellation Policy</Link>,{' '}
-                  <Link href="/privacy">Privacy Policy</Link> and{' '}
-                  <Link href="/esim-compatibility">device requirements</Link>. No checkbox waives
-                  rights for faulty or misdescribed supply.
-                </p>
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    required
-                    checked={termsAccepted}
-                    onChange={(e) => setTermsAccepted(e.target.checked)}
-                  />
-                  <span>
-                    I agree to the Terms and Conditions (version {LEGAL_VERSION}) and have read the
-                    Refund and Cancellation Policy.
-                  </span>
-                </label>
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    required
-                    checked={immediateSupplyRequested}
-                    onChange={(e) => setImmediateSupplyRequested(e.target.checked)}
-                  />
-                  <span>{EARLY_SUPPLY_REQUEST}</span>
-                </label>
-                <label className="checkbox-label">
-                  <input
-                    type="checkbox"
-                    required
-                    checked={cancellationAcknowledged}
-                    onChange={(e) => setCancellationAcknowledged(e.target.checked)}
-                  />
-                  <span>{CANCELLATION_ACKNOWLEDGEMENT}</span>
-                </label>
-                <p>
-                  If you prefer later supply, leave the early-supply choices unticked and{' '}
-                  <Link href="/contact">contact us before ordering</Link>. This online checkout
-                  supplies immediately; delayed delivery is not automatically scheduled.
-                </p>
-                <p>
-                  Continuing opens Stripe’s payment form. The final “Pay securely” button authorises
-                  payment of the displayed total.
-                </p>
-              </fieldset>
+              <CheckoutPolicyNotice />
               {mode === 'disabled' || mode !== stripeCheckoutMode ? (
                 <p className="notice" role="status">
                   Payments are not currently configured for this storefront. Your cart is saved.
@@ -471,11 +453,8 @@ function CheckoutForIdentity() {
                 disabled={
                   starting ||
                   loading ||
-                  !quote ||
+                  !quoteReady ||
                   !compatible ||
-                  !termsAccepted ||
-                  !immediateSupplyRequested ||
-                  !cancellationAcknowledged ||
                   mode === 'disabled' ||
                   mode !== stripeCheckoutMode
                 }
@@ -485,22 +464,26 @@ function CheckoutForIdentity() {
             </form>
           )}
           {error && (
-            <p className="error-message" role="alert">
-              {error}
-            </p>
+            <div role="alert">
+              <p className="error-message">{error}</p>
+              {!session && (!quote || mode === 'disabled') && (
+                <button
+                  type="button"
+                  className="button"
+                  onClick={() => setQuoteAttempt((n) => n + 1)}
+                >
+                  Retry checkout
+                </button>
+              )}
+            </div>
           )}
-          {loading && <p role="status">Checking availability and prices…</p>}
         </div>
-        {quote?.currency === currency ? (
-          <OrderSummary
-            lines={quote?.items ?? lines}
-            total={
-              quote?.totalCents ?? lines.reduce((n, i) => n + i.quantity * i.plan.priceCents, 0)
-            }
-          />
-        ) : (
-          <p role="status">Updating prices in {currency}…</p>
-        )}
+        <OrderSummary
+          lines={preview.items}
+          total={quoteReady && quote ? quote.totalCents : preview.total}
+          currency={currency}
+          updating={loading}
+        />
       </div>
     </section>
   );

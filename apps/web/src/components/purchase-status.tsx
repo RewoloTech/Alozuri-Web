@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useDispatch, useSelector } from 'react-redux';
-import type { CheckoutLegalAcceptance } from '@voyaspan/shared/legal';
 import { money, type CartLine, type CartItem, type Plan } from '@voyaspan/shared';
 import { removeFromCart, quantityChanged, type RootState } from '@/lib/store';
 import { api } from '@/lib/api';
@@ -19,7 +18,9 @@ export type Purchase = {
   status: string;
   test: boolean;
   createdAt: string;
-  legal?: Omit<CheckoutLegalAcceptance, 'version'> & { version: string } & {
+  legal?: {
+    version: string;
+    noticeText?: string;
     acceptedAt: string;
     effectiveDate: string;
     termsText: string;
@@ -153,7 +154,8 @@ function PrivatePurchase({ id }: { id: string }) {
               <p>Delivery email: {order.email}</p>
               <p>Total: {money(order.totalCents, order.currency)}</p>
               {order.legal && (
-                <div>
+                <details className="order-documents">
+                  <summary>Order documents</summary>
                   <p>
                     Terms version {order.legal.version} · Accepted {order.legal.acceptedAt}
                   </p>
@@ -161,7 +163,7 @@ function PrivatePurchase({ id }: { id: string }) {
                     className="button"
                     onClick={() => {
                       if (!order.legal) return;
-                      const text = `Order ${order.id}\nTotal ${money(order.totalCents, order.currency)}\nAccepted ${order.legal.acceptedAt}\n${order.legal.requestText}\n${order.legal.acknowledgementText}\n\n${order.legal.termsText}\n\n${order.legal.refundText}`;
+                      const text = `Order ${order.id}\nTotal ${money(order.totalCents, order.currency)}\nAccepted ${order.legal.acceptedAt}\n${order.legal.noticeText ?? ''}\n${order.legal.requestText}\n${order.legal.acknowledgementText}\n\n${order.legal.termsText}\n\n${order.legal.refundText}`;
                       const url = URL.createObjectURL(
                         new Blob([text], { type: 'text/plain;charset=utf-8' }),
                       );
@@ -174,7 +176,7 @@ function PrivatePurchase({ id }: { id: string }) {
                   >
                     Download your contract
                   </button>
-                </div>
+                </details>
               )}
               {order.test ? (
                 <p className="notice">Stripe test order. No real charge or eSIM is issued.</p>

@@ -1,3 +1,8 @@
+import { defaultFeaturedReader } from './lib/featured-bundles.js';
+import {
+  parseFeaturedBundles,
+  type FeaturedBundle,
+} from '../../../packages/shared/src/featured.ts';
 import {
   ExchangeRates,
   currencySchema,
@@ -56,6 +61,7 @@ const idSchema = documentId;
 export async function createApp(
   options: {
     repository?: Repository;
+    featured?: (currency: Currency) => Promise<FeaturedBundle[]>;
     exchangeRates?: Pick<ExchangeRates, 'current'>;
     verify?: (token: string) => Promise<Principal>;
     demo?: boolean;
@@ -169,9 +175,17 @@ export async function createApp(
     z.object({})
       .strict()
       .parse(request.body ?? {});
-    const result = await syncCatalogue();
-    repository.invalidate?.();
-    return result;
+    try {
+      const result = await syncCatalogue();
+      repository.invalidate?.();
+      return result;
+    } catch (error) {
+      app.log.error(
+        { operation: 'catalogue-sync' },
+        'Catalogue or featured bundle publication failed; previous featured snapshot retained.',
+      );
+      throw error;
+    }
   });
   app.post('/internal/fulfillment/run', async (request, reply) => {
     if (!(await verifyFulfillmentIdentity(request.headers.authorization)))
@@ -201,6 +215,20 @@ export async function createApp(
     return activation
       ? { activation }
       : reply.code(404).send({ error: 'Installation details are not available for this order.' });
+  });
+  app.get('/v1/featured-bundles', async (request) => {
+    const input = z
+      .object({ currency: currencySchema.default('USD') })
+      .strict()
+      .parse(request.query);
+    const bundles = parseFeaturedBundles(
+      await (options.featured ?? ((currency) => defaultFeaturedReader.read(currency)))(
+        input.currency,
+      ),
+      input.currency,
+    );
+    if (!bundles) throw new Error('Invalid featured bundle snapshot.');
+    return { bundles };
   });
   app.get('/v1/catalogue/sitemap', async () => ({
     plans: (await repository.plans())

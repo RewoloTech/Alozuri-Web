@@ -115,17 +115,6 @@ export function PlanDetails({
             </div>
           </div>
           <div className="surface">
-            {plan.supplierNotes && (
-              <section>
-                <h2>Supplier conditions</h2>
-                <p>
-                  These product-specific conditions do not override{' '}
-                  <Link href="/refund-policy">Alozuri’s Refund and Cancellation Policy</Link> or
-                  your statutory rights.
-                </p>
-                <p style={{ whiteSpace: 'pre-line' }}>{plan.supplierNotes}</p>
-              </section>
-            )}
             <h2>Know before you go</h2>
             <dl className="spec-list">
               <div>
@@ -152,6 +141,16 @@ export function PlanDetails({
             <Link href="/help#compatibility" className="text-link">
               Check device compatibility ↗
             </Link>
+            {plan.supplierNotes && (
+              <details className="plan-conditions">
+                <summary>Plan conditions</summary>
+                <p style={{ whiteSpace: 'pre-line' }}>{plan.supplierNotes}</p>
+                <p>
+                  Your statutory rights apply. Read our{' '}
+                  <Link href="/refund-policy">Refund Policy</Link>.
+                </p>
+              </details>
+            )}
           </div>
         </div>
         <aside className="surface purchase-summary">
@@ -197,7 +196,7 @@ export function PlanDetails({
             Your device must support eSIM and be carrier unlocked. Install over Wi-Fi and follow the
             activation rule.
           </p>
-          <Link href="/legal/refunds" className="text-link">
+          <Link href="/refund-policy" className="text-link">
             Refund information
           </Link>
         </aside>

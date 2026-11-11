@@ -265,6 +265,7 @@ export function isCountryCode(code: string): boolean {
 
 export {
   cartItems,
+  previewCartPrices,
   mergeCartItems,
   coverageLabel,
   searchState,

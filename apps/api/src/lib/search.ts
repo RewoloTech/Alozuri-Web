@@ -37,7 +37,7 @@ export const searchQuerySchema = z
       .pipe(z.array(country).min(1).max(50)),
     minGb: z.coerce.number().finite().min(0).max(10000).default(0),
     dataType: z.enum(['all', 'fixed', 'daily', 'unlimited']).default('all'),
-    coverage: z.enum(['local', 'all']).default('local'),
+    coverage: z.enum(['local', 'all']).optional(),
     sort: z.enum(['recommended', 'price', 'value', 'data']).default('recommended'),
     pageSize: z.coerce.number().int().min(1).max(48).default(12),
     cursor: z
@@ -47,7 +47,14 @@ export const searchQuerySchema = z
       .regex(/^[A-Za-z0-9_-]+$/)
       .optional(),
   })
-  .strict();
+  .strict()
+  .transform((input) => {
+    // A local-only package cannot cover multiple countries. Discard a stale
+    // local flag from older clients instead of silently eliminating every bundle.
+    const coverage: SearchFilters['coverage'] =
+      input.countries.length > 1 ? 'all' : (input.coverage ?? 'local');
+    return { ...input, coverage };
+  });
 const bookmarkSchema = z
   .object({
     revision: z.string().regex(/^[a-f0-9]{64}$/),

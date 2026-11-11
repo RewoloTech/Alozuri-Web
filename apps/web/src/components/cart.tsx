@@ -1,10 +1,11 @@
 'use client';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import { useDispatch, useSelector, useStore } from 'react-redux';
 import { ShoppingBag, Trash2, Minus, Plus, LockKeyhole } from 'lucide-react';
 import {
   cartItems,
+  previewCartPrices,
   coverageLabel,
   countryName,
   dataLabel,
@@ -46,14 +47,16 @@ export function OrderSummary({
   total,
   children,
   currency = lines[0]?.plan.currency ?? 'USD',
+  updating = false,
 }: {
   lines: CartLine[];
-  total: number;
+  total: number | null;
   currency?: Currency;
+  updating?: boolean;
   children?: React.ReactNode;
 }) {
   return (
-    <aside className="surface commerce-summary">
+    <aside className="surface commerce-summary" aria-busy={updating}>
       <span className="eyebrow">YOUR ORDER</span>
       {lines.map((line) => (
         <div className="summary-line" key={line.plan.id}>
@@ -72,26 +75,28 @@ export function OrderSummary({
           <strong>
             {line.plan.currency === currency
               ? money(line.plan.priceCents * line.quantity, line.plan.currency)
-              : 'Updating price…'}
+              : '—'}
           </strong>
         </div>
       ))}
       <dl className="spec-list">
         <div>
           <dt>Subtotal</dt>
-          <dd>{money(total, currency)}</dd>
+          <dd>{total === null ? '—' : money(total, currency)}</dd>
         </div>
       </dl>
       <div className="commerce-total">
         <strong>Total · {currency}</strong>
-        <strong>{money(total, currency)}</strong>
+        <strong>{total === null ? '—' : money(total, currency)}</strong>
       </div>
-      <p className="fine-print">
-        The displayed total is the amount charged. No additional checkout fees.
+      <p className="fine-print">Prices are verified before payment. No additional checkout fees.</p>
+      <p className="quote-status" role="status" aria-live="polite">
+        {updating ? 'Confirming latest prices…' : ''}
       </p>
       {children}
-      <p className="fine-print">
-        <LockKeyhole size={13} /> Payment details are handled securely by Stripe.
+      <p className="fine-print payment-security">
+        <LockKeyhole size={13} aria-hidden="true" />
+        <span>Payment details are handled securely by Stripe.</span>
       </p>
     </aside>
   );
@@ -112,10 +117,13 @@ export function Cart() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const cart = useSelector((s: RootState) => s.cart),
-    dispatch = useDispatch();
+    dispatch = useDispatch(),
+    store = useStore<RootState>();
   const [quote, setQuote] = useState<Quote | null>(null),
     [pending, setPending] = useState(false),
-    [error, setError] = useState('');
+    [error, setError] = useState(''),
+    [quoteAttempt, setQuoteAttempt] = useState(0),
+    [quotedSignature, setQuotedSignature] = useState('');
   const signature = JSON.stringify(cartItems(cart.items));
   useEffect(() => {
     if (!cart.ready || signature === '[]') {
@@ -123,29 +131,38 @@ export function Cart() {
       return;
     }
     let active = true;
-    setQuote(null);
+    const controller = new AbortController();
     setPending(true);
     setError('');
-    void api<{ quote: Quote }>('/v2/quote', {
-      method: 'POST',
-      body: JSON.stringify({ items: JSON.parse(signature), currency }),
-    })
-      .then((r) => {
-        if (active) {
-          setQuote(r.quote);
-          dispatch(restoreCart(r.quote.items));
-        }
+    const timer = setTimeout(() => {
+      void api<{ quote: Quote }>('/v2/quote', {
+        method: 'POST',
+        signal: controller.signal,
+        body: JSON.stringify({ items: JSON.parse(signature), currency }),
       })
-      .catch((e) => {
-        if (active) setError(e instanceof Error ? e.message : 'Could not validate cart.');
-      })
-      .finally(() => {
-        if (active) setPending(false);
-      });
+        .then((r) => {
+          if (active && JSON.stringify(cartItems(store.getState().cart.items)) === signature) {
+            setQuote(r.quote);
+            setQuotedSignature(signature);
+            dispatch(restoreCart(r.quote.items));
+          }
+        })
+        .catch((e) => {
+          if (active) {
+            setQuotedSignature('');
+            setError(e instanceof Error ? e.message : 'Could not validate cart.');
+          }
+        })
+        .finally(() => {
+          if (active) setPending(false);
+        });
+    }, 180);
     return () => {
       active = false;
+      clearTimeout(timer);
+      controller.abort();
     };
-  }, [signature, cart.ready, dispatch, currency, refresh]);
+  }, [signature, cart.ready, dispatch, currency, refresh, quoteAttempt, store]);
   if (!mounted || !cart.ready)
     return (
       <section className="container section" role="status">
@@ -173,16 +190,15 @@ export function Cart() {
         </Link>
       </section>
     );
-  const priceReady = quote?.currency === currency;
-  // Account cart snapshots remain base USD; the verified quote owns displayed prices.
-  const displayedItems = cart.items.map((line) => ({
-    ...line,
-    plan: priceReady
-      ? (quote.items.find((item) => item.plan.id === line.plan.id)?.plan ?? line.plan)
-      : line.plan,
-  }));
-  const total =
-    quote?.totalCents ?? cart.items.reduce((sum, i) => sum + i.quantity * i.plan.priceCents, 0);
+  const priceReady =
+    quote?.currency === currency && quotedSignature === signature && !pending && !error;
+  const preview = previewCartPrices(
+    cart.items,
+    quote?.currency === currency ? quote.items : [],
+    currency,
+  );
+  const displayedItems = preview.items;
+  const total = priceReady ? quote.totalCents : preview.total;
   return (
     <section className="container section">
       <div className="page-intro">
@@ -200,9 +216,9 @@ export function Cart() {
                 <LineDescription line={line} />
                 <p>
                   {line.unavailable ? 'Unavailable · last seen price: ' : ''}
-                  {priceReady
+                  {line.plan.currency === currency
                     ? money(line.plan.priceCents, line.plan.currency)
-                    : 'Updating price…'}{' '}
+                    : '—'}{' '}
                   per eSIM
                 </p>
                 <div className="quantity-controls" aria-label={'Quantity for ' + line.plan.name}>
@@ -235,7 +251,7 @@ export function Cart() {
                 <strong>
                   {line.plan.currency === currency
                     ? money(line.plan.priceCents * line.quantity, line.plan.currency)
-                    : 'Updating price…'}
+                    : '—'}
                 </strong>
                 <button
                   className="text-link"
@@ -254,6 +270,16 @@ export function Cart() {
           {(error || cart.error) && (
             <div role="alert">
               <p className="error-message">{error || cart.error}</p>
+              {error && (
+                <button
+                  type="button"
+                  className="button"
+                  disabled={pending}
+                  onClick={() => setQuoteAttempt((n) => n + 1)}
+                >
+                  Retry prices
+                </button>
+              )}
               {user?.emailVerified && cart.error && (
                 <button className="button" onClick={() => void restoreSavedCart()}>
                   Use saved account cart
@@ -262,23 +288,18 @@ export function Cart() {
             </div>
           )}
         </div>
-        {quote?.currency === currency ? (
-          <OrderSummary lines={quote?.items ?? cart.items} total={total}>
-            {pending ? (
-              <p role="status">Checking current availability and prices…</p>
-            ) : (
-              <Link
-                className="button primary full-width"
-                aria-disabled={!quote || !!error}
-                href={quote && !error ? '/checkout' : '#'}
-              >
-                Secure checkout →
-              </Link>
-            )}
-          </OrderSummary>
-        ) : (
-          <p role="status">Updating prices in {currency}…</p>
-        )}
+        <OrderSummary lines={displayedItems} total={total} currency={currency} updating={pending}>
+          <Link
+            className="button primary full-width"
+            aria-disabled={!priceReady}
+            href="/checkout"
+            onClick={(event) => {
+              if (!priceReady) event.preventDefault();
+            }}
+          >
+            Secure checkout →
+          </Link>
+        </OrderSummary>
       </div>
     </section>
   );

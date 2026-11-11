@@ -6,7 +6,7 @@ This is a scoped code/configuration review with automated tests, not a penetrati
 
 - Sign-up hover/focus preserves white text against a darker violet background, using a short colour transition and respecting existing reduced-motion preferences.
 - Registration and destination-option checkboxes have a non-shrinking input beside a separate wrapping text span. Registration links use the canonical Terms and Privacy routes.
-- Single-country search still defaults to local plans. The optional regional/global checkbox is retained and explained: it broadens results to multi-country products covering the chosen country. It does not change the default or label those products as country-only.
+- Single-country search now always requests local-only plans. The regional/global checkbox has been removed; an older coverage=all URL is normalised to local. Wider coverage remains available in multi-country mode.
 - Sign-in and email verification now share `safeAccountDestination`. It rejects external/protocol-relative URLs, executable schemes, backslashes, literal/encoded control characters, ambiguous normalised paths, malformed escapes and excessive input length. Valid local destination queries remain supported.
 
 ## Observed controls
@@ -22,7 +22,7 @@ This is a scoped code/configuration review with automated tests, not a penetrati
 
 ## Verification
 
-102 shared/API unit tests and 21 Firestore integration tests passed. The full Playwright fixture suite passed 11 cases (real Stripe is intentionally separate); it includes hover readability, checkbox alignment at desktop/390/375px, safe server-rendered JSON-LD, privacy controls, search state and payment retry behaviour. Lint, application/test TypeScript checks and the production build passed. The renamed regional option is covered by Cypress's strict-local/optional-regional regression; final command results are recorded in `docs/testing.md`.
+102 shared/API unit tests and 21 Firestore integration tests passed. The full Playwright fixture suite passed 11 cases (real Stripe is intentionally separate); it includes hover readability, checkbox alignment at desktop/390/375px, safe server-rendered JSON-LD, privacy controls, search state and payment retry behaviour. Lint, application/test TypeScript checks and the production build passed. Strict single-country behaviour, including older regional-option URLs, is covered by Cypress; final command results are recorded in `docs/testing.md`.
 
 ## Remaining operational checks
 

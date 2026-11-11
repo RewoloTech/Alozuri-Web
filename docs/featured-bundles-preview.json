@@ -1,0 +1,150 @@
+{
+  "mode": "read-only-repricing-preview",
+  "sourceSyncId": "d64aa3cd-3257-4769-a865-b2ce5aefd0c9",
+  "sourceSyncedAt": "2026-11-10T23:28:05.021Z",
+  "sourceDocuments": 3283,
+  "currentlyValidatedRetailRecords": 0,
+  "productionWrites": 0,
+  "regions": [
+    {
+      "region": "europe",
+      "status": "active",
+      "defaultDataGb": 10,
+      "selectedPlanId": "esim-b0702e322fbcf8a23d9d69e8",
+      "options": [
+        {
+          "dataGb": 5,
+          "productId": "esim-50fb57ec1d51f8b289fca25d",
+          "supplierProductId": "PXU710SMN",
+          "name": "Europe (33 areas) 5GB 30Days",
+          "validityDays": 30,
+          "countryCount": 33,
+          "projectedSellingPriceUsdCents": 599
+        },
+        {
+          "dataGb": 10,
+          "productId": "esim-b0702e322fbcf8a23d9d69e8",
+          "supplierProductId": "PGJBA365C",
+          "name": "Europe (33 areas) 10GB 30Days",
+          "validityDays": 30,
+          "countryCount": 33,
+          "projectedSellingPriceUsdCents": 1099
+        },
+        {
+          "dataGb": 20,
+          "productId": "esim-e09d355469557f45b9e67a90",
+          "supplierProductId": "P9G6JMV1T",
+          "name": "Europe (33 areas) 20GB 30Days",
+          "validityDays": 30,
+          "countryCount": 33,
+          "projectedSellingPriceUsdCents": 2049
+        }
+      ]
+    },
+    {
+      "region": "asia",
+      "status": "active",
+      "defaultDataGb": 10,
+      "selectedPlanId": "esim-db0fb72526448cb80bf983d3",
+      "options": [
+        {
+          "dataGb": 5,
+          "productId": "esim-7c76c881fa8586642d4d1de5",
+          "supplierProductId": "JC178",
+          "name": "Asia-20 5GB 30 Days",
+          "validityDays": 30,
+          "countryCount": 20,
+          "projectedSellingPriceUsdCents": 1749
+        },
+        {
+          "dataGb": 10,
+          "productId": "esim-db0fb72526448cb80bf983d3",
+          "supplierProductId": "JC180",
+          "name": "Asia-20 10GB 30Days",
+          "validityDays": 30,
+          "countryCount": 20,
+          "projectedSellingPriceUsdCents": 2749
+        },
+        {
+          "dataGb": 20,
+          "productId": "esim-33e5898da82bfb835aefb766",
+          "supplierProductId": "PALTQIBLC",
+          "name": "Asia-20 20GB 30Days",
+          "validityDays": 30,
+          "countryCount": 20,
+          "projectedSellingPriceUsdCents": 4649
+        }
+      ]
+    },
+    {
+      "region": "north-america",
+      "status": "active",
+      "defaultDataGb": 10,
+      "selectedPlanId": "esim-c525b3fa0ca7f258c7dd956c",
+      "options": [
+        {
+          "dataGb": 5,
+          "productId": "esim-abf5c287fe49a3dcc0f1e3d5",
+          "supplierProductId": "P8H3NEG7T",
+          "name": "USA & Canada 5GB 30Days",
+          "validityDays": 30,
+          "countryCount": 2,
+          "projectedSellingPriceUsdCents": 1549
+        },
+        {
+          "dataGb": 10,
+          "productId": "esim-c525b3fa0ca7f258c7dd956c",
+          "supplierProductId": "CKH494",
+          "name": "North America 10GB 30Days",
+          "validityDays": 30,
+          "countryCount": 3,
+          "projectedSellingPriceUsdCents": 2749
+        },
+        {
+          "dataGb": 20,
+          "productId": "esim-5dcbceeaf47fe914762ac36e",
+          "supplierProductId": "CKH535",
+          "name": "North America 20GB 30Days",
+          "validityDays": 30,
+          "countryCount": 3,
+          "projectedSellingPriceUsdCents": 4249
+        }
+      ]
+    },
+    {
+      "region": "global",
+      "status": "active",
+      "defaultDataGb": 10,
+      "selectedPlanId": "esim-faf726618a4c44744c58d8d3",
+      "options": [
+        {
+          "dataGb": 5,
+          "productId": "esim-c10f8b63b7b242596415c939",
+          "supplierProductId": "PEW54FVD9",
+          "name": "Global (120+ areas) 5GB 30Days",
+          "validityDays": 30,
+          "countryCount": 117,
+          "projectedSellingPriceUsdCents": 2999
+        },
+        {
+          "dataGb": 10,
+          "productId": "esim-faf726618a4c44744c58d8d3",
+          "supplierProductId": "P34FHRF8J",
+          "name": "Global (120+ areas) 10GB 30Days",
+          "validityDays": 30,
+          "countryCount": 117,
+          "projectedSellingPriceUsdCents": 5149
+        },
+        {
+          "dataGb": 20,
+          "productId": "esim-5ad04940a09a8cc95e63cace",
+          "supplierProductId": "PR3JZMC20",
+          "name": "Global (120+ areas) 20GB 30Days",
+          "validityDays": 30,
+          "countryCount": 117,
+          "projectedSellingPriceUsdCents": 9049
+        }
+      ]
+    }
+  ]
+}

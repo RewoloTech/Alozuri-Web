@@ -2,26 +2,36 @@ import { z } from 'zod';
 import {
   LEGAL_VERSION,
   LEGAL_EFFECTIVE_DATE,
-  EARLY_SUPPLY_REQUEST,
-  CANCELLATION_ACKNOWLEDGEMENT,
-  type CheckoutLegalAcceptance,
+  CHECKOUT_NOTICE,
+  type CheckoutLegalInput,
 } from '../../../../packages/shared/src/legal.ts';
-import { POLICIES, policyText } from '../../../../packages/shared/src/policies.ts';
-export const checkoutLegalSchema = z
+import { POLICIES, POLICY_VERSIONS, policyText } from '../../../../packages/shared/src/policies.ts';
+const noticeSchema = z
   .object({
     version: z.literal(LEGAL_VERSION),
+    method: z.literal('order_placement'),
+    noticeAcknowledged: z.literal(true),
+  })
+  .strict();
+const previousCheckoutSchema = z
+  .object({
+    version: z.literal('2026-11-11.1'),
     termsAccepted: z.literal(true),
     immediateSupplyRequested: z.literal(true),
     cancellationAcknowledged: z.literal(true),
   })
   .strict();
+export const checkoutLegalSchema = z.union([noticeSchema, previousCheckoutSchema]);
 export const legalSnapshotSchema = z.object({
   version: z.string().max(40),
   effectiveDate: z.string(),
   acceptedAt: z.string(),
   termsAccepted: z.literal(true),
-  immediateSupplyRequested: z.literal(true),
-  cancellationAcknowledged: z.literal(true),
+  immediateSupplyRequested: z.boolean(),
+  cancellationAcknowledged: z.boolean(),
+  method: z.literal('order_placement').optional(),
+  noticeAcknowledged: z.literal(true).optional(),
+  noticeText: z.string().optional(),
   requestText: z.string(),
   acknowledgementText: z.string(),
   termsText: z.string(),
@@ -29,16 +39,33 @@ export const legalSnapshotSchema = z.object({
 });
 export type LegalSnapshot = z.infer<typeof legalSnapshotSchema>;
 export function legalSnapshot(
-  input: CheckoutLegalAcceptance,
+  input: CheckoutLegalInput,
   now = new Date().toISOString(),
 ): LegalSnapshot {
   const accepted = checkoutLegalSchema.parse(input);
+  if (accepted.version === '2026-11-11.1') {
+    return {
+      ...accepted,
+      effectiveDate: '2026-11-11',
+      acceptedAt: now,
+      requestText:
+        'I expressly request immediate supply of my eSIM before the 14-day cancellation period ends.',
+      acknowledgementText:
+        'I understand that, where my purchase is digital content, my cancellation right ends when supply begins with my express consent and this acknowledgement. For a service, cancellation rights are affected only as the law permits, including proportionate charges for requested early performance and loss of the right after full performance with the required consent. My rights for faulty or misdescribed products are not waived.',
+      termsText: policyText(POLICY_VERSIONS[accepted.version].terms, accepted.version),
+      refundText: policyText(POLICY_VERSIONS[accepted.version].refunds, accepted.version),
+    };
+  }
   return {
     ...accepted,
     effectiveDate: LEGAL_EFFECTIVE_DATE,
     acceptedAt: now,
-    requestText: EARLY_SUPPLY_REQUEST,
-    acknowledgementText: CANCELLATION_ACKNOWLEDGEMENT,
+    termsAccepted: true,
+    immediateSupplyRequested: false,
+    cancellationAcknowledged: false,
+    noticeText: CHECKOUT_NOTICE,
+    requestText: '',
+    acknowledgementText: '',
     termsText: policyText(POLICIES.terms),
     refundText: policyText(POLICIES.refunds),
   };

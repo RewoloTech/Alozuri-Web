@@ -1,4 +1,5 @@
 import { privacyChoice, CONSENT_COOKIE } from '../../../packages/shared/src/privacy';
+import { unavailableBundles } from '../../../packages/shared/src/featured';
 import { searchPageFixture } from '../../fixtures/search';
 import type { CartItem, Plan } from '../../../packages/shared/src/index';
 
@@ -46,6 +47,7 @@ export function mockCommerce() {
         cartCheckoutMode: 'test',
         supportedCurrencies: ['USD', 'GBP', 'EUR'],
       };
+    else if (url.pathname === '/v1/featured-bundles') body = { bundles: unavailableBundles() };
     else if (url.pathname === '/v1/countries')
       body = {
         countries: [
@@ -102,7 +104,7 @@ export function mockCommerce() {
   });
 }
 
-export function button(label: string) {
+export function button(label: string | RegExp) {
   return cy.contains('button', label);
 }
 export function selectCountry(name: string) {

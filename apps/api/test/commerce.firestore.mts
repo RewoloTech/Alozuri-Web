@@ -503,7 +503,7 @@ test('new orders require consent, store immutable terms, and cannot fulfil befor
   const f = fixture(false, undefined, 'USD', () => mailBlocked);
   const withoutConsent = {
     ...f.input,
-    legal: { ...CHECKOUT_LEGAL_ACCEPTANCE, cancellationAcknowledged: false },
+    legal: { ...CHECKOUT_LEGAL_ACCEPTANCE, noticeAcknowledged: false },
   };
   // API boundary rejects a missing or negative acknowledgement before a payment can be created.
   const api = await createApp({
@@ -534,7 +534,9 @@ test('new orders require consent, store immutable terms, and cannot fulfil befor
     assert.equal(await store.claim(children.docs[0].id), null);
     const original = (await db.doc('purchases/' + started.orderId).get()).get('legal');
     assert.ok(original.termsText.includes('Rewolo Technologies Ltd'));
-    assert.ok(original.acknowledgementText.includes('not waived'));
+    assert.equal(original.immediateSupplyRequested, false);
+    assert.equal(original.cancellationAcknowledged, false);
+    assert.ok(original.noticeText.includes('By placing your order'));
     assert.equal((await f.service.notify()).sent, 0);
     assert.equal(await store.claim(children.docs[0].id), null);
     mailBlocked = false;
