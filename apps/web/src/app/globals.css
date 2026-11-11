@@ -1330,11 +1330,16 @@ h1 {
     height: 180px;
   }
   .europe-banner {
+    display: grid;
+    grid-template-columns: 45px minmax(0, 1fr);
+    align-items: start;
     padding: 18px;
-    flex-wrap: wrap;
   }
   .europe-banner > .text-link {
-    margin-left: 62px;
+    grid-column: 2;
+    justify-self: start;
+    margin-left: 0;
+    white-space: normal;
   }
   .section {
     padding-block: 42px;
@@ -1511,17 +1516,33 @@ h1 {
   .data-field {
     width: auto;
     flex-basis: 100%;
-    padding: 10px 12px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    min-height: 53px;
+    padding: 12px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    min-height: 104px;
   }
   .data-field > .field-label {
     margin: 0;
   }
   .select-wrap {
-    width: 160px;
+    position: relative;
+    width: 100%;
+    min-width: 0;
+    height: 48px;
+  }
+  .select-wrap select {
+    min-width: 0;
+    height: 100%;
+    padding: 8px 40px 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: white;
+  }
+  .select-wrap > svg {
+    position: absolute;
+    right: 12px;
+    pointer-events: none;
   }
   .search-button {
     min-height: 48px;
@@ -1603,6 +1624,7 @@ h1 {
     right: 10px;
   }
   .europe-banner {
+    grid-template-columns: 35px minmax(0, 1fr);
     padding: 17px;
     gap: 12px;
     align-items: flex-start;
@@ -1627,7 +1649,7 @@ h1 {
     line-height: 1.75;
   }
   .europe-banner > .text-link {
-    margin-left: 47px;
+    margin-left: 0;
     font-size: 0.9375rem;
   }
   .how-section {

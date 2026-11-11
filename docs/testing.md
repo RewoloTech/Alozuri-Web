@@ -140,6 +140,8 @@ Observed results for this follow-up: 108 unit/API tests, 11 shopping browser cas
 
 # Mobile typography — 11 November 2026
 
+Mobile layout follow-up: the itinerary banner uses an icon/text grid with its action on a separate row below the copy. At widths up to 600px, the data allowance label sits above a full-width, 48px-high select; verify that changing every allowance option preserves the field dimensions. The desktop layouts are unchanged. Visual checks at 375/390/768/1440px found no horizontal overflow, and the three focused destination, keyboard-picker and data-filter Playwright cases passed, as did lint, TypeScript and the production build.
+
 The shared stylesheet uses 16px body text, 15–16px product descriptions and primary controls, and a 14px minimum for labels, captions, secondary information and footnotes at the default browser font setting. Small text uses rem units to respect the browser's preferred font size. Large heading sizes are unchanged. Mobile inputs/selects remain at least 16px, and the header allows longer account labels to wrap.
 
 For visual verification, inspect home, cart and checkout at 375/390/768/1440px; check product details, coverage, validity, footer links, country-picker controls, cookie choices and keyboard menu use. Check the signed-in header with both “My account” and “Verify email”, as well as the guest header, for overflow. Existing Playwright shopping, featured-bundle and policy cases cover the affected layouts and interactions; no payment or supplier purchase is necessary for this CSS change.
