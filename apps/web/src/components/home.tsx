@@ -14,36 +14,8 @@ import {
   Zap,
 } from 'lucide-react';
 import { Planner } from './planner';
-const destinations = [
-  {
-    name: 'Japan',
-    code: 'JP',
-    flag: '🇯🇵',
-    tag: 'City lights to mountain trails',
-    image: '/images/japan.jpg',
-  },
-  {
-    name: 'Italy',
-    code: 'IT',
-    flag: '🇮🇹',
-    tag: 'Take the scenic route',
-    image: '/images/italy.jpg',
-  },
-  {
-    name: 'United States',
-    code: 'US',
-    flag: '🇺🇸',
-    tag: 'For the road trip and everything after',
-    image: '/images/usa.jpg',
-  },
-  {
-    name: 'Turkey',
-    code: 'TR',
-    flag: '🇹🇷',
-    tag: 'A new connection at every corner',
-    image: '/images/turkey.jpg',
-  },
-];
+import { SeasonalDestinations } from './seasonal-destinations';
+import { seasonalInspiration } from '@voyaspan/shared/destination-inspiration';
 export function Home({ featuredBundles }: { featuredBundles?: React.ReactNode }) {
   return (
     <>
@@ -151,30 +123,7 @@ export function Home({ featuredBundles }: { featuredBundles?: React.ReactNode })
             All destinations <ArrowUpRight size={18} />
           </Link>
         </div>
-        <div className="destination-grid">
-          {destinations.map((d) => (
-            <Link
-              key={d.code}
-              href={`/destinations/${d.code.toLowerCase()}`}
-              className="destination-card"
-            >
-              <div
-                className="destination-photo"
-                style={{
-                  backgroundImage: `url(${d.image})`,
-                }}
-              />
-              <div className="destination-copy">
-                <span className="destination-flag">{d.flag}</span>
-                <h3>
-                  {d.name}
-                  <ArrowUpRight size={18} />
-                </h3>
-                <p>{d.tag}</p>
-              </div>
-            </Link>
-          ))}
-        </div>
+        <SeasonalDestinations initial={seasonalInspiration(new Date())} />
         <div className="europe-banner">
           <span className="europe-icon">
             <MapPin size={25} />

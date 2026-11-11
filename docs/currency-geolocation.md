@@ -38,4 +38,4 @@ Verification on 11 November 2026: lint, application/test TypeScript and the prod
 
 Deploy the Next.js frontend to apply this feature; no API/pricing migration or live purchase is required. After deployment, verify `/api/currency` through `alozuri.com` from known regions, its no-store headers, manual override and a matching server quote. Verify failure/default behaviour on direct App Hosting domains. Cloudflare-to-App-Hosting country-header forwarding has not been verified on the deployed new endpoint until that rollout occurs. Static export cannot provide IP detection; use the existing server-backed App Hosting deployment.
 
-The final `npm run test:cypress` run also passed all 13 cases. Changed-file formatting and `git diff --check` passed. No deployment was performed.
+The final `npm run test:cypress` run also passed all 13 cases. Changed-file formatting and `git diff --check` passed. No deployment was performed during implementation verification. The subsequent authorised production activation at approximately 20:27 London time is recorded in [manual rollout recovery](manual-rollout-recovery.md).

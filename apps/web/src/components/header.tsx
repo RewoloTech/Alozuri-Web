@@ -4,6 +4,8 @@ import { ArrowUpRight, Globe2, Menu, X, ShoppingBag } from 'lucide-react';
 import { useSelector } from 'react-redux';
 import type { RootState } from '@/lib/store';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { AccountMenu } from './account-menu';
 import { SUPPORTED_CURRENCIES } from '@voyaspan/shared';
 import { useCurrency } from './currency-provider';
 import { useAuth } from './auth-provider';
@@ -18,7 +20,8 @@ export function Brand() {
   );
 }
 export function Header() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const router = useRouter();
   const { currency, ready, setCurrency, available, locked } = useCurrency();
   const quantity = useSelector((s: RootState) => s.cart.items.reduce((n, i) => n + i.quantity, 0));
   const [open, setOpen] = useState(false);
@@ -68,13 +71,21 @@ export function Header() {
               </option>
             ))}
           </select>
-          <Link
-            href={user ? (user.emailVerified ? '/account/esims' : '/verify-email') : '/login'}
-            className="nav-login"
-          >
-            {user ? (user.emailVerified ? 'My account' : 'Verify email') : 'Log in'}{' '}
-            <ArrowUpRight size={16} />
-          </Link>
+          {user ? (
+            <AccountMenu
+              key={user.uid}
+              verified={user.emailVerified}
+              onLogout={async () => {
+                await logout();
+                setOpen(false);
+                router.replace('/');
+              }}
+            />
+          ) : (
+            <Link href="/login" className="nav-login">
+              Log in <ArrowUpRight size={16} />
+            </Link>
+          )}
           {!user && (
             <Link href="/register" className="nav-login nav-signup">
               Sign up

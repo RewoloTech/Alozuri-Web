@@ -16,6 +16,8 @@ import { z } from 'zod';
 import type { Firestore } from 'firebase-admin/firestore';
 import { database } from './firebase.js';
 import { SupplierClient } from './supplier.js';
+import { EsimUsageService, UsageError } from './usage.js';
+import type { EsimUsage } from '../../../../packages/shared/src/esim-usage.ts';
 import { currentCheckoutPlan, type PaymentMode } from './payments.js';
 import type { Principal, Repository } from './repository.js';
 import { planSchema } from './validation.js';
@@ -218,6 +220,7 @@ export class CommerceService {
     private capacity:
       ((items: { wholesaleUnits: number; quantity: number }[]) => Promise<void>) | null = null,
     private rates: Pick<ExchangeRates, 'current'> = new ExchangeRates(),
+    private usageReader = new EsimUsageService(db, new SupplierClient()),
   ) {
     const url = new URL(site);
     if (
@@ -607,7 +610,26 @@ export class CommerceService {
       };
     });
   }
+  async usage(
+    id: string,
+    unitId: string,
+    user: Principal | null,
+    access: string | undefined,
+  ): Promise<EsimUsage> {
+    const purchase = await this.order(id, user, access);
+    if (!purchase.allocations.some((unit) => unit.id === unitId))
+      throw new CommerceError('Usage is not available for this eSIM.', 404);
+    if (this.mode !== 'live' || purchase.test)
+      return { state: 'unavailable', snapshot: null, stale: false };
+    try {
+      return await this.usageReader.get(id, unitId);
+    } catch (error) {
+      if (error instanceof UsageError) throw new CommerceError(error.message, error.statusCode);
+      throw error;
+    }
+  }
   async history(user: Principal) {
+    if (!user.verified) throw new CommerceError('Sign in with a verified account.', 401);
     const [owned, email] = await Promise.all([
       this.db.collection('purchases').where('uid', '==', user.uid).limit(100).get(),
       user.email
@@ -618,7 +640,28 @@ export class CommerceService {
             .get()
         : Promise.resolve(null),
     ]);
-    return [...new Map([...owned.docs, ...(email?.docs || [])].map((d) => [d.id, d])).values()]
+    const purchases = [
+      ...new Map([...owned.docs, ...(email?.docs || [])].map((d) => [d.id, d])).values(),
+    ];
+    const allocations = new Map<string, { id: string; status: string; plan: Plan }[]>();
+    const chunks: string[][] = [];
+    for (let i = 0; i < purchases.length; i += 10)
+      chunks.push(purchases.slice(i, i + 10).map((d) => d.id));
+    const groups = await Promise.all(
+      chunks.map((ids) => this.db.collection('orders').where('parentOrderId', 'in', ids).get()),
+    );
+    for (const group of groups)
+      for (const doc of group.docs) {
+        const parentId = String(doc.get('parentOrderId'));
+        const list = allocations.get(parentId) ?? [];
+        list.push({
+          id: doc.id,
+          status: String(doc.get('status')),
+          plan: planSchema.parse(doc.get('plan')),
+        });
+        allocations.set(parentId, list);
+      }
+    return purchases
       .map((d) => {
         const p = purchaseSchema.parse(d.data());
         return {
@@ -629,6 +672,7 @@ export class CommerceService {
           status: p.status,
           test: p.test,
           createdAt: p.createdAt,
+          allocations: allocations.get(d.id) ?? [],
         };
       })
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));

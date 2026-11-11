@@ -8,6 +8,8 @@ import Stripe from 'stripe';
 import { initializeApp, deleteApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { CommerceService } from '../src/lib/commerce.ts';
+import { EsimUsageService, USAGE_CACHE_MS, type UsageSupplier } from '../src/lib/usage.ts';
+import type { UsageSnapshot } from '../../../packages/shared/src/esim-usage.ts';
 import { createApp } from '../src/app.ts';
 import { FulfillmentService, firestoreFulfillmentStore } from '../src/lib/fulfillment.ts';
 import { demoPlans } from '../../../packages/shared/src/demo.ts';
@@ -23,6 +25,7 @@ function fixture(
   capacity?: (items: { wholesaleUnits: number; quantity: number }[]) => Promise<void>,
   currency: Currency = 'USD',
   emailFailure?: () => boolean,
+  usageOptions?: { supplier: UsageSupplier; now?: () => number },
 ) {
   const plans: StoredPlan[] = demoPlans.slice(0, 2).map((p) =>
     pricePackage(
@@ -108,6 +111,15 @@ function fixture(
     },
     capacity,
     { current: async () => rates },
+    new EsimUsageService(
+      db,
+      usageOptions?.supplier ?? {
+        usage: async () => {
+          throw new Error('No live supplier calls in tests');
+        },
+      },
+      usageOptions?.now,
+    ),
   );
   const input = {
     items: [
@@ -400,6 +412,257 @@ test('GBP and EUR contract emails retain the charged currency and total after ca
   }
 });
 
+const usageReading: UsageSnapshot = {
+  kind: 'fixed',
+  usedBytes: 1073741824,
+  totalBytes: 5 * 1073741824,
+  remainingBytes: 4 * 1073741824,
+  profileStatus: 'IN_USE',
+  expiresAt: null,
+  checkedAt: new Date().toISOString(),
+};
+async function usageFixture(supplier: UsageSupplier, now = Date.now, testMode = false) {
+  await db.doc('supplierLimits/esim-usage').delete();
+  const f = fixture(testMode, undefined, 'USD', undefined, { supplier, now });
+  const result = await f.service.checkout(f.input, null);
+  f.intent.status = 'succeeded';
+  f.intent.amount_received = f.intent.amount;
+  await f.event();
+  const units = await db.collection('orders').where('parentOrderId', '==', result.orderId).get();
+  for (const unit of units.docs) {
+    await unit.ref.update({ status: 'ready', supplierOrderNo: 'vendor-' + unit.id });
+    await db.doc('fulfillmentJobs/' + unit.id).delete();
+    await db.doc('orderActivations/' + unit.id).set({
+      uid: unit.get('uid'),
+      esimTranNo: 'profile-' + unit.id,
+      ac: 'PRIVATE-ACTIVATION',
+      iccid: 'PRIVATE-ICCID',
+    });
+  }
+  return { ...f, result, units: units.docs };
+}
+test('usage is ownership protected, scoped per purchased unit, cached and absent from public Firestore', async () => {
+  let calls = 0;
+  const f = await usageFixture({
+    usage: async (orderNo, esimTranNo) => {
+      assert.ok(orderNo.startsWith('vendor-order_'));
+      assert.ok(esimTranNo.startsWith('profile-order_'));
+      calls++;
+      return usageReading;
+    },
+  });
+  const unit = f.units[0].id;
+  for (const [user, token] of [
+    [null, undefined],
+    [null, 'wrong'],
+    [{ uid: 'bob', email: 'other@example.com', verified: true }, undefined],
+  ] as const)
+    await assert.rejects(f.service.usage(f.result.orderId, unit, user, token), /not found/);
+  assert.equal(calls, 0);
+  const first = await f.service.usage(f.result.orderId, unit, null, f.result.accessToken);
+  assert.equal(first.snapshot?.remainingBytes, usageReading.remainingBytes);
+  assert.ok(!JSON.stringify(first).includes('PRIVATE'));
+  assert.ok(!JSON.stringify(first).includes('profile-'));
+  await f.service.usage(f.result.orderId, unit, null, f.result.accessToken);
+  assert.equal(calls, 1);
+  await f.service.usage(f.result.orderId, f.units[1].id, null, f.result.accessToken);
+  assert.equal(calls, 2);
+  await assert.rejects(
+    f.service.usage(f.result.orderId, 'order_' + 'f'.repeat(48), null, f.result.accessToken),
+    /not available/,
+  );
+  const anonymous = await fetch(
+    `http://${process.env.FIRESTORE_EMULATOR_HOST}/v1/projects/demo-alozuri/databases/(default)/documents/esimUsage/${unit}`,
+  );
+  assert.equal(anonymous.status, 403);
+  const history = await f.service.history({ uid: 'alice', email: f.input.email, verified: true });
+  assert.equal(history.find((order) => order.id === f.result.orderId)?.allocations.length, 3);
+  assert.ok(!JSON.stringify(history).includes('vendor-order_'));
+  assert.equal(
+    (await f.service.history({ uid: 'bob', email: 'other@example.com', verified: true })).length,
+    0,
+  );
+});
+test('usage failures retain a labelled stale reading, back off, and discard readings older than a day', async () => {
+  let now = Date.now(),
+    fail = false,
+    calls = 0;
+  const f = await usageFixture(
+    {
+      usage: async () => {
+        calls++;
+        if (fail) throw new Error('SECRET-provider-error');
+        return usageReading;
+      },
+    },
+    () => now,
+  );
+  const get = () => f.service.usage(f.result.orderId, f.units[0].id, null, f.result.accessToken);
+  await get();
+  fail = true;
+  now += USAGE_CACHE_MS + 1;
+  const stale = await get();
+  assert.equal(stale.stale, true);
+  assert.equal(stale.state, 'available');
+  await get();
+  assert.equal(calls, 2);
+  now += 25 * 60 * 60 * 1000;
+  const expired = await get();
+  assert.equal(expired.state, 'unavailable');
+  assert.equal(expired.snapshot, null);
+  assert.ok(!JSON.stringify(expired).includes('SECRET'));
+});
+test('concurrent usage refreshes share a database lease and refunds during a lookup cannot expose the result', async () => {
+  let release = () => {},
+    started = () => {},
+    calls = 0;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const entered = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  const f = await usageFixture({
+    usage: async () => {
+      calls++;
+      started();
+      await gate;
+      return usageReading;
+    },
+  });
+  const get = () => f.service.usage(f.result.orderId, f.units[0].id, null, f.result.accessToken);
+  const pending = get();
+  await entered;
+  const second = await get();
+  assert.equal(second.state, 'pending');
+  assert.equal(calls, 1);
+  await f.units[0].ref.update({ status: 'refunded', paymentBlocked: true });
+  release();
+  const result = await pending;
+  assert.equal(result.state, 'unavailable');
+  assert.equal(result.snapshot, null);
+  assert.equal((await db.doc('esimUsage/' + f.units[0].id).get()).get('snapshot'), undefined);
+});
+test('test purchases, undelivered eSIMs and mismatched activation owners never query the supplier', async () => {
+  let calls = 0;
+  const supplier = {
+    usage: async () => {
+      calls++;
+      return usageReading;
+    },
+  };
+  const sandbox = await usageFixture(supplier, Date.now, true);
+  assert.equal(
+    (
+      await sandbox.service.usage(
+        sandbox.result.orderId,
+        sandbox.units[0].id,
+        null,
+        sandbox.result.accessToken,
+      )
+    ).state,
+    'unavailable',
+  );
+  const f = await usageFixture(supplier);
+  await f.units[0].ref.update({ status: 'fulfilling' });
+  assert.equal(
+    (await f.service.usage(f.result.orderId, f.units[0].id, null, f.result.accessToken)).state,
+    'pending',
+  );
+  await f.units[0].ref.update({ status: 'ready' });
+  await db.doc('orderActivations/' + f.units[0].id).update({ uid: 'someone-else' });
+  assert.equal(
+    (await f.service.usage(f.result.orderId, f.units[0].id, null, f.result.accessToken)).state,
+    'pending',
+  );
+  assert.equal(calls, 0);
+});
+test('usage supplier reads have a shared burst limit across different purchased units', async () => {
+  let calls = 0;
+  const now = Date.now();
+  const supplier = {
+    usage: async () => {
+      calls++;
+      return usageReading;
+    },
+  };
+  const first = await usageFixture(supplier, () => now),
+    second = await usageFixture(supplier, () => now);
+  await assert.rejects(
+    first.service.usage(first.result.orderId, second.units[0].id, null, first.result.accessToken),
+    /not available/,
+  );
+  const values = await Promise.all(
+    [first, second].flatMap((f) =>
+      f.units.map((unit) => f.service.usage(f.result.orderId, unit.id, null, f.result.accessToken)),
+    ),
+  );
+  assert.equal(calls, 4);
+  assert.equal(values.filter((value) => value.state === 'available').length, 4);
+  assert.equal(values.filter((value) => value.state === 'pending').length, 2);
+});
+test('usage API validates identifiers and auth before supplier access, including guest private links', async () => {
+  let calls = 0;
+  const f = await usageFixture({
+    usage: async () => {
+      calls++;
+      return usageReading;
+    },
+  });
+  const api = await createApp({
+    repository: { plans: async () => [], orders: async () => [], order: async () => null },
+    payments: null,
+    fulfillment: null,
+    commerce: f.service,
+    demo: false,
+    verify: async (token) => ({
+      uid: token,
+      email: token === 'alice' ? f.input.email : 'other@example.com',
+      verified: token !== 'unverified',
+    }),
+  });
+  try {
+    const url = `/v2/orders/${f.result.orderId}/units/${f.units[0].id}/usage`;
+    assert.equal((await api.inject({ method: 'GET', url })).statusCode, 404);
+    assert.equal(
+      (await api.inject({ method: 'GET', url, headers: { authorization: 'Bearer bob' } }))
+        .statusCode,
+      404,
+    );
+    assert.equal(
+      (await api.inject({ method: 'GET', url, headers: { authorization: 'Bearer unverified' } }))
+        .statusCode,
+      401,
+    );
+    assert.equal(
+      (
+        await api.inject({
+          method: 'GET',
+          url: url + '?esimTranNo=other',
+          headers: { 'x-order-access': f.result.accessToken },
+        })
+      ).statusCode,
+      400,
+    );
+    assert.equal(calls, 0);
+    const response = await api.inject({
+      method: 'GET',
+      url,
+      headers: { 'x-order-access': f.result.accessToken },
+    });
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.headers['cache-control'], 'no-store');
+    assert.equal(response.json().usage.snapshot.remainingBytes, usageReading.remainingBytes);
+    assert.equal(
+      (await api.inject({ method: 'GET', url, headers: { authorization: 'Bearer alice' } }))
+        .statusCode,
+      200,
+    );
+    assert.equal(calls, 1);
+  } finally {
+    await api.close();
+  }
+});
 test('public Firestore clients cannot read supplier pricing or bypass the importer with direct writes', async () => {
   const f = fixture(true);
   await db.doc('packages/private-pricing-test').set(f.plans[0]);

@@ -211,7 +211,7 @@ function AccountDashboard() {
           )}
         </div>
         <aside className="stack">
-          <div className="surface">
+          <div className="surface" id="account-settings">
             <h2>Account details</h2>
             {user ? (
               <>

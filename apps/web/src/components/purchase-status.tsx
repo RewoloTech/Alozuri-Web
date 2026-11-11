@@ -8,6 +8,7 @@ import { removeFromCart, quantityChanged, type RootState } from '@/lib/store';
 import { api } from '@/lib/api';
 import { useAuth } from './auth-provider';
 import { InstallationDetails } from './installation-details';
+import { EsimUsagePanel } from './esim-usage';
 import { LineDescription } from './cart';
 export type Purchase = {
   id: string;
@@ -192,7 +193,10 @@ function PrivatePurchase({ id }: { id: string }) {
                 <h2>{a.plan.name}</h2>
                 <p>Status: {a.status.replaceAll('_', ' ')}</p>
                 {a.status === 'ready' && !order.test ? (
-                  <InstallationDetails orderId={a.id} purchaseId={id} accessToken={access} />
+                  <>
+                    <EsimUsagePanel purchaseId={id} unitId={a.id} accessToken={access} />
+                    <InstallationDetails orderId={a.id} purchaseId={id} accessToken={access} />
+                  </>
                 ) : a.status === 'provision_error' ? (
                   <p>Delivery needs attention. Contact support with your order reference.</p>
                 ) : a.status === 'refund_pending' ? (
@@ -228,6 +232,10 @@ function PrivatePurchase({ id }: { id: string }) {
   );
 }
 export function PurchaseHistory() {
+  const { user } = useAuth();
+  return <PurchaseHistoryForIdentity key={user?.uid ?? 'guest'} />;
+}
+function PurchaseHistoryForIdentity() {
   const { user } = useAuth();
   return <AccountPurchases key={user?.uid ?? 'guest'} />;
 }
@@ -290,6 +298,26 @@ function AccountPurchases() {
               <Link className="button" href={'/checkout/success?order=' + order.id}>
                 View order and installation
               </Link>
+              {order.test ? (
+                <p className="fine-print">Test order. No eSIM usage is available.</p>
+              ) : (
+                (order.allocations ?? []).map((unit) => (
+                  <section className="surface stack" key={unit.id}>
+                    <h3>{unit.plan.name}</h3>
+                    {unit.status === 'ready' ? (
+                      <>
+                        <EsimUsagePanel purchaseId={order.id} unitId={unit.id} />
+                        <InstallationDetails purchaseId={order.id} orderId={unit.id} />
+                      </>
+                    ) : (
+                      <p>
+                        eSIM status: {unit.status.replaceAll('_', ' ')}. Usage will be available
+                        after delivery.
+                      </p>
+                    )}
+                  </section>
+                ))
+              )}
             </article>
           ))}
         </div>

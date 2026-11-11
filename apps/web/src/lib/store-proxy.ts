@@ -7,7 +7,7 @@ export function allowedStoreRequest(method: string, path: string): boolean {
     `^/v1/packages/${id}$`,
     '^/v2/search/plans$',
     '^/v2/(cart|orders)$',
-    `^/v2/orders/${id}(/units/${id}/activation)?$`,
+    `^/v2/orders/${id}(/units/${id}/(activation|usage))?$`,
     `^/v1/orders(/${id}(/activation|/payment-status)?)?$`,
   ];
   if (method === 'GET') return reads.some((pattern) => new RegExp(pattern).test(path));

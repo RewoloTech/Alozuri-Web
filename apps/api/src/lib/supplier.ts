@@ -4,6 +4,8 @@ import { dataSizeLabel, type StoredPlan } from '../../../../packages/shared/src/
 import { pricePackage } from './package-pricing.js';
 import { moneyInteger } from './pricing.js';
 import { storedPlanSchema } from './validation.js';
+import { parseSupplierUsage } from './usage-data.js';
+import type { UsageSnapshot } from '../../../../packages/shared/src/esim-usage.ts';
 const sourcePackage = z.object({
   packageCode: z.string().min(1).max(200),
   name: z.string().min(1).max(1000),
@@ -215,6 +217,28 @@ export class SupplierClient {
     )
       throw new Error('Supplier profile does not match the order.');
     return activationSchema.parse(p);
+  }
+  async usage(
+    orderNo: string,
+    esimTranNo: string,
+    packageCode: string,
+    kind: UsageSnapshot['kind'],
+  ): Promise<UsageSnapshot | null> {
+    for (const value of [orderNo, esimTranNo, packageCode]) z.string().min(1).max(200).parse(value);
+    try {
+      return parseSupplierUsage(
+        await this.request('esim/query', {
+          orderNo,
+          esimTranNo,
+          pager: { pageNum: 1, pageSize: 5 },
+        }),
+        { orderNo, esimTranNo, packageCode },
+        kind,
+      );
+    } catch (error) {
+      if (error instanceof SupplierError && error.code === '200010') return null;
+      throw error;
+    }
   }
   async packages(
     filters: { packageCode?: string; locationCode?: string } = {},

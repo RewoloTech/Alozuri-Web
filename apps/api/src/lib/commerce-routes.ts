@@ -83,6 +83,21 @@ export function registerCommerceRoutes(
       ),
     }),
   );
+  app.get<{ Params: { id: string; unit: string } }>(
+    '/v2/orders/:id/units/:unit/usage',
+    { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } },
+    async (req) => {
+      z.object({}).strict().parse(req.query);
+      return {
+        usage: await commerce().usage(
+          id.parse(req.params.id),
+          unit.parse(req.params.unit),
+          await user(req.headers.authorization),
+          z.string().max(200).optional().parse(req.headers['x-order-access']),
+        ),
+      };
+    },
+  );
   app.get('/v2/orders', async (req) => ({
     orders: await commerce().history((await user(req.headers.authorization, true))!),
   }));

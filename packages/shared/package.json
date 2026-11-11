@@ -10,7 +10,9 @@
     "./privacy": "./src/privacy.ts",
     "./policies": "./src/policies.ts",
     "./featured": "./src/featured.ts",
-    "./currency": "./src/currency.ts"
+    "./currency": "./src/currency.ts",
+    "./destination-inspiration": "./src/destination-inspiration.ts",
+    "./esim-usage": "./src/esim-usage.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
