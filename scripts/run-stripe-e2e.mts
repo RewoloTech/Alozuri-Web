@@ -1,3 +1,4 @@
+import { pricePackage } from '../apps/api/src/lib/package-pricing.ts';
 // Real Stripe sandbox card payment + local Firestore. Never loads live keys or calls the supplier.
 import { readFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
@@ -35,7 +36,7 @@ if (!secret?.startsWith('sk_test_') || !publishable?.startsWith('pk_test_'))
 const firebase = initializeApp({ projectId: 'demo-alozuri' }),
   db = getFirestore(firebase),
   stripe = new Stripe(secret, { maxNetworkRetries: 1, timeout: 15000 });
-const plan: StoredPlan = {
+const plan: StoredPlan = pricePackage({
   id: 'esim-stripe-integration',
   name: 'Alozuri sandbox verification',
   countries: ['FR'],
@@ -52,7 +53,7 @@ const plan: StoredPlan = {
   active: true,
   supplierCode: 'no-supplier-call',
   wholesaleUnits: 1000,
-};
+});
 const webhookSecret = 'whsec_local_stripe_e2e_transport',
   service = new CommerceService(
     stripe,

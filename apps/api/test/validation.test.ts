@@ -1,3 +1,4 @@
+import { pricePackage } from '../src/lib/package-pricing.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createApp } from '../src/app.js';
@@ -7,7 +8,10 @@ import { demoPlans } from '../../../packages/shared/src/demo.ts';
 const now = Date.parse('2026-11-09T12:00:00.000Z');
 const plan = { ...demoPlans[0], active: true, syncedAt: new Date(now).toISOString() };
 test('catalogue rejects corrupt, stale, inactive and future records and strips private fields', () => {
-  const publicPlan = cataloguePlan({ ...plan, wholesaleUnits: 123, supplierCode: 'secret' }, now);
+  const publicPlan = cataloguePlan(
+    pricePackage({ ...plan, wholesaleUnits: 123, supplierCode: 'secret' }),
+    now,
+  );
   assert.ok(publicPlan);
   assert.equal('wholesaleUnits' in publicPlan, false);
   assert.equal('active' in publicPlan, false);
@@ -20,9 +24,15 @@ test('catalogue rejects corrupt, stale, inactive and future records and strips p
     { active: false },
     { syncedAt: 'invalid' },
     { syncedAt: new Date(now + 1).toISOString() },
-    { syncedAt: new Date(now - 36 * 60 * 60 * 1000).toISOString() },
+    { catalogueDate: '2000-01-01' },
   ])
-    assert.equal(cataloguePlan({ ...plan, ...patch }, now), null);
+    assert.equal(
+      cataloguePlan(
+        { ...pricePackage({ ...plan, wholesaleUnits: 123, supplierCode: 'secret' }), ...patch },
+        now,
+      ),
+      null,
+    );
 });
 test('order validates stored fields only after ownership and never exposes nested secrets', () => {
   const order = {

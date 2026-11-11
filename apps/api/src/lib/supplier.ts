@@ -1,16 +1,14 @@
 import { createHmac, randomUUID, createHash } from 'node:crypto';
 import { z } from 'zod';
-import {
-  priceRetail,
-  dataSizeLabel,
-  type StoredPlan,
-} from '../../../../packages/shared/src/index.ts';
+import { dataSizeLabel, type StoredPlan } from '../../../../packages/shared/src/index.ts';
+import { pricePackage } from './package-pricing.js';
+import { moneyInteger } from './pricing.js';
 import { storedPlanSchema } from './validation.js';
 const sourcePackage = z.object({
   packageCode: z.string().min(1).max(200),
   name: z.string().min(1).max(1000),
-  price: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
-  currencyCode: z.literal('USD'),
+  price: z.unknown().optional(),
+  currencyCode: z.unknown().optional(),
   volume: z.number().nonnegative().max(Number.MAX_SAFE_INTEGER),
   duration: z.number().int().positive().max(3660),
   durationUnit: z.literal('DAY'),
@@ -52,7 +50,7 @@ export function adaptPackage(input: unknown, syncedAt: string): StoredPlan | nul
     countries,
     dataGb: p.volume / 1073741824,
     days: p.duration,
-    priceCents: Math.max(50, priceRetail(p.price)),
+    priceCents: 0,
     currency: 'USD' as const,
     dataType: (p.dataType === 4 || (p.dataType === 1 && /\bunlimited\b/i.test(p.name))
       ? 'unlimited'
@@ -82,15 +80,15 @@ export function adaptPackage(input: unknown, syncedAt: string): StoredPlan | nul
               ? 'Supplier describes this plan as unlimited. Check plan name and supplier conditions for speed restrictions.'
               : 'Fixed total data allowance. Data only; no local phone number.'),
     syncedAt,
-    active: true,
+    active: p.currencyCode === 'USD' && moneyInteger(p.price),
   };
   if (!storedPlanSchema.safeParse(publicFields).success) return null;
-  return {
+  return pricePackage({
     ...publicFields,
     providerId: 'esim-access',
     supplierCode: p.packageCode,
-    wholesaleUnits: p.price,
-  };
+    wholesaleUnits: p.currencyCode === 'USD' && moneyInteger(p.price) ? p.price : 0,
+  });
 }
 export class SupplierError extends Error {
   constructor(

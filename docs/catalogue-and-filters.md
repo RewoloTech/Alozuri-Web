@@ -12,6 +12,8 @@ The interface offers all plans, 1/3/5/10/20/50 GB or more, daily plans, and unli
 
 ## Retail pricing and gross profit
 
+The following describes the currently deployed fixed pricing. The pending tiered implementation, dated catalogue policy, multi-currency conversion and guarded migration are documented in [automatic pricing](automatic-pricing.md); they have not been deployed or applied to live records.
+
 The supplier supplies wholesale costs; Alozuri calculates retail prices. `adaptPackage` applies `priceRetail` during sync and again when checkout revalidates the supplier product. The current default is **1.8 × wholesale cost**, rounded up to whole USD cents, with a 30% minimum-margin guard and a $0.50 minimum selling price. At the default multiplier the 80% markup exceeds the 30% guard. Prices shown to customers are the saved retail `priceCents` in Firestore, not the CSV's suggested retail column or a browser-provided amount. No markup or existing selling prices were changed by the search audit.
 
 A read-only audit on 2026-11-11 found 3,283 active products, gross margins of 44.44–45.00% after cent rounding, and no price below $0.50. A France 50 GB product cost $17.00 wholesale and sold for $30.60: **$13.60 gross profit**, **80% markup on cost**, **44.44% gross margin on sales**. These are not net profits: Stripe fees, taxes, refunds, exchange costs and operating expenses are not included. Actual fees vary by transaction; do not invent a fixed net profit. Supplier cost and product codes remain private; search responses contain an explicit public-field allowlist.

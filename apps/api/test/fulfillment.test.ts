@@ -333,3 +333,25 @@ test('supplier adapter binds delivery profile to the original order and package'
     globalThis.fetch = originalFetch;
   }
 });
+
+for (const currency of ['GBP', 'EUR'] as const)
+  for (const rejected of [false, true])
+    test(`${currency} delivery ${rejected ? 'refunds' : 'fulfils'} in the exact charged currency`, async () => {
+      const f = fixture();
+      f.order.currency = currency;
+      f.order.plan.currency = currency;
+      f.order.parentOrderId = 'purchase_' + 'c'.repeat(48);
+      f.order.chargeTotalCents = f.order.amountCents;
+      delete f.order.sessionId;
+      f.intent.currency = currency.toLowerCase();
+      f.refund.currency = currency.toLowerCase();
+      Object.assign(f.intent, { metadata: { alozuriPurchaseId: f.order.parentOrderId } });
+      if (rejected)
+        f.supplier.order = async () => {
+          throw new SupplierError('200011', true);
+        };
+      assert.deepEqual(await f.service.run(), { processed: 1, failed: 0 });
+      assert.equal(f.order.status, rejected ? 'refunded' : 'ready');
+      assert.equal(f.getRefunds(), rejected ? 1 : 0);
+      assert.equal(f.order.currency, currency);
+    });

@@ -28,14 +28,12 @@ test('supplier adapter uses explicit coverage, unit conversion, retail margin an
   const p = adaptPackage(source, new Date().toISOString())!;
   assert.ok(p);
   assert.deepEqual(p.countries, ['FR']);
-  assert.equal(p.priceCents, 126);
+  assert.equal(p.priceCents, 199);
   assert.equal(p.dataGb, 1);
   assert.ok(p.activation.includes('first connection'));
   for (const patch of [
     { location: 'Europe' },
-    { currencyCode: 'EUR' },
     { dataType: 9 },
-    { price: -1 },
     { durationUnit: 'HOUR' },
     { volume: 'bad' },
   ])

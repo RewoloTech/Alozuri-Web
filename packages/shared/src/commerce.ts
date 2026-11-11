@@ -3,7 +3,7 @@ export type CartLine = { plan: Plan; quantity: number; unavailable?: boolean };
 export type CartItem = { planId: string; quantity: number };
 export const MAX_QUANTITY = 5;
 export const MAX_CART_UNITS = 10;
-export const SUPPORTED_CURRENCIES = ['USD'] as const;
+export const SUPPORTED_CURRENCIES = ['USD', 'GBP', 'EUR'] as const;
 export function cartItems(lines: CartLine[]): CartItem[] {
   return lines.map(({ plan, quantity }) => ({ planId: plan.id, quantity }));
 }

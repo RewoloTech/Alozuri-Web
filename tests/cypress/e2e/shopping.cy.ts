@@ -1,3 +1,5 @@
+import type { Interception } from 'cypress/types/net-stubbing';
+import type { Plan } from '../../../packages/shared/src/index';
 import { searchPageFixture } from '../../fixtures/search';
 import {
   button,
@@ -317,5 +319,143 @@ describe('paged and accessible search', () => {
     cy.contains('button', 'Change destination')
       .should('be.focused')
       .and('have.attr', 'aria-expanded', 'false');
+  });
+});
+
+describe('server-authoritative customer currencies', () => {
+  beforeEach(() => {
+    mockCommerce();
+    cy.on('window:before:load', (win) => installStripeStub(win, false));
+  });
+  it('reprices search, cart quantities and checkout in GBP/EUR and locks currency during payment', () => {
+    cy.viewport(390, 844);
+    const displayed = (currency: string): Plan => ({
+      ...localPlan,
+      currency: currency === 'GBP' ? 'GBP' : currency === 'EUR' ? 'EUR' : 'USD',
+      priceCents: currency === 'GBP' ? 999 : currency === 'EUR' ? 1199 : 1500,
+    });
+    cy.intercept('GET', 'http://127.0.0.1:8189/v2/search/plans*', (req) => {
+      const currency = new URL(req.url).searchParams.get('currency') || 'USD';
+      req.reply({
+        headers: { 'access-control-allow-origin': 'http://localhost:3100' },
+        body: searchPageFixture([displayed(currency)]),
+      });
+    });
+    cy.intercept('GET', 'http://127.0.0.1:8189/v1/packages/' + localPlan.id + '*', (req) => {
+      const currency = new URL(req.url).searchParams.get('currency') || 'USD';
+      req.reply({
+        headers: { 'access-control-allow-origin': 'http://localhost:3100' },
+        body: { plan: displayed(currency) },
+      });
+    });
+    cy.intercept('POST', /http:\/\/127\.0\.0\.1:8189\/v2\/(quote|checkout)$/, (req) => {
+      const currency = req.body.currency,
+        quantity = req.body.items[0].quantity;
+      const p = displayed(currency);
+      const quote = {
+        items: [{ plan: p, quantity }],
+        currency,
+        subtotalCents: p.priceCents * quantity,
+        taxCents: 0,
+        totalCents: p.priceCents * quantity,
+      };
+      const checkout = req.url.endsWith('/checkout');
+      if (checkout) {
+        req.alias = 'currencyCheckout';
+        expect(req.body.expectedTotalCents).to.eq(2398);
+        expect(currency).to.eq('EUR');
+      }
+      req.reply({
+        headers: { 'access-control-allow-origin': 'http://localhost:3100' },
+        body: checkout
+          ? {
+              orderId: 'purchase_' + 'c'.repeat(48),
+              accessToken: 'private-currency-test',
+              clientSecret: 'pi_currency_secret',
+              paymentMode: 'test',
+              quote,
+            }
+          : { quote },
+      });
+    });
+    cy.visit('/?mode=country&countries=FR');
+    button('Find my eSIM').click();
+    cy.get('select[aria-label="Currency"]').select('GBP');
+    cy.get('.plan-card strong').should('contain', '£9.99');
+    cy.get('.plan-card a').click();
+    button('Add to cart').click();
+    cy.visit('/cart');
+    cy.get('.commerce-total').should('contain', 'GBP').and('contain', '£9.99');
+    cy.get('select[aria-label="Currency"]').select('EUR');
+    cy.get('.commerce-total').should('contain', 'EUR').and('contain', '€11.99');
+    cy.get('button[aria-label^="Increase quantity"]').click();
+    cy.get('.commerce-total').should('contain', '€23.98');
+    cy.contains('a', 'Secure checkout').click();
+    cy.contains('label', 'Email address').find('input').type('currency@example.com');
+    cy.contains('label', 'Confirm email address').find('input').type('currency@example.com');
+    cy.get('input[type="checkbox"]').check();
+    button('Continue to payment').click();
+    cy.wait('@currencyCheckout');
+    cy.get('select[aria-label="Currency"]').should('be.disabled').and('have.value', 'EUR');
+    button('Pay securely').should('be.visible');
+    cy.screenshot('currency-eur-checkout-mobile', { capture: 'fullPage' });
+  });
+});
+
+describe('currency-specific checkout idempotency', () => {
+  beforeEach(() => {
+    mockCommerce();
+    cy.on('window:before:load', (win) => installStripeStub(win, false));
+  });
+  it('uses a new checkout attempt when currencies round to the same numeric total', () => {
+    cy.intercept('POST', /http:\/\/127\.0\.0\.1:8189\/v2\/(quote|checkout)$/, (req) => {
+      const currency = req.body.currency;
+      const p = { ...localPlan, currency, priceCents: 500 };
+      const quote = {
+        items: [{ plan: p, quantity: 1 }],
+        currency,
+        subtotalCents: 500,
+        taxCents: 0,
+        totalCents: 500,
+      };
+      const checkout = req.url.endsWith('/checkout');
+      if (checkout) req.alias = 'sameAmountCheckout';
+      req.reply({
+        headers: { 'access-control-allow-origin': 'http://localhost:3100' },
+        body: checkout
+          ? {
+              orderId: 'purchase_' + 'c'.repeat(48),
+              accessToken: 'private-currency-test',
+              clientSecret: 'pi_same_amount_secret',
+              paymentMode: 'test',
+              quote,
+            }
+          : { quote },
+      });
+    });
+    const start = () => {
+      cy.contains('label', 'Email address').find('input').type('currency@example.com');
+      cy.contains('label', 'Confirm email address').find('input').type('currency@example.com');
+      cy.get('input[type="checkbox"]').check();
+      button('Continue to payment').click();
+      cy.wait('@sameAmountCheckout');
+      button('Pay securely').should('be.visible');
+    };
+    cy.visit('/plans/' + localPlan.id);
+    button('Add to cart').click();
+    cy.visit('/checkout');
+    start();
+    cy.visit('/cart');
+    cy.get('select[aria-label="Currency"]').select('EUR');
+    cy.get('.commerce-total').should('contain', 'EUR');
+    cy.contains('a', 'Secure checkout').click();
+    start();
+    cy.get<Interception[]>('@sameAmountCheckout.all').then((requests) => {
+      expect(requests).to.have.length(2);
+      const [first, second] = requests;
+      expect(first.request.body.currency).to.eq('USD');
+      expect(second.request.body.currency).to.eq('EUR');
+      expect(first.request.body.requestId).not.to.eq(second.request.body.requestId);
+    });
   });
 });

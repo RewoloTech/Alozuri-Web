@@ -4,9 +4,11 @@ import Link from 'next/link';
 import { useDispatch, useSelector } from 'react-redux';
 import { dataLabel, countryName, money, coverageLabel, type Plan } from '@voyaspan/shared';
 import { demoPlans } from '@voyaspan/shared/demo';
+import { useCurrency } from './currency-provider';
 import { api, demoMode } from '@/lib/api';
 import { addToCart, type RootState } from '@/lib/store';
 export function PlanDetails({ id }: { id: string; review?: boolean }) {
+  const { currency, refresh } = useCurrency();
   const dispatch = useDispatch(),
     cart = useSelector((s: RootState) => s.cart);
   const [plan, setPlan] = useState<Plan | null>(() =>
@@ -19,7 +21,13 @@ export function PlanDetails({ id }: { id: string; review?: boolean }) {
   useEffect(() => {
     if (demoMode) return;
     let active = true;
-    void api<{ plan: Plan }>('/v1/packages/' + encodeURIComponent(id))
+    setLoading(true);
+    setError('');
+    void api<{ plan: Plan }>(
+      '/v1/packages/' +
+        encodeURIComponent(id) +
+        (currency === 'USD' ? '' : '?currency=' + currency),
+    )
       .then((r) => {
         if (active) setPlan(r.plan);
       })
@@ -32,14 +40,18 @@ export function PlanDetails({ id }: { id: string; review?: boolean }) {
     return () => {
       active = false;
     };
-  }, [id]);
+  }, [id, currency, refresh]);
   async function add() {
     if (!plan || plan.demo) return;
     setAdding(true);
     setAdded(false);
     setError('');
     try {
-      const fresh = await api<{ plan: Plan }>('/v1/packages/' + encodeURIComponent(id));
+      const fresh = await api<{ plan: Plan }>(
+        '/v1/packages/' +
+          encodeURIComponent(id) +
+          (currency === 'USD' ? '' : '?currency=' + currency),
+      );
       if (fresh.plan.demo) throw new Error('Sample plans cannot be purchased.');
       setPlan(fresh.plan);
       dispatch(addToCart(fresh.plan));
@@ -133,7 +145,7 @@ export function PlanDetails({ id }: { id: string; review?: boolean }) {
         <aside className="surface purchase-summary">
           <span className="eyebrow">{plan.demo ? 'SAMPLE PLAN' : 'PLAN SUMMARY'}</span>
           <h2>
-            {money(plan.priceCents)} <small>USD</small>
+            {money(plan.priceCents, plan.currency)} <small>{plan.currency}</small>
           </h2>
           <p>
             {dataLabel(plan)} · {plan.days} days

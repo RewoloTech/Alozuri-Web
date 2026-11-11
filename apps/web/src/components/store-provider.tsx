@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { Provider } from 'react-redux';
 import { searchState, readSearch } from '@voyaspan/shared';
+import { CurrencyProvider } from './currency-provider';
 import { makeStore, restoreSearch } from '@/lib/store';
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [store] = useState(makeStore);
@@ -26,5 +27,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       } catch {}
     });
   }, [store]);
-  return <Provider store={store}>{children}</Provider>;
+  return (
+    <CurrencyProvider>
+      <Provider store={store}>{children}</Provider>
+    </CurrencyProvider>
+  );
 }

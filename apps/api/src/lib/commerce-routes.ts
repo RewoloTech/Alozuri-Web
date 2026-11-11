@@ -1,3 +1,4 @@
+import { currencySchema } from './exchange-rates.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { database } from './firebase.js';
@@ -36,10 +37,10 @@ export function registerCommerceRoutes(
     { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
     async (req) => {
       const input = z
-        .object({ items: itemsSchema, currency: z.literal('USD') })
+        .object({ items: itemsSchema, currency: currencySchema })
         .strict()
         .parse(req.body);
-      return { quote: await commerce().quote(input.items) };
+      return { quote: await commerce().quote(input.items, input.currency) };
     },
   );
   app.post(
@@ -54,7 +55,7 @@ export function registerCommerceRoutes(
           emailConfirmation: z.email().max(254),
           requestId: z.uuid(),
           compatible: z.literal(true),
-          currency: z.literal('USD'),
+          currency: currencySchema,
           expectedTotalCents: z.number().int().positive(),
         })
         .strict()

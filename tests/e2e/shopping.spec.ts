@@ -49,7 +49,12 @@ async function setup(page: Page) {
       return;
     }
     let data: unknown = {};
-    if (url.pathname === '/v1/config') data = { paymentMode: 'test', cartCheckoutMode: 'test' };
+    if (url.pathname === '/v1/config')
+      data = {
+        paymentMode: 'test',
+        cartCheckoutMode: 'test',
+        supportedCurrencies: ['USD', 'GBP', 'EUR'],
+      };
     else if (url.pathname === '/v1/countries')
       data = {
         countries: [

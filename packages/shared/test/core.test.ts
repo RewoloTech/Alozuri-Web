@@ -4,7 +4,6 @@ import {
   canTransition,
   matchPlans,
   normalizeCountries,
-  priceRetail,
   retailPlan,
   type StoredPlan,
 } from '../src/index.ts';
@@ -35,12 +34,6 @@ test('data filter and value sorting apply to all matching plans', () => {
       (p, i) => i === 0 || plans[i - 1].priceCents / plans[i - 1].dataGb <= p.priceCents / p.dataGb,
     ),
   );
-});
-test('supplier units convert to cents and respect minimum margin', () => {
-  assert.equal(priceRetail(58600, 1.8), 1055);
-  assert.equal(priceRetail(58600, 1, 0.5), 1172);
-  assert.throws(() => priceRetail(-1));
-  assert.throws(() => priceRetail(58600, 1, 1));
 });
 test('public products exclude wholesale and supplier fields', () => {
   const stored: StoredPlan = {

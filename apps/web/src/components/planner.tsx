@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useId, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useDispatch, useSelector } from 'react-redux';
 import {
@@ -43,6 +43,7 @@ import {
   type DataAllowance,
 } from '@voyaspan/shared';
 import { demoPlans } from '@voyaspan/shared/demo';
+import { useCurrency } from './currency-provider';
 import { api, demoMode } from '@/lib/api';
 export function Planner({
   initialCountries = [],
@@ -54,6 +55,9 @@ export function Planner({
   destinationMode?: boolean;
 }) {
   const dispatch = useDispatch();
+  const { currency, refresh } = useCurrency();
+  const currencyKey = currency + refresh;
+  const previousCurrency = useRef(currencyKey);
   const saved = useSelector((s: RootState) => s.itinerary);
   const [error, setError] = useState('');
   // Tabs show the user's choice immediately; draft validation stays in the shared state.
@@ -203,6 +207,7 @@ export function Planner({
     try {
       let response: SearchPage;
       if (demoMode) {
+        if (currency !== 'USD') throw new Error('Sample plans are available in USD only.');
         const matches = matchPlans(demoPlans, selected, minGb, dataType).filter(
           (p) => mode === 'trip' || regional || p.countries.length === 1,
         );
@@ -240,6 +245,7 @@ export function Planner({
           sort: order,
           pageSize: '12',
         });
+        if (currency !== 'USD') params.set('currency', currency);
         if (cursor) params.set('cursor', cursor);
         response = await api<SearchPage>('/v2/search/plans?' + params, { signal: abort.signal });
       }
@@ -278,6 +284,14 @@ export function Planner({
       }
     }
   }
+  const refreshPrices = useEffectEvent(() => {
+    if (page !== null || loading) void search();
+  });
+  useEffect(() => {
+    if (previousCurrency.current === currencyKey) return;
+    previousCurrency.current = currencyKey;
+    refreshPrices();
+  }, [currencyKey]);
   return (
     <>
       <section
@@ -628,8 +642,12 @@ export function PlanCard({ plan, highlight = false }: { plan: PlanSummary; highl
       </div>
       <div className="plan-bottom">
         <div>
-          <strong>{money(plan.priceCents)}</strong>
-          <span> USD{plan.demo ? ' · sample price' : ''}</span>
+          <strong>{money(plan.priceCents, plan.currency)}</strong>
+          <span>
+            {' '}
+            {plan.currency}
+            {plan.demo ? ' · sample price' : ''}
+          </span>
         </div>
         <Link href={`/plans/${plan.id}`} className="button small">
           View plan <ArrowRight size={16} />

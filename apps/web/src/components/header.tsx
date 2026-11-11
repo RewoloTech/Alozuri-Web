@@ -4,6 +4,8 @@ import { ArrowUpRight, Globe2, Menu, X, ShoppingBag } from 'lucide-react';
 import { useSelector } from 'react-redux';
 import type { RootState } from '@/lib/store';
 import { useState } from 'react';
+import { SUPPORTED_CURRENCIES } from '@voyaspan/shared';
+import { useCurrency } from './currency-provider';
 import { useAuth } from './auth-provider';
 export function Brand() {
   return (
@@ -17,6 +19,7 @@ export function Brand() {
 }
 export function Header() {
   const { user } = useAuth();
+  const { currency, setCurrency, available, locked } = useCurrency();
   const quantity = useSelector((s: RootState) => s.cart.items.reduce((n, i) => n + i.quantity, 0));
   const [open, setOpen] = useState(false);
   return (
@@ -47,9 +50,22 @@ export function Header() {
               </span>
             )}
           </Link>
-          <span className="currency">
-            <Globe2 size={15} /> USD $
-          </span>
+          <select
+            className="currency-select"
+            aria-label="Currency"
+            disabled={locked}
+            value={currency}
+            onChange={(e) => {
+              const value = SUPPORTED_CURRENCIES.find((c) => c === e.target.value);
+              if (value) setCurrency(value);
+            }}
+          >
+            {available.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
           <Link
             href={user ? (user.emailVerified ? '/account/esims' : '/verify-email') : '/login'}
             className="nav-login"

@@ -1,3 +1,13 @@
+import {
+  ExchangeRates,
+  currencySchema,
+  convertedPlan,
+  priceExchange,
+  type PriceExchange,
+} from './exchange-rates.js';
+import { validPackagePricing, currentCatalogueDate } from './package-pricing.js';
+import { checkedMoney } from './pricing.js';
+import type { Currency } from '../../../../packages/shared/src/index.ts';
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import Stripe from 'stripe';
 import { z } from 'zod';
@@ -41,43 +51,64 @@ export const itemsSchema = z
   });
 const snapshotSchema = z.object({
   plan: planSchema,
+  baseSellingPriceUsdCents: z.number().int().positive().optional(),
+  pricingVersion: z.string().optional(),
+  exchange: z
+    .object({
+      source: z.string(),
+      asOf: z.string(),
+      fetchedAt: z.string(),
+      numerator: z.string(),
+      denominator: z.string(),
+    })
+    .optional(),
   quantity: z.number().int().min(1).max(5),
   supplierCode: z.string().min(1),
   wholesaleUnits: z.number().int().positive(),
 });
-const purchaseSchema = z.object({
-  uid: z.string().nullable(),
-  email: z.email(),
-  items: z.array(snapshotSchema).min(1).max(10),
-  currency: z.literal('USD'),
-  totalCents: z.number().int().positive(),
-  status: z.enum([
-    'pending_payment',
-    'payment_processing',
-    'paid',
-    'cancelled',
-    'refunded',
-    'refund_pending',
-    'attention',
-  ]),
-  test: z.boolean(),
-  createdAt: z.string(),
-  accessHash: z.string(),
-  paymentIntentId: z.string().optional(),
-  paidAt: z.string().optional(),
-});
+const purchaseSchema = z
+  .object({
+    uid: z.string().nullable(),
+    email: z.email(),
+    items: z.array(snapshotSchema).min(1).max(10),
+    currency: currencySchema,
+    totalCents: z.number().int().positive(),
+    status: z.enum([
+      'pending_payment',
+      'payment_processing',
+      'paid',
+      'cancelled',
+      'refunded',
+      'refund_pending',
+      'attention',
+    ]),
+    test: z.boolean(),
+    createdAt: z.string(),
+    accessHash: z.string(),
+    paymentIntentId: z.string().optional(),
+    paidAt: z.string().optional(),
+  })
+  .refine(
+    (p) =>
+      p.items.every((i) => i.plan.currency === p.currency) &&
+      p.items.reduce((n, i) => n + BigInt(i.plan.priceCents) * BigInt(i.quantity), 0n) ===
+        BigInt(p.totalCents),
+    'Stored payment amount or currency mismatch.',
+  );
 type Purchase = z.infer<typeof purchaseSchema>;
 export type Quote = {
   items: { plan: Plan; quantity: number }[];
   subtotalCents: number;
   taxCents: number;
   totalCents: number;
-  currency: 'USD';
+  currency: Currency;
 };
 const hash = (s: string) => createHash('sha256').update(s).digest('hex');
 export async function priceCart(
   items: CartItem[],
   loadPlan: (id: string) => Promise<StoredPlan>,
+  currency: Currency = 'USD',
+  exchange: PriceExchange = priceExchange('USD'),
 ): Promise<{ quote: Quote; snapshots: z.infer<typeof snapshotSchema>[] }> {
   const normalized = itemsSchema.parse(items);
   if (!normalized.length) throw new CommerceError('Your cart is empty.');
@@ -89,7 +120,9 @@ export async function priceCart(
       p.demo ||
       p.currency !== 'USD' ||
       !p.active ||
-      p.priceCents < 50 ||
+      !validPackagePricing(p) ||
+      !currentCatalogueDate(p.catalogueDate) ||
+      p.priceCents < 199 ||
       !Number.isSafeInteger(p.priceCents) ||
       !p.supplierCode ||
       !Number.isSafeInteger(p.wholesaleUnits) ||
@@ -97,13 +130,18 @@ export async function priceCart(
     )
       throw new CommerceError('A plan is unavailable. Update your cart.');
     snapshots.push({
-      plan: planSchema.parse(p),
+      plan: convertedPlan(planSchema.parse(p), currency, exchange),
+      baseSellingPriceUsdCents: p.priceCents,
+      pricingVersion: p.pricingVersion,
+      exchange,
       quantity: item.quantity,
       supplierCode: p.supplierCode,
       wholesaleUnits: p.wholesaleUnits,
     });
   }
-  const total = snapshots.reduce((n, i) => n + i.plan.priceCents * i.quantity, 0);
+  const total = checkedMoney(
+    snapshots.reduce((n, i) => n + BigInt(i.plan.priceCents) * BigInt(i.quantity), 0n),
+  );
   if (!Number.isSafeInteger(total) || total > 99999999)
     throw new CommerceError('Order amount is outside the supported range.');
   return {
@@ -113,7 +151,7 @@ export async function priceCart(
       subtotalCents: total,
       taxCents: 0,
       totalCents: total,
-      currency: 'USD',
+      currency,
     },
   };
 }
@@ -156,6 +194,7 @@ export class CommerceService {
     private mailer: OrderMailer | null = null,
     private capacity:
       ((items: { wholesaleUnits: number; quantity: number }[]) => Promise<void>) | null = null,
+    private rates: Pick<ExchangeRates, 'current'> = new ExchangeRates(),
   ) {
     const url = new URL(site);
     if (
@@ -169,8 +208,14 @@ export class CommerceService {
       throw new Error('Invalid checkout site URL.');
     if (accessSecret.length < 32) throw new Error('Order access signing secret is required.');
   }
-  quote(items: CartItem[]) {
-    return priceCart(items, this.loadPlan).then((r) => r.quote);
+  private async priced(items: CartItem[], currency: Currency) {
+    const fx = priceExchange(currency, currency === 'USD' ? undefined : await this.rates.current());
+    return priceCart(items, this.loadPlan, currency, fx);
+  }
+  quote(items: CartItem[], currency: Currency = 'USD') {
+    if (process.env.CHECKOUT_PAUSED === 'true')
+      throw new CommerceError('Checkout is temporarily paused for catalogue maintenance.', 503);
+    return this.priced(items, currency).then((r) => r.quote);
   }
   private token(id: string) {
     return createHmac('sha256', this.accessSecret)
@@ -192,11 +237,13 @@ export class CommerceService {
       emailConfirmation: string;
       requestId: string;
       compatible: true;
-      currency: 'USD';
+      currency: Currency;
       expectedTotalCents: number;
     },
     user: Principal | null,
   ) {
+    if (process.env.CHECKOUT_PAUSED === 'true')
+      throw new CommerceError('Checkout is temporarily paused for catalogue maintenance.', 503);
     if (input.email.toLowerCase() !== input.emailConfirmation.toLowerCase())
       throw new CommerceError('Email addresses do not match.');
     const email = input.email.toLowerCase(),
@@ -204,7 +251,7 @@ export class CommerceService {
       id = 'purchase_' + hash(this.mode + ':' + owner + ':' + input.requestId).slice(0, 48),
       ref = this.db.collection('purchases').doc(id),
       accessToken = this.token(id);
-    const { quote, snapshots } = await priceCart(input.items, this.loadPlan);
+    const { quote, snapshots } = await this.priced(input.items, input.currency);
     await this.capacity?.(snapshots);
     if (input.expectedTotalCents !== quote.totalCents)
       throw new CommerceError('The price changed. Review the updated total before paying.', 409);
@@ -212,7 +259,7 @@ export class CommerceService {
       uid: user?.verified ? user.uid : null,
       email,
       items: snapshots,
-      currency: 'USD' as const,
+      currency: input.currency,
       totalCents: quote.totalCents,
       status: 'pending_payment' as const,
       test: this.mode === 'test',
@@ -226,6 +273,7 @@ export class CommerceService {
         if (
           p.email !== email ||
           p.totalCents !== proposed.totalCents ||
+          p.currency !== proposed.currency ||
           JSON.stringify(
             p.items.map((i) => [
               i.plan.id,
@@ -267,7 +315,7 @@ export class CommerceService {
       : await this.stripe.paymentIntents.create(
           {
             amount: purchase.totalCents,
-            currency: 'usd',
+            currency: purchase.currency.toLowerCase(),
             receipt_email: email,
             automatic_payment_methods: { enabled: true, allow_redirects: 'never' },
             metadata: { alozuriPurchaseId: id },
@@ -298,7 +346,7 @@ export class CommerceService {
       intent.livemode !== !p.test ||
       intent.metadata.alozuriPurchaseId !== id ||
       intent.amount !== p.totalCents ||
-      intent.currency !== 'usd' ||
+      intent.currency !== p.currency.toLowerCase() ||
       (p.paymentIntentId && p.paymentIntentId !== intent.id)
     )
       throw new CommerceError('Payment does not match this order.');
@@ -362,7 +410,12 @@ export class CommerceService {
           const failed = own.some((r) => r.status === 'failed' || r.status === 'canceled');
           const refunded =
             full ||
-            own.some((r) => r.status === 'succeeded' && r.amount === unit.get('amountCents'));
+            own.some(
+              (r) =>
+                r.status === 'succeeded' &&
+                r.amount === unit.get('amountCents') &&
+                r.currency === p.currency.toLowerCase(),
+            );
           t.update(unit.ref, {
             paymentBlocked: true,
             status:
@@ -383,7 +436,8 @@ export class CommerceService {
                 (r) =>
                   r.metadata?.alozuriOrderId === u.id &&
                   r.status === 'succeeded' &&
-                  r.amount === u.get('amountCents'),
+                  r.amount === u.get('amountCents') &&
+                  r.currency === p.currency.toLowerCase(),
               ),
           );
         t.update(ref, {
@@ -435,7 +489,10 @@ export class CommerceService {
               uid: p.uid || 'guest_' + hash(id).slice(0, 24),
               plan: line.plan,
               amountCents: line.plan.priceCents,
-              currency: 'USD',
+              currency: p.currency,
+              baseSellingPriceUsdCents: line.baseSellingPriceUsdCents ?? line.plan.priceCents,
+              pricingVersion: line.pricingVersion ?? 'legacy',
+              exchange: line.exchange ?? null,
               status: 'paid',
               test: p.test,
               createdAt: p.createdAt,

@@ -16,7 +16,7 @@ export const planSchema = z.object({
   dataGb: z.number().finite().nonnegative().max(10000),
   days: z.number().int().positive().max(3660),
   priceCents: cents,
-  currency: z.literal('USD'),
+  currency: z.enum(['USD', 'GBP', 'EUR']),
   dataType: z.enum(['fixed', 'daily', 'unlimited']),
   dailyPolicy: z.enum(['reduced', 'cutoff']).optional(),
   supplierNotes: z.string().max(10000).optional(),
@@ -26,14 +26,17 @@ export const planSchema = z.object({
   demo: z.boolean().optional(),
   syncedAt: timestamp,
 });
-export const storedPlanSchema = planSchema.extend({ active: z.boolean() });
+export const storedPlanSchema = planSchema.extend({
+  currency: z.literal('USD'),
+  active: z.boolean(),
+});
 export const orderSchema = z.object({
   uid: z.string().min(1).max(128),
   plan: planSchema,
   status: z.enum(orderStates),
   createdAt: timestamp,
   amountCents: cents,
-  currency: z.literal('USD'),
+  currency: z.enum(['USD', 'GBP', 'EUR']),
   refundRequested: z.boolean().optional(),
   test: z.boolean().optional(),
 });

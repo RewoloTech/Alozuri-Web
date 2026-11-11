@@ -39,6 +39,7 @@ const regionNames = new Intl.DisplayNames(['en'], { type: 'region', fallback: 'n
 export function countryName(code: string) {
   return countries.find((c) => c.code === code)?.name ?? regionNames.of(code) ?? code;
 }
+export type Currency = 'USD' | 'GBP' | 'EUR';
 export type Plan = {
   id: string;
   name: string;
@@ -46,7 +47,7 @@ export type Plan = {
   dataGb: number;
   days: number;
   priceCents: number;
-  currency: 'USD';
+  currency: Currency;
   dataType: 'fixed' | 'daily' | 'unlimited';
   dailyPolicy?: 'reduced' | 'cutoff';
   supplierNotes?: string;
@@ -61,6 +62,15 @@ export type StoredPlan = Plan & {
   wholesaleUnits: number;
   active: boolean;
   providerId?: string;
+  packageId?: string;
+  supplier?: 'esimaccess';
+  supplierCostUsdCents?: number;
+  sellingPriceUsdCents?: number;
+  pricingVersion?: string;
+  pricingUpdatedAt?: unknown;
+  priceOverrideUsdCents?: number | null;
+  pricingStatus?: 'valid' | 'review_required';
+  catalogueDate?: string;
 };
 export function retailPlan(plan: StoredPlan): Plan {
   const {
@@ -165,22 +175,6 @@ export function matchPlans(
       return true;
     })
     .sort(comparePlanValue);
-}
-// Supplier units are 1/10,000 USD. Retail amounts are integer USD cents.
-export function priceRetail(wholesaleUnits: number, markup = 1.8, minimumMargin = 0.3): number {
-  if (
-    !Number.isSafeInteger(wholesaleUnits) ||
-    wholesaleUnits <= 0 ||
-    !Number.isFinite(markup) ||
-    markup < 1 ||
-    !Number.isFinite(minimumMargin) ||
-    minimumMargin < 0 ||
-    minimumMargin >= 1
-  )
-    throw new Error('Invalid pricing inputs');
-  return Math.ceil(
-    Math.max((wholesaleUnits / 100) * markup, wholesaleUnits / 100 / (1 - minimumMargin)),
-  );
 }
 export const orderStates = [
   'created',

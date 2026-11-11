@@ -12,6 +12,11 @@ test('real Stripe Payment Element declines a test card, retries the same intent 
     if (r.url().endsWith('/v2/checkout') && r.method() === 'POST') requests++;
   });
   await page.goto('/plans/' + (process.env.STRIPE_PLAN_ID || 'esim-stripe-integration'));
+  const currency = process.env.STRIPE_TEST_CURRENCY || 'USD';
+  if (currency !== 'USD') {
+    await page.getByRole('combobox', { name: 'Currency', exact: true }).selectOption(currency);
+    await expect(page.locator('.purchase-summary small')).toHaveText(currency);
+  }
   await page.getByRole('button', { name: 'Add to cart', exact: true }).click();
   await expect(page.getByRole('link', { name: 'Shopping cart, 1 item' })).toBeVisible();
   await page.goto('/checkout');
@@ -58,9 +63,15 @@ test('real Stripe Payment Element declines a test card, retries the same intent 
     /declined|insufficient/i,
     { timeout: 30000 },
   );
-  await frame.getByRole('textbox', { name: 'Card number', exact: true }).fill('4242424242424242');
+  const retryCard = frame.getByRole('textbox', { name: 'Card number', exact: true });
+  await retryCard.fill('');
+  // Stripe's masked input updates on individual key events; exercise a real replacement card.
+  await retryCard.pressSequentially('4242424242424242', { delay: 25 });
+  await retryCard.press('Tab');
   await frame.getByRole('textbox', { name: /Expiration|Expiry|MM/ }).fill('1230');
-  await frame.getByRole('textbox', { name: 'Security code', exact: true }).fill('123');
+  const retryCvc = frame.getByRole('textbox', { name: 'Security code', exact: true });
+  await retryCvc.fill('123');
+  await retryCvc.press('Tab');
   await page.getByRole('button', { name: 'Pay securely', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Your test order', exact: true })).toBeVisible({
     timeout: 45000,

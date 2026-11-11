@@ -38,7 +38,12 @@ export function mockCommerce() {
       return;
     }
     let body: unknown;
-    if (url.pathname === '/v1/config') body = { paymentMode: 'test', cartCheckoutMode: 'test' };
+    if (url.pathname === '/v1/config')
+      body = {
+        paymentMode: 'test',
+        cartCheckoutMode: 'test',
+        supportedCurrencies: ['USD', 'GBP', 'EUR'],
+      };
     else if (url.pathname === '/v1/countries')
       body = {
         countries: [

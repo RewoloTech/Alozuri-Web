@@ -10,6 +10,7 @@ import {
 import { database } from './firebase.js';
 import { cataloguePlan, type Principal } from './repository.js';
 import { orderSchema, planSchema } from './validation.js';
+import { pricePackage, samePackage, packageWrite } from './package-pricing.js';
 import { SupplierClient, adaptPackage } from './supplier.js';
 export class CheckoutError extends Error {
   statusCode = 400;
@@ -19,7 +20,7 @@ export interface PaymentOrder {
   uid: string;
   plan: Plan;
   amountCents: number;
-  currency: 'USD';
+  currency: Plan['currency'];
   status: OrderState;
   sessionId?: string;
   test: boolean;
@@ -53,7 +54,7 @@ function paymentOrder(
     uid: parsed.uid,
     plan: parsed.plan,
     amountCents: parsed.amountCents,
-    currency: 'USD',
+    currency: parsed.currency,
     status: parsed.status,
     test: parsed.test,
     ...(typeof data.sessionId === 'string' ? { sessionId: data.sessionId } : {}),
@@ -88,7 +89,7 @@ export function firestorePaymentStore(mode: PaymentMode = 'test'): PaymentStore 
         const [doc, event] = await Promise.all([t.get(ref), t.get(eventRef)]);
         if (event.exists || !doc.exists) return;
         const order = paymentOrder(doc.id, doc.data()!, mode);
-        if (charge.amount !== order.amountCents || charge.currency !== 'usd')
+        if (charge.amount !== order.amountCents || charge.currency !== order.currency.toLowerCase())
           throw new CheckoutError('Payment adjustment mismatch.');
         if (!charge.disputed && !charge.amount_refunded && !failedRefund) return;
         t.update(ref, {
@@ -243,11 +244,21 @@ export async function currentCheckoutPlan(
   )
     throw new CheckoutError('Plan unavailable. Search again.');
   const source = await supplier.packages({ locationCode: publicPlan.countries[0] });
-  const fresh = source
+  const candidate = source
     .map((p) => adaptPackage(p, new Date().toISOString()))
     .find((p) => p?.id === id);
-  if (!fresh) throw new CheckoutError('This package is no longer available. Search again.');
-  await ref.set(fresh, { merge: true });
+  if (!candidate) {
+    await ref.set({ active: false, pricingStatus: 'review_required' }, { merge: true });
+    throw new CheckoutError('This package is no longer available. Search again.');
+  }
+  const fresh = await database().runTransaction(async (t) => {
+    const current = await t.get(ref);
+    const priced = pricePackage(candidate, current.data());
+    if (!samePackage(current.data() || {}, priced))
+      t.set(ref, packageWrite(priced), { merge: true });
+    return priced;
+  });
+  if (!fresh.active) throw new CheckoutError('This package is unavailable pending price review.');
   if (
     fresh.priceCents !== publicPlan.priceCents ||
     fresh.dataGb !== publicPlan.dataGb ||
@@ -275,7 +286,7 @@ export function assertOrderSession(order: PaymentOrder, session: Stripe.Checkout
     (order.sessionId && order.sessionId !== session.id) ||
     session.client_reference_id !== order.id ||
     session.amount_total !== order.amountCents ||
-    session.currency !== 'usd'
+    session.currency !== order.currency.toLowerCase()
   )
     throw new CheckoutError('Payment does not match the order snapshot.');
 }
@@ -328,6 +339,8 @@ export class PaymentService {
     requestId: string,
     ui: CheckoutUi = 'hosted',
   ): Promise<CheckoutResult> {
+    if (process.env.CHECKOUT_PAUSED === 'true')
+      throw new CheckoutError('Checkout is temporarily paused for catalogue maintenance.');
     if (!user.verified) throw new CheckoutError('Verify your email before checkout.');
     const plan = await this.loadPlan(planId);
     if (
@@ -384,6 +397,8 @@ export class PaymentService {
     return result;
   }
   async resume(user: Principal, orderId: string) {
+    if (process.env.CHECKOUT_PAUSED === 'true')
+      throw new CheckoutError('Checkout is temporarily paused for catalogue maintenance.');
     if (!user.verified) throw new CheckoutError('Verify your email before checkout.');
     const order = await this.store.find(user.uid, orderId);
     if (!order?.sessionId) throw new CheckoutError('Order not found.');

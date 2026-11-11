@@ -1,3 +1,4 @@
+import { MINIMUM_CHARGE_MINOR } from './exchange-rates.js';
 import { createHash, randomUUID } from 'node:crypto';
 import Stripe from 'stripe';
 import { z } from 'zod';
@@ -26,7 +27,8 @@ const liveOrderSchema = orderSchema
     (o) =>
       !o.plan.demo &&
       o.amountCents === o.plan.priceCents &&
-      o.amountCents >= 50 &&
+      o.currency === o.plan.currency &&
+      o.amountCents >= MINIMUM_CHARGE_MINOR[o.currency] &&
       (Boolean(o.sessionId) || Boolean(o.parentOrderId && o.chargeTotalCents)),
   );
 export type DeliveryOrder = PaymentOrder &
@@ -223,7 +225,7 @@ export class FulfillmentService {
     if (
       refund.payment_intent !== order.paymentIntentId ||
       refund.amount !== order.amountCents ||
-      refund.currency !== 'usd'
+      refund.currency !== order.currency.toLowerCase()
     )
       throw new Error('Refund mismatch.');
     const fields = {
@@ -270,7 +272,7 @@ export class FulfillmentService {
       !intent.livemode ||
       intent.status !== 'succeeded' ||
       intent.amount_received !== (order.chargeTotalCents ?? order.amountCents) ||
-      intent.currency !== 'usd' ||
+      intent.currency !== order.currency.toLowerCase() ||
       !charge ||
       typeof charge === 'string'
     )

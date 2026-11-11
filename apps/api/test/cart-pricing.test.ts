@@ -1,3 +1,4 @@
+import { pricePackage } from '../src/lib/package-pricing.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { cartView, itemsSchema, priceCart, checkSupplierCapacity } from '../src/lib/commerce.js';
@@ -5,15 +6,19 @@ import { demoPlans } from '../../../packages/shared/src/demo.ts';
 import type { StoredPlan } from '../../../packages/shared/src/index.ts';
 import type { Repository } from '../src/lib/repository.js';
 
-const plan: StoredPlan = {
-  ...demoPlans[0],
-  id: 'verified-plan',
-  demo: false,
-  active: true,
-  priceCents: 1234,
-  supplierCode: 'supplier-variant-42',
-  wholesaleUnits: 31000,
-};
+const plan: StoredPlan = pricePackage(
+  {
+    ...demoPlans[0],
+    id: 'verified-plan',
+    demo: false,
+    active: true,
+    priceCents: 1234,
+    supplierCode: 'supplier-variant-42',
+    wholesaleUnits: 31000,
+    syncedAt: new Date().toISOString(),
+  },
+  { priceOverrideUsdCents: 1234 },
+);
 const repository = (plans: StoredPlan[]): Repository => ({
   plans: async () => plans,
   orders: async () => [],
@@ -21,7 +26,7 @@ const repository = (plans: StoredPlan[]): Repository => ({
 });
 
 test('cart pricing aggregates duplicate variants and calculates the exact server total in minor units', async () => {
-  const second = { ...plan, id: 'second-plan', priceCents: 999 };
+  const second = pricePackage({ ...plan, id: 'second-plan' }, { priceOverrideUsdCents: 999 });
   const loaded: string[] = [];
   const result = await priceCart(
     [
@@ -93,7 +98,9 @@ test('empty and invalid carts never reach product loading', async () => {
 
 test('cart pricing rejects amounts exceeding the supported charge limit', async () => {
   await assert.rejects(
-    priceCart([{ planId: plan.id, quantity: 2 }], async () => ({ ...plan, priceCents: 50000000 })),
+    priceCart([{ planId: plan.id, quantity: 2 }], async () =>
+      pricePackage(plan, { priceOverrideUsdCents: 50000000 }),
+    ),
     /outside/,
   );
 });

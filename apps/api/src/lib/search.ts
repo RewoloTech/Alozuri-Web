@@ -1,3 +1,4 @@
+import { currencySchema } from './exchange-rates.js';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import {
@@ -28,6 +29,7 @@ const country = z
   .refine(isCountryCode);
 export const searchQuerySchema = z
   .object({
+    currency: currencySchema.default('USD'),
     countries: z
       .string()
       .max(200)

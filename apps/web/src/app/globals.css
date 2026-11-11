@@ -2356,3 +2356,23 @@ h1 {
   font-size: 34px;
   font-weight: 700;
 }
+
+.currency-select {
+  width: 66px;
+  min-height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: white;
+  color: var(--navy);
+  font: inherit;
+  font-size: 11px;
+  padding: 4px;
+}
+@media (max-width: 600px) {
+  .nav-actions {
+    gap: 6px;
+  }
+  .currency-select {
+    width: 55px;
+  }
+}

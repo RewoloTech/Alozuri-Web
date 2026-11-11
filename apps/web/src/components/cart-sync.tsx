@@ -30,7 +30,7 @@ export function CartSync() {
                 i.plan.countries.every((c) => typeof c === 'string') &&
                 typeof i.plan.priceCents === 'number' &&
                 Number.isFinite(i.plan.priceCents) &&
-                i.plan.currency === 'USD' &&
+                ['USD', 'GBP', 'EUR'].includes(i.plan.currency) &&
                 typeof i.plan.dataGb === 'number' &&
                 typeof i.plan.days === 'number' &&
                 Number.isInteger(i.quantity) &&

@@ -80,3 +80,133 @@ test.after(async () => {
   await db.terminate();
   await deleteApp(app);
 });
+
+test('imports reprice cost changes, preserve profitable overrides, date packages and skip duplicate package writes', async () => {
+  let units = 10000;
+  const provider: CatalogueProvider = {
+    id: 'pricing-provider',
+    fetch: async (at) => ({
+      fetched: 1,
+      plans: [
+        { ...plan('pricing-package', 'pricing-provider'), wholesaleUnits: units, syncedAt: at },
+      ],
+    }),
+  };
+  await syncCatalogue(provider, db);
+  const ref = db.doc('packages/pricing-package');
+  const first = await ref.get();
+  assert.equal(first.get('priceCents'), 249);
+  assert.equal(first.get('catalogueDate'), new Date().toISOString().slice(0, 10));
+  const duplicate = await syncCatalogue(provider, db);
+  assert.equal(duplicate.written, 0);
+  assert.ok((await ref.get()).updateTime!.isEqual(first.updateTime!));
+  units = 20000;
+  await syncCatalogue(provider, db);
+  assert.equal((await ref.get()).get('priceCents'), 449);
+  units = 10000;
+  await syncCatalogue(provider, db);
+  assert.equal((await ref.get()).get('priceCents'), 249);
+  await ref.update({ priceOverrideUsdCents: 349 });
+  await syncCatalogue(provider, db);
+  assert.equal((await ref.get()).get('priceCents'), 349);
+  units = 50000;
+  const review = await syncCatalogue(provider, db);
+  assert.equal(review.active, 0);
+  assert.equal(review.reviewRequired, 1);
+  assert.equal((await ref.get()).get('priceOverrideUsdCents'), 349);
+  assert.equal((await ref.get()).get('active'), false);
+});
+
+test('pricing migration dry-run changes nothing, apply backs up once and a second apply is a no-op', async () => {
+  const { migratePricing } = await import('../src/lib/pricing-migration.ts');
+  const { PRICING_VERSION } = await import('../src/lib/pricing.ts');
+  const ref = db.doc('packages/migration-test');
+  await ref.set({
+    ...plan('migration-test'),
+    syncedAt: new Date().toISOString(),
+    wholesaleUnits: 20000,
+  });
+  const before = await ref.get();
+  const preview = await migratePricing(db);
+  assert.ok(preview.changed > 0);
+  assert.ok((await ref.get()).updateTime!.isEqual(before.updateTime!));
+  await migratePricing(db, true);
+  assert.equal((await ref.get()).get('priceCents'), 449);
+  const backup = await db.doc(`pricingMigrations/${PRICING_VERSION}/packages/migration-test`).get();
+  assert.equal(backup.get('before').priceCents, before.get('priceCents'));
+  assert.equal((await migratePricing(db, true)).changed, 0);
+  assert.ok(
+    (
+      await db.doc(`pricingMigrations/${PRICING_VERSION}/packages/migration-test`).get()
+    ).updateTime!.isEqual(backup.updateTime!),
+  );
+  assert.equal((await db.doc('packages/other').get()).get('providerId'), 'second-provider');
+});
+
+test('exchange rates persist across instances, refresh after TTL and fail closed when no usable fallback remains', async () => {
+  const { ExchangeRates } = await import('../src/lib/exchange-rates.ts');
+  let now = Date.now(),
+    calls = 0,
+    failed = false;
+  const fetchRates = async () => {
+    calls++;
+    if (failed) throw new Error('provider unavailable');
+    return {
+      source: 'frankfurter-ecb' as const,
+      asOf: new Date(now).toISOString().slice(0, 10),
+      fetchedAt: new Date(now).toISOString(),
+      rates: {
+        GBP: { numerator: '75', denominator: '100' },
+        EUR: { numerator: '9', denominator: '10' },
+      },
+    };
+  };
+  await db.doc('exchangeRates/USD').delete();
+  const rates = new ExchangeRates(db, fetchRates, () => now);
+  await rates.current();
+  await rates.current();
+  await new ExchangeRates(db, fetchRates, () => now).current();
+  assert.equal(calls, 1);
+  now += 3600001;
+  await rates.current();
+  assert.equal(calls, 2);
+  failed = true;
+  now += 3600001;
+  assert.ok(await rates.current());
+  now += 8 * 86400000;
+  await assert.rejects(rates.current(), /temporarily unavailable/);
+});
+
+test('source metadata removal is persisted without losing overrides or unrelated owner metadata', async () => {
+  let daily = true;
+  const provider: CatalogueProvider = {
+    id: 'source-metadata',
+    fetch: async (at) => ({
+      fetched: 1,
+      plans: [
+        {
+          ...plan('source-metadata-package', 'source-metadata'),
+          syncedAt: at,
+          ...(daily
+            ? {
+                dataType: 'daily' as const,
+                dailyPolicy: 'reduced' as const,
+                supplierNotes: 'Former conditions',
+              }
+            : { dataType: 'fixed' as const }),
+        },
+      ],
+    }),
+  };
+  await syncCatalogue(provider, db);
+  const ref = db.doc('packages/source-metadata-package');
+  await ref.update({ ownerTag: 'keep', priceOverrideUsdCents: 349 });
+  daily = false;
+  await syncCatalogue(provider, db);
+  const fresh = await ref.get();
+  assert.equal(fresh.get('dailyPolicy'), undefined);
+  assert.equal(fresh.get('supplierNotes'), undefined);
+  assert.equal(fresh.get('ownerTag'), 'keep');
+  assert.equal(fresh.get('priceOverrideUsdCents'), 349);
+  assert.equal((await syncCatalogue(provider, db)).written, 0);
+});

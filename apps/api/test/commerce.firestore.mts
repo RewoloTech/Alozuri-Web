@@ -1,3 +1,6 @@
+import { convertPrice, priceExchange, type FxRates } from '../src/lib/exchange-rates.ts';
+import type { Currency } from '../../../packages/shared/src/index.ts';
+import { pricePackage } from '../src/lib/package-pricing.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import Stripe from 'stripe';
@@ -17,10 +20,21 @@ let serial = 0;
 function fixture(
   testMode = false,
   capacity?: (items: { wholesaleUnits: number; quantity: number }[]) => Promise<void>,
+  currency: Currency = 'USD',
 ) {
-  const plans: StoredPlan[] = demoPlans
-    .slice(0, 2)
-    .map((p) => ({ ...p, demo: false, active: true, supplierCode: p.id, wholesaleUnits: 1000 }));
+  const plans: StoredPlan[] = demoPlans.slice(0, 2).map((p) =>
+    pricePackage(
+      {
+        ...p,
+        demo: false,
+        active: true,
+        supplierCode: p.id,
+        wholesaleUnits: 1000,
+        syncedAt: new Date().toISOString(),
+      },
+      { priceOverrideUsdCents: p.priceCents },
+    ),
+  );
   let creates = 0;
   const emails: { id: string; email: string; url: string }[] = [];
   const intent = {
@@ -44,7 +58,11 @@ function fixture(
         creates++;
         assert.ok(options.idempotencyKey);
         assert.equal(params.automatic_payment_methods?.enabled, true);
-        Object.assign(intent, { amount: params.amount, metadata: params.metadata });
+        Object.assign(intent, {
+          amount: params.amount,
+          currency: params.currency,
+          metadata: params.metadata,
+        });
         return intent;
       },
       retrieve: async () => intent,
@@ -53,6 +71,15 @@ function fixture(
     charges: { retrieve: async () => ({ ...intent.latest_charge, payment_intent: intent.id }) },
     refunds: { list: async () => ({ data: refunds }) },
   } as unknown as Stripe;
+  const rates: FxRates = {
+    source: 'frankfurter-ecb',
+    asOf: new Date().toISOString().slice(0, 10),
+    fetchedAt: new Date().toISOString(),
+    rates: {
+      GBP: { numerator: '8', denominator: '10' },
+      EUR: { numerator: '11', denominator: '10' },
+    },
+  };
   const service = new CommerceService(
     stripe,
     testMode ? 'test' : 'live',
@@ -71,6 +98,7 @@ function fixture(
       },
     },
     capacity,
+    { current: async () => rates },
   );
   const input = {
     items: [
@@ -81,8 +109,10 @@ function fixture(
     emailConfirmation: 'guest@example.com',
     requestId: crypto.randomUUID(),
     compatible: true as const,
-    currency: 'USD' as const,
-    expectedTotalCents: plans[0].priceCents * 2 + plans[1].priceCents,
+    currency,
+    expectedTotalCents:
+      convertPrice(plans[0].priceCents, currency, priceExchange(currency, rates)) * 2 +
+      convertPrice(plans[1].priceCents, currency, priceExchange(currency, rates)),
   };
   async function event(
     type = 'payment_intent.succeeded',
@@ -286,7 +316,7 @@ test('authenticated carts merge once, isolate owners, retain unavailable items f
     const currency = await api.inject({
       method: 'POST',
       url: '/v2/quote',
-      payload: { items: f.input.items, currency: 'EUR' },
+      payload: { items: f.input.items, currency: 'JPY' },
     });
     assert.equal(currency.statusCode, 400);
   } finally {
@@ -305,4 +335,113 @@ test('an unfunded supplier blocks checkout before creating a Stripe intent or pu
 test.after(async () => {
   await db.terminate();
   await deleteApp(app);
+});
+
+for (const currency of ['GBP', 'EUR'] as const)
+  test(`${currency} quote, Stripe intent, webhook and historical receipt preserve the same charged minor units`, async () => {
+    const f = fixture(true, undefined, currency);
+    const quote = await f.service.quote(f.input.items, currency);
+    assert.equal(quote.currency, currency);
+    assert.notEqual(quote.totalCents, f.plans[0].priceCents * 2 + f.plans[1].priceCents);
+    const result = await f.service.checkout(f.input, null);
+    assert.equal(f.intent.amount, quote.totalCents);
+    assert.equal(f.intent.currency, currency.toLowerCase());
+    assert.equal(result.quote.totalCents, quote.totalCents);
+    const saved = await db.doc('purchases/' + result.orderId).get();
+    assert.equal(saved.get('items')[0].exchange.source, 'frankfurter-ecb');
+    assert.equal(saved.get('items')[0].baseSellingPriceUsdCents, f.plans[0].priceCents);
+    f.intent.status = 'succeeded';
+    f.intent.amount_received = f.intent.amount;
+    const eventId = 'evt_fx_' + crypto.randomUUID().replaceAll('-', '');
+    await f.event('payment_intent.succeeded', eventId);
+    await f.event('payment_intent.succeeded', eventId);
+    const units = await db.collection('orders').where('parentOrderId', '==', result.orderId).get();
+    assert.equal(units.size, 3);
+    assert.ok(units.docs.every((d) => d.get('currency') === currency));
+    f.plans[0].priceCents = 1; // A later catalogue change cannot rewrite the amount already paid.
+    const receipt = await f.service.order(result.orderId, null, result.accessToken);
+    assert.equal(receipt.totalCents, quote.totalCents);
+    assert.equal(receipt.currency, currency);
+    assert.equal(receipt.items[0].plan.priceCents, quote.items[0].plan.priceCents);
+  });
+
+test('public Firestore clients cannot read supplier pricing or bypass the importer with direct writes', async () => {
+  const f = fixture(true);
+  await db.doc('packages/private-pricing-test').set(f.plans[0]);
+  const url =
+    'http://127.0.0.1:8188/v1/projects/demo-alozuri/databases/(default)/documents/packages/private-pricing-test';
+  assert.equal((await fetch(url)).status, 403);
+  assert.equal(
+    (
+      await fetch(url, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          fields: { priceCents: { integerValue: '1' }, pricingStatus: { stringValue: 'valid' } },
+        }),
+      })
+    ).status,
+    403,
+  );
+});
+
+test('maintenance pause blocks new prices/payments while verified payment webhooks can still finish existing orders', async () => {
+  const f = fixture(true),
+    result = await f.service.checkout(f.input, null);
+  const previous = process.env.CHECKOUT_PAUSED;
+  process.env.CHECKOUT_PAUSED = 'true';
+  try {
+    assert.throws(() => f.service.quote(f.input.items), /paused/);
+    await assert.rejects(
+      f.service.checkout({ ...f.input, requestId: crypto.randomUUID() }, null),
+      /paused/,
+    );
+    f.intent.status = 'succeeded';
+    f.intent.amount_received = f.intent.amount;
+    await f.event();
+    assert.equal((await f.service.order(result.orderId, null, result.accessToken)).status, 'paid');
+    assert.equal(f.getCreates(), 1);
+  } finally {
+    if (previous === undefined) delete process.env.CHECKOUT_PAUSED;
+    else process.env.CHECKOUT_PAUSED = previous;
+  }
+});
+
+test('checkout supplier revalidation skips unchanged writes, persists cost changes and blocks missing prices', async () => {
+  const { currentCheckoutPlan } = await import('../src/lib/payments.ts');
+  const { SupplierClient, adaptPackage } = await import('../src/lib/supplier.ts');
+  const source = {
+    packageCode: 'checkout-price-test',
+    name: 'France pricing test',
+    currencyCode: 'USD',
+    price: 10000,
+    volume: 1073741824,
+    duration: 7,
+    durationUnit: 'DAY',
+    durationType: 1,
+    dataType: 1,
+    location: 'FR',
+    activeType: 2,
+  };
+  class ReadOnlySupplier extends SupplierClient {
+    row: unknown = source;
+    async packages() {
+      return [this.row];
+    }
+  }
+  const supplier = new ReadOnlySupplier('', '');
+  const initial = adaptPackage(source, new Date().toISOString())!;
+  const ref = db.doc('packages/' + initial.id);
+  await ref.set(initial);
+  const before = await ref.get();
+  assert.equal((await currentCheckoutPlan(initial.id, supplier)).priceCents, 249);
+  assert.ok((await ref.get()).updateTime!.isEqual(before.updateTime!));
+  supplier.row = { ...source, price: 20000 };
+  await assert.rejects(currentCheckoutPlan(initial.id, supplier), /plan changed/);
+  assert.equal((await ref.get()).get('sellingPriceUsdCents'), 449);
+  assert.equal((await currentCheckoutPlan(initial.id, supplier)).priceCents, 449);
+  supplier.row = { ...source, price: undefined };
+  await assert.rejects(currentCheckoutPlan(initial.id, supplier), /unavailable/);
+  assert.equal((await ref.get()).get('pricingStatus'), 'review_required');
+  assert.equal((await ref.get()).get('active'), false);
 });

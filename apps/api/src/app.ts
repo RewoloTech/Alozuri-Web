@@ -1,3 +1,10 @@
+import {
+  ExchangeRates,
+  currencySchema,
+  convertedPlan,
+  priceExchange,
+} from './lib/exchange-rates.js';
+import type { Currency, Plan } from '../../../packages/shared/src/index.ts';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
@@ -42,12 +49,14 @@ const matchQuery = z
     minGb: z.coerce.number().finite().min(0).max(10000).default(0),
     dataType: z.enum(['all', 'fixed', 'daily', 'unlimited']).default('all'),
     coverage: z.enum(['all', 'local']).default('all'),
+    currency: currencySchema.default('USD'),
   })
   .strict();
 const idSchema = documentId;
 export async function createApp(
   options: {
     repository?: Repository;
+    exchangeRates?: Pick<ExchangeRates, 'current'>;
     verify?: (token: string) => Promise<Principal>;
     demo?: boolean;
     logger?: boolean;
@@ -61,6 +70,25 @@ export async function createApp(
 ) {
   const demo = options.demo ?? process.env.DEMO_MODE !== 'false';
   const repository = options.repository ?? createRepository(demo);
+  const rates = options.exchangeRates ?? new ExchangeRates();
+  const converted = new WeakMap<Plan[], Map<string, Plan[]>>();
+  async function displayPlans(currency: Currency) {
+    const source = await repository.plans();
+    if (currency === 'USD') return source;
+    const fx = priceExchange(currency, await rates.current());
+    const key = JSON.stringify({ currency, ...fx });
+    let views = converted.get(source);
+    if (!views) {
+      views = new Map();
+      converted.set(source, views);
+    }
+    let plans = views.get(key);
+    if (!plans) {
+      plans = source.map((p) => convertedPlan(p, currency, fx));
+      views.set(key, plans);
+    }
+    return plans;
+  }
   const verify = options.verify ?? verifyToken;
   const payments = options.payments === undefined ? configuredPayments() : options.payments;
   const fulfillment =
@@ -130,8 +158,9 @@ export async function createApp(
   app.get('/v1/config', async () => ({
     paymentMode: payments?.mode ?? 'disabled',
     catalogueMode: demo ? 'preview' : 'live',
-    cartCheckoutMode: commerce?.mode ?? 'disabled',
-    supportedCurrencies: ['USD'],
+    cartCheckoutMode:
+      process.env.CHECKOUT_PAUSED === 'true' ? 'disabled' : (commerce?.mode ?? 'disabled'),
+    supportedCurrencies: demo ? ['USD'] : ['USD', 'GBP', 'EUR'],
     fulfillmentMode: payments?.mode === 'live' ? 'esim_access' : 'test_no_issuance',
   }));
   app.post('/internal/catalogue/sync', async (request, reply) => {
@@ -193,8 +222,11 @@ export async function createApp(
     paymentMode: payments?.mode ?? 'disabled',
   }));
   app.get('/v1/packages', async (request) => {
-    const query = z.object({ country: code.optional() }).strict().parse(request.query);
-    const plans = await repository.plans();
+    const query = z
+      .object({ country: code.optional(), currency: currencySchema.default('USD') })
+      .strict()
+      .parse(request.query);
+    const plans = await displayPlans(query.currency);
     return {
       plans: query.country ? plans.filter((p) => p.countries.includes(query.country!)) : plans,
     };
@@ -202,7 +234,7 @@ export async function createApp(
   app.get('/v1/packages/match', async (request) => {
     const query = matchQuery.parse(request.query);
     const matches = matchPlans(
-      await repository.plans(),
+      await displayPlans(query.currency),
       query.countries,
       query.minGb,
       query.dataType,
@@ -215,15 +247,18 @@ export async function createApp(
     '/v2/search/plans',
     { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } },
     async (request) => {
-      const { cursor, ...filters } = searchQuerySchema.parse(request.query);
+      const { cursor, currency, ...filters } = searchQuerySchema.parse(request.query);
       const bookmark = parseSearchCursor(cursor);
-      return searchCatalogue(await repository.plans()).search(filters, bookmark);
+      return searchCatalogue(await displayPlans(currency)).search(filters, bookmark);
     },
   );
   app.get<{ Params: { id: string } }>('/v1/packages/:id', async (request, reply) => {
-    z.object({}).strict().parse(request.query);
+    const query = z
+      .object({ currency: currencySchema.default('USD') })
+      .strict()
+      .parse(request.query);
     const id = idSchema.parse(request.params.id);
-    const plan = (await repository.plans()).find((p) => p.id === id);
+    const plan = (await displayPlans(query.currency)).find((p) => p.id === id);
     return plan ? { plan } : reply.code(404).send({ error: 'Plan unavailable.' });
   });
   app.get('/v1/orders', async (request, reply) => {

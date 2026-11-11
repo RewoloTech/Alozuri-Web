@@ -15,6 +15,7 @@ import type { StripeExpressCheckoutElementConfirmEvent } from '@stripe/stripe-js
 import { cartItems, type CartLine, type Plan } from '@voyaspan/shared';
 import type { RootState } from '@/lib/store';
 import { api } from '@/lib/api';
+import { useCurrency } from './currency-provider';
 import { useAuth } from './auth-provider';
 import { OrderSummary, type Quote } from './cart';
 import { stripeCheckoutMode } from './stripe-checkout';
@@ -122,9 +123,11 @@ function StripePayment({
 }
 export function Checkout() {
   const { user } = useAuth();
-  return <CheckoutForIdentity key={user?.uid ?? 'guest'} />;
+  const { currency } = useCurrency();
+  return <CheckoutForIdentity key={(user?.uid ?? 'guest') + currency} />;
 }
 function CheckoutForIdentity() {
+  const { currency, refresh, lock } = useCurrency();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const cart = useSelector((s: RootState) => s.cart),
@@ -141,6 +144,10 @@ function CheckoutForIdentity() {
     [compatible, setCompatible] = useState(false),
     [session, setSession] = useState<{ clientSecret: string; orderId: string } | null>(null),
     [mode, setMode] = useState('disabled');
+  useEffect(() => {
+    lock(Boolean(session) || starting);
+    return () => lock(false);
+  }, [session, starting, lock]);
   const request = useRef(crypto.randomUUID()),
     submitting = useRef(false);
   useEffect(() => {
@@ -154,7 +161,11 @@ function CheckoutForIdentity() {
   useEffect(() => {
     if (!buy) return;
     let active = true;
-    void api<{ plan: Plan }>('/v1/packages/' + encodeURIComponent(buy))
+    void api<{ plan: Plan }>(
+      '/v1/packages/' +
+        encodeURIComponent(buy) +
+        (currency === 'USD' ? '' : '?currency=' + currency),
+    )
       .then((r) => {
         if (active) setBuyPlan(r.plan);
       })
@@ -162,13 +173,14 @@ function CheckoutForIdentity() {
     return () => {
       active = false;
     };
-  }, [buy]);
+  }, [buy, currency]);
   const lines: CartLine[] = useMemo(
     () => (buy ? (buyPlan ? [{ plan: buyPlan, quantity: 1 }] : []) : cart.items),
     [buy, buyPlan, cart.items],
   );
   const signature = JSON.stringify(cartItems(lines));
   useEffect(() => {
+    if (session) return;
     setSession(null);
     request.current = crypto.randomUUID();
     if (signature === '[]') {
@@ -181,7 +193,7 @@ function CheckoutForIdentity() {
     setError('');
     void api<{ quote: Quote }>('/v2/quote', {
       method: 'POST',
-      body: JSON.stringify({ items: JSON.parse(signature), currency: 'USD' }),
+      body: JSON.stringify({ items: JSON.parse(signature), currency }),
     })
       .then((r) => {
         if (active) setQuote(r.quote);
@@ -195,7 +207,7 @@ function CheckoutForIdentity() {
     return () => {
       active = false;
     };
-  }, [signature]);
+  }, [signature, currency, refresh, session]);
   async function start(e: React.FormEvent) {
     e.preventDefault();
     if (submitting.current || !quote) return;
@@ -208,6 +220,7 @@ function CheckoutForIdentity() {
     setError('');
     try {
       const fingerprint = JSON.stringify({
+        currency,
         items: JSON.parse(signature),
         email: email.trim().toLowerCase(),
         total: quote.totalCents,
@@ -235,7 +248,7 @@ function CheckoutForIdentity() {
           method: 'POST',
           body: JSON.stringify({
             items: JSON.parse(signature),
-            currency: 'USD',
+            currency,
             email: email.trim(),
             emailConfirmation: confirmation.trim(),
             compatible,
@@ -273,7 +286,7 @@ function CheckoutForIdentity() {
         request.current = crypto.randomUUID();
         const fresh = await api<{ quote: Quote }>('/v2/quote', {
           method: 'POST',
-          body: JSON.stringify({ items: JSON.parse(signature), currency: 'USD' }),
+          body: JSON.stringify({ items: JSON.parse(signature), currency }),
         }).catch(() => null);
         if (fresh) setQuote(fresh.quote);
       }
@@ -367,7 +380,7 @@ function CheckoutForIdentity() {
                 />
               </label>
               <h2>Review your order</h2>
-              <p>The order summary shows your plans and final total in USD.</p>
+              <p>The order summary shows your plans and final total in {currency}.</p>
               <label className="checkbox-label">
                 <input
                   type="checkbox"
@@ -407,10 +420,16 @@ function CheckoutForIdentity() {
           )}
           {loading && <p role="status">Checking availability and prices…</p>}
         </div>
-        <OrderSummary
-          lines={quote?.items ?? lines}
-          total={quote?.totalCents ?? lines.reduce((n, i) => n + i.quantity * i.plan.priceCents, 0)}
-        />
+        {quote?.currency === currency ? (
+          <OrderSummary
+            lines={quote?.items ?? lines}
+            total={
+              quote?.totalCents ?? lines.reduce((n, i) => n + i.quantity * i.plan.priceCents, 0)
+            }
+          />
+        ) : (
+          <p role="status">Updating prices in {currency}…</p>
+        )}
       </div>
     </section>
   );

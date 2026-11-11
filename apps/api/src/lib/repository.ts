@@ -1,6 +1,8 @@
 import { type CustomerOrder, type Plan } from '../../../../packages/shared/src/index.ts';
 import { demoPlans } from '../../../../packages/shared/src/demo.ts';
 import { database } from './firebase.js';
+import { currentCatalogueDate, validPackagePricing, catalogueDate } from './package-pricing.js';
+import { z } from 'zod';
 import { documentId, orderSchema, storedPlanSchema, planSchema } from './validation.js';
 export type Principal = { uid: string; verified: boolean; admin: boolean; email?: string };
 export interface Repository {
@@ -37,8 +39,14 @@ export function cataloguePlan(data: unknown, now = Date.now()): Plan | null {
   const parsed = storedPlanSchema.safeParse(data);
   if (!parsed.success || !parsed.data.active) return null;
   const plan = parsed.data;
-  const syncedAt = Date.parse(plan.syncedAt);
-  if (syncedAt > now || syncedAt <= now - 36 * 60 * 60 * 1000) return null;
+  const privateData = z.record(z.string(), z.unknown()).safeParse(data);
+  if (!privateData.success || !validPackagePricing(privateData.data)) return null;
+  if (
+    !currentCatalogueDate(privateData.data.catalogueDate, now) ||
+    privateData.data.catalogueDate !== catalogueDate(plan.syncedAt) ||
+    Date.parse(plan.syncedAt) > now
+  )
+    return null;
   return planSchema.parse(plan);
 }
 export function createRepository(demo: boolean): Repository {
@@ -56,7 +64,7 @@ export function createRepository(demo: boolean): Repository {
         expires = Date.now() + 5 * 60 * 1000;
         cache = database()
           .collection('packages')
-          .where('active', '==', true)
+          .where('catalogueDate', 'in', [catalogueDate(), catalogueDate(Date.now() - 86400000)])
           .get()
           .then((docs) =>
             docs.docs.map((d) => cataloguePlan(d.data())).filter((p): p is Plan => p !== null),
@@ -67,9 +75,7 @@ export function createRepository(demo: boolean): Repository {
           });
       }
       const snapshot = await cache;
-      const visible = snapshot.filter(
-        (p) => Date.parse(p.syncedAt) > Date.now() - 36 * 60 * 60 * 1000,
-      );
+      const visible = snapshot.filter((p) => currentCatalogueDate(catalogueDate(p.syncedAt)));
       // Retain snapshot identity while valid, so the search index is built once per cache refresh.
       return visible.length === snapshot.length ? snapshot : visible;
     },

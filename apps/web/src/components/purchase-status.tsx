@@ -178,7 +178,8 @@ function PrivatePurchase({ id }: { id: string }) {
               <div key={line.plan.id}>
                 <LineDescription line={line} />
                 <p>
-                  Quantity {line.quantity} · {money(line.plan.priceCents * line.quantity)}
+                  Quantity {line.quantity} ·{' '}
+                  {money(line.plan.priceCents * line.quantity, order.currency)}
                 </p>
               </div>
             ))}

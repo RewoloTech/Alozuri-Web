@@ -3,6 +3,8 @@ import { OAuth2Client } from 'google-auth-library';
 import { database } from './firebase.js';
 import { EsimAccessCatalogue, type CatalogueProvider } from './catalogue-provider.js';
 import type { Firestore } from 'firebase-admin/firestore';
+import { Timestamp } from 'firebase-admin/firestore';
+import { pricePackage, samePackage, packageWrite } from './package-pricing.js';
 import { storedPlanSchema } from './validation.js';
 export async function verifySyncIdentity(header: string | undefined) {
   const audience = process.env.CATALOGUE_SYNC_AUDIENCE,
@@ -54,17 +56,44 @@ export async function syncCatalogue(
       ...plans.map((p) => ({ ref: db.collection('packages').doc(p.id), data: p })),
       ...owned
         .filter((d) => !ids.has(d.id) && d.get('active') === true)
-        .map((d) => ({ ref: d.ref, data: { active: false } })),
+        .map((d) => ({ ref: d.ref, data: { active: false, pricingStatus: 'review_required' } })),
     ];
-    for (let offset = 0; offset < writes.length; offset += 400) {
-      const batch = db.batch();
-      for (const w of writes.slice(offset, offset + 400)) batch.set(w.ref, w.data, { merge: true });
-      await batch.commit();
+    let written = 0,
+      available = 0,
+      reviewRequired = 0;
+    for (let offset = 0; offset < writes.length; offset += 300) {
+      const counts = await db.runTransaction(async (t) => {
+        const chunk = writes.slice(offset, offset + 300);
+        const [lease, ...docs] = await t.getAll(state, ...chunk.map((w) => w.ref));
+        if (lease.get('runId') !== runId) throw new Error('Catalogue lease lost.');
+        let count = 0,
+          active = 0,
+          review = 0;
+        for (let i = 0; i < chunk.length; i++) {
+          const w = chunk[i],
+            previous = docs[i].data() || {};
+          const data = 'id' in w.data ? pricePackage(w.data, previous, Timestamp.now()) : w.data;
+          if ('id' in data) {
+            if (data.active) active++;
+            else review++;
+          }
+          if (!samePackage(previous, data)) {
+            t.set(w.ref, 'id' in data ? packageWrite(data) : data, { merge: true });
+            count++;
+          }
+        }
+        return { count, active, review };
+      });
+      written += counts.count;
+      available += counts.active;
+      reviewRequired += counts.review;
     }
     const result = {
       providerId: provider.id,
       fetched,
-      active: plans.length,
+      active: available,
+      reviewRequired,
+      written,
       unsupported: fetched - plans.length,
       syncedAt,
     };
