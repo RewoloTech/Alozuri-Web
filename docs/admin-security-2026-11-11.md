@@ -71,14 +71,15 @@ was selected and no production claims or environment variables were changed.
   privileged data, and the storefront proxy rejects admin reads/role writes.
 
 No live payment, supplier purchase, production mutation, or deployment was
-performed. There was no new visual UI change, so manual layout review was not
+performed during the original security review. There was no new visual UI change, so manual layout review was not
 required for this change. This is a targeted code and access-control review,
 not a penetration test or a complete Google Cloud organization IAM audit.
 
 ## Release requirements
 
-The authentication hardening is local until reviewed and deployed. If exactly
-one app administrator is intended, the owner must be explicitly identified,
+The authentication hardening was subsequently deployed with the approved API
+pricing releases (see `pricing-production-release-2026-11-11.json`). No owner UID
+or role was assigned. If exactly one app administrator is intended, the owner must be explicitly identified,
 their email verified, and the role and server UID restriction configured through
 a trusted administrative process. Merely deploying this change does not create
 an administrator. Use MFA for the owner and protect privileged Firebase/Cloud

@@ -64,3 +64,10 @@ Recommendation: produce clear customer-facing titles while preserving exact supp
 - No production administrator session was used. No role grants, refunds, supplier purchases, customer-record edits, payment submissions or deployments were performed.
 
 Recommended implementation order: unify customer history; correct operational status; add role-aware admin navigation and read-only order/exception views; add protected recovery actions; then address the remaining presentation issues. Actual live wallet authorisation, supplier allocation, installation and inbox delivery remain outside this review's verification.
+
+## Subsequent deployment status
+
+This report records the earlier review snapshot. The supplier usage route and
+admin authentication hardening were subsequently deployed with the approved API
+pricing releases. The operational admin-management gaps remain separate work;
+no admin role or owner UID was granted by those deployments.
