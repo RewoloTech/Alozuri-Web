@@ -208,7 +208,7 @@ describe('single-country plans', () => {
     cy.wait('@localOnly');
     cy.contains('h3', localPlan.name).should('be.visible');
     cy.contains('h3', plan.name).should('not.exist');
-    cy.contains('label', 'Include regional and global plans').find('input').check();
+    cy.contains('label', 'Also show regional and global plans').find('input').check();
     cy.wait('@includeRegions');
     cy.contains('h3', plan.name).should('be.visible');
     cy.contains('Multi-country coverage').should('be.visible');

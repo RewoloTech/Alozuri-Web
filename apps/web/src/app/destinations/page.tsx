@@ -1,6 +1,11 @@
+import { publicMetadata } from '@/lib/seo';
 import Link from 'next/link';
 import { DestinationDirectory } from '@/components/destination-directory';
-export const metadata = { title: 'Destinations', alternates: { canonical: '/destinations' } };
+export const metadata = publicMetadata(
+  'eSIM destinations',
+  'Find travel eSIM coverage by country or compare one plan for a multi-country itinerary.',
+  '/destinations',
+);
 export default function Destinations() {
   return (
     <section className="container section">

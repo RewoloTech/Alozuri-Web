@@ -12,7 +12,7 @@ import {
   signInWithPopup,
   updateProfile,
 } from 'firebase/auth';
-import { accountName } from '@voyaspan/shared';
+import { accountName, safeAccountDestination } from '@voyaspan/shared';
 import { authClient, firebaseConfigured } from '@/lib/firebase';
 const errors: Record<string, string> = {
   'auth/invalid-credential': 'The email or password is incorrect.',
@@ -32,8 +32,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' | 'reset' }) {
   const router = useRouter();
   const search = useSearchParams();
   const next = search.get('next');
-  const destination =
-    next?.startsWith('/') && !next.startsWith('//') && !next.includes('\\') ? next : '/dashboard';
+  const destination = safeAccountDestination(next);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -138,6 +137,11 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' | 'reset' }) {
               ? 'Enter your email and we’ll send you a reset link.'
               : 'Log in to find your eSIMs and pick up where you left off.'}
         </p>
+        <p className="fine-print">
+          Accounts and purchases are intended for adults aged 18 and over. Read our{' '}
+          <Link href="/terms">Terms</Link> and <Link href="/privacy">Privacy Policy</Link>. Signing
+          in does not opt you into marketing or optional support tracking.
+        </p>
         {!firebaseConfigured && (
           <div className="notice">
             Account access will be available when Firebase Authentication is connected. You can
@@ -224,10 +228,10 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' | 'reset' }) {
           )}
           {mode === 'register' && (
             <label className="checkbox-label">
-              <input type="checkbox" required />{' '}
+              <input type="checkbox" required />
               <span>
-                I agree to the <Link href="/legal/terms">Terms</Link> and{' '}
-                <Link href="/legal/privacy">Privacy Policy</Link>.
+                I agree to the <Link href="/terms">Terms</Link> and{' '}
+                <Link href="/privacy">Privacy Policy</Link>.
               </span>
             </label>
           )}

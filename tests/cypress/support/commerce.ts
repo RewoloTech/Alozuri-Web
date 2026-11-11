@@ -1,3 +1,4 @@
+import { privacyChoice, CONSENT_COOKIE } from '../../../packages/shared/src/privacy';
 import { searchPageFixture } from '../../fixtures/search';
 import type { CartItem, Plan } from '../../../packages/shared/src/index';
 
@@ -26,6 +27,7 @@ export const localPlan: Plan = {
 export const orderId = 'purchase_' + 'c'.repeat(48);
 
 export function mockCommerce() {
+  cy.setCookie(CONSENT_COOKIE, encodeURIComponent(JSON.stringify(privacyChoice(false))));
   cy.intercept('http://127.0.0.1:8189/**', (req) => {
     const url = new URL(req.url);
     const headers = {

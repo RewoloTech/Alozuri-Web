@@ -20,28 +20,28 @@ const destinations = [
     code: 'JP',
     flag: '🇯🇵',
     tag: 'City lights to mountain trails',
-    image: 'photo-1493976040374-85c8e12f0c0e',
+    image: '/images/japan.jpg',
   },
   {
     name: 'Italy',
     code: 'IT',
     flag: '🇮🇹',
     tag: 'Take the scenic route',
-    image: 'photo-1516483638261-f4dbaf036963',
+    image: '/images/italy.jpg',
   },
   {
     name: 'United States',
     code: 'US',
     flag: '🇺🇸',
     tag: 'For the road trip and everything after',
-    image: 'photo-1485738422979-f5c462d49f74',
+    image: '/images/usa.jpg',
   },
   {
     name: 'Turkey',
     code: 'TR',
     flag: '🇹🇷',
     tag: 'A new connection at every corner',
-    image: 'photo-1570939274717-7eda259b50ed',
+    image: '/images/turkey.jpg',
   },
 ];
 export function Home() {
@@ -160,7 +160,7 @@ export function Home() {
               <div
                 className="destination-photo"
                 style={{
-                  backgroundImage: `url(https://images.unsplash.com/${d.image}?auto=format&fit=crop&w=700&q=85)`,
+                  backgroundImage: `url(${d.image})`,
                 }}
               />
               <div className="destination-copy">

@@ -75,3 +75,25 @@ For this release, 19 shared tests, 52 API tests, 11 Firestore tests, 11 Cypress 
 ## Pending tiered pricing implementation
 
 [Automatic pricing and migration](automatic-pricing.md) records the new algorithm, UTC today/yesterday fallback, server-side currencies, private-field safeguards and deployment boundary. Current local verification: 95 unit/API tests, 20 Firestore tests, 13 Cypress cases, six Playwright fixture cases and real Stripe TEST decline/retry runs in USD/GBP/EUR passed. Actual wallet authorisation and live eSIM delivery remain unverified. The production database migration was previewed read-only and has not been applied.
+
+## Legal, privacy, customer support and SEO (2026-11-11)
+
+Tawk.to now uses an explicitly opened hosted chat link after optional support consent. No vendor script runs on Alozuri account/checkout pages. Necessary-only shopping remains available after rejection; Cookie settings in the footer supports withdrawal. Fonts and destination images are served locally. The earlier global lazy-loaded Tawk embed has been replaced.
+
+The seven canonical legal pages, version archives, company footer, checkout acknowledgements, immutable order/contract snapshots, durable confirmation emails, confirmation-before-provisioning gate, public metadata/JSON-LD, robots and sitemap are documented in [LEGAL_COMPLIANCE.md](../LEGAL_COMPLIANCE.md). That document also lists legal, supplier and operational questions; this implementation is not a compliance certification.
+
+Current observed verification:
+
+- `npm test`: 100 shared/API tests passed.
+- `npm run test:firestore` (Java 21/local emulator): 21 passed, including missing/negative legal consent, private contract retrieval, failed confirmation/retry and provisioning gates.
+- `npm run test:cypress`: 13 passed.
+- `npm run test:e2e`: 10 passed; the real Stripe case is deliberately skipped in this fixture command and runs separately. The six shopping cases also passed after adding assertions for four initially unchecked checkout choices and the exact posted legal version.
+- `npm run test:stripe` (local Firestore, real Stripe TEST SDK/API, USD): passed decline, same-intent retry, completed sandbox payment and private paid-order confirmation. The runner simulates signed webhook transport locally; it does not verify Stripe’s external production webhook delivery. Masked Stripe fields are entered with key events and blurred to commit their state.
+- Production HTTP/browser checks passed for all seven documents, canonical/indexing metadata, robots, sitemap, private/no-store headers, filter noindex headers and optional-provider request absence.
+- Mobile/desktop cookie, contract and checkout views were checked at 375/390/768/1440px; screenshots were reviewed locally. Keyboard dismissal/focus restoration and initially unchecked consent are tested.
+
+Lint, app/test TypeScript, changed-file formatting and the production build passed; no real charge, wallet authorisation, supplier purchase or actual delivery-email receipt is implied by fixture tests. Search-console ownership, Cloudflare account rules, live mailbox/bounce handling and processor/legal review remain external checks. No deployment or live database migration is part of this change.
+
+## Checkbox, hover and security follow-up (2026-11-11)
+
+The latest shared/API count is 102 passing tests; Firestore remains 21 passing tests, with direct authenticated and anonymous access checks expanded to customer collections and catalogue listing. The full browser fixture suite passed 11 cases, including the new desktop/mobile hover and checkbox regression. Sign-in redirect validation now covers literal/encoded controls and external URL variants. A read-only inspection confirmed deployed Firestore deny-all client rules; `npm audit` reported zero known advisories. See [security review](security-review.md) for the scope and limitations.

@@ -1,3 +1,4 @@
+import { privacyChoice, CONSENT_COOKIE } from '../../packages/shared/src/privacy';
 import { test, expect, type Frame } from '@playwright/test';
 test.skip(
   process.env.STRIPE_INTEGRATION !== '1',
@@ -7,6 +8,14 @@ test('real Stripe Payment Element declines a test card, retries the same intent 
   page,
 }) => {
   test.setTimeout(120000);
+  await page.context().addCookies([
+    {
+      name: CONSENT_COOKIE,
+      value: encodeURIComponent(JSON.stringify(privacyChoice(false))),
+      domain: 'localhost',
+      path: '/',
+    },
+  ]);
   let requests = 0;
   page.on('request', (r) => {
     if (r.url().endsWith('/v2/checkout') && r.method() === 'POST') requests++;
@@ -26,7 +35,7 @@ test('real Stripe Payment Element declines a test card, retries the same intent 
   await page
     .getByRole('textbox', { name: 'Confirm email address' })
     .fill('checkout-test@example.com');
-  await page.getByRole('checkbox').check();
+  for (const checkbox of await page.getByRole('checkbox').all()) await checkbox.check();
   await page.getByRole('button', { name: 'Continue to payment' }).click();
   let paymentFrame: Frame | undefined;
   await expect
@@ -52,11 +61,16 @@ test('real Stripe Payment Element declines a test card, retries the same intent 
   const frame = paymentFrame;
   const country = frame.getByRole('combobox', { name: 'Country/Territory', exact: true });
   if (await country.count()) await country.selectOption('US');
-  await frame.getByRole('textbox', { name: 'Card number', exact: true }).fill('4000000000009995');
+  const firstCard = frame.getByRole('textbox', { name: 'Card number', exact: true });
+  await firstCard.pressSequentially('4000000000009995', { delay: 25 });
+  await firstCard.press('Tab');
   await frame.getByRole('textbox', { name: /Expiration|Expiry|MM/ }).fill('1230');
   await frame.getByRole('textbox', { name: /Security code|CVC/ }).fill('123');
   const postal = frame.getByRole('textbox', { name: /ZIP|Postal/ });
-  if (await postal.count()) await postal.fill('10001');
+  if (await postal.count()) {
+    await postal.fill('10001');
+    await postal.press('Tab');
+  }
   await page.screenshot({ path: 'test-results/stripe-real-form.png', fullPage: true });
   await page.getByRole('button', { name: 'Pay securely', exact: true }).click();
   await expect(page.getByRole('alert').filter({ hasText: /declined|insufficient/i })).toContainText(

@@ -1,5 +1,10 @@
+import { publicMetadata } from '@/lib/seo';
 import Link from 'next/link';
-export const metadata = { title: 'Help & installation', alternates: { canonical: '/help' } };
+export const metadata = publicMetadata(
+  'Help and eSIM installation',
+  'Get help checking device compatibility, installing your travel eSIM, understanding activation and contacting Alozuri.',
+  '/help',
+);
 export default function Help() {
   return (
     <section className="container section help-page">
@@ -25,7 +30,7 @@ export default function Help() {
           <h2>1. Before installation</h2>
           <p>
             Connect to reliable Wi-Fi. Open your order from your account. Read when validity starts:
-            installation or first supported network connection.
+            purchase, installation or first supported network connection, according to the plan.
           </p>
         </div>
         <div className="surface">
@@ -55,13 +60,15 @@ export default function Help() {
           your order supplies one. Avoid deleting an installed eSIM; reinstalling may not be
           supported.
         </p>
-        <p>Usage is not live and may be delayed by 2–3 hours.</p>
+        <p>
+          Live usage reporting is not provided by this storefront; do not assume an unverified
+          balance or update interval.
+        </p>
       </div>
       <div className="notice">
-        <strong>Support setup is pending.</strong> This preview does not accept orders. A verified
-        support contact will be published before sales open.{' '}
-        <Link className="text-link" href="/dashboard">
-          View your account →
+        <strong>Need more help?</strong> Email info@alozuri.com or visit our contact page.{' '}
+        <Link className="text-link" href="/contact">
+          Contact support →
         </Link>
       </div>
     </section>

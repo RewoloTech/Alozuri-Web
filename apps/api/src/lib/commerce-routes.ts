@@ -1,3 +1,4 @@
+import { checkoutLegalSchema } from './legal.js';
 import { currencySchema } from './exchange-rates.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -55,6 +56,7 @@ export function registerCommerceRoutes(
           emailConfirmation: z.email().max(254),
           requestId: z.uuid(),
           compatible: z.literal(true),
+          legal: checkoutLegalSchema,
           currency: currencySchema,
           expectedTotalCents: z.number().int().positive(),
         })

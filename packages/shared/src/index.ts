@@ -283,3 +283,28 @@ export type {
   SearchFilters,
   SearchPage,
 } from './search.ts';
+
+// Keep post-authentication navigation on this origin, including after URL normalisation.
+export function safeAccountDestination(input: unknown): string {
+  const fallback = '/dashboard';
+  if (
+    typeof input !== 'string' ||
+    input.length > 2048 ||
+    !input.startsWith('/') ||
+    input.startsWith('//')
+  )
+    return fallback;
+  const unsafe = (value: string) =>
+    [...value].some((c) => c.charCodeAt(0) <= 0x20 || c.charCodeAt(0) === 0x7f || c === '\\');
+  if (unsafe(input)) return fallback;
+  try {
+    const path = decodeURIComponent(input.split(/[?#]/, 1)[0]);
+    if (unsafe(path) || path.startsWith('//')) return fallback;
+    const target = new URL(input, 'https://alozuri.invalid');
+    if (target.origin !== 'https://alozuri.invalid' || target.pathname.startsWith('//'))
+      return fallback;
+    return input;
+  } catch {
+    return fallback;
+  }
+}

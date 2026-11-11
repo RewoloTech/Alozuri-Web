@@ -181,6 +181,7 @@ export async function createApp(
       .parse(request.body ?? {});
     z.object({}).strict().parse(request.query);
     if (!fulfillment) return reply.code(503).send({ error: 'Delivery is not configured.' });
+    await commerce?.notify();
     const result = await fulfillment.run();
     await commerce?.notify();
     if (result.failed) {
@@ -201,6 +202,11 @@ export async function createApp(
       ? { activation }
       : reply.code(404).send({ error: 'Installation details are not available for this order.' });
   });
+  app.get('/v1/catalogue/sitemap', async () => ({
+    plans: (await repository.plans())
+      .filter((p) => !p.demo)
+      .map((p) => ({ id: p.id, syncedAt: p.syncedAt })),
+  }));
   app.get('/v1/countries', async () => {
     const codes = [...new Set((await repository.plans()).flatMap((p) => p.countries))];
     return {

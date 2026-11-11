@@ -30,6 +30,7 @@ export function LineDescription({ line }: { line: CartLine }) {
       <p>
         {dataLabel(line.plan)} · {line.plan.days} days · {coverageLabel(line.plan)}
       </p>
+      <p>Activation: {line.plan.activation}</p>
       <details>
         <summary>
           Coverage: {line.plan.countries.length}{' '}
@@ -61,6 +62,8 @@ export function OrderSummary({
             <p>
               {dataLabel(line.plan)} · {line.plan.days} days · Qty {line.quantity}
             </p>
+            <p>Activation: {line.plan.activation}</p>
+            <p>{line.plan.fairUse}</p>
             <small>
               Coverage: {line.plan.countries.length}{' '}
               {line.plan.countries.length === 1 ? 'destination' : 'destinations'}

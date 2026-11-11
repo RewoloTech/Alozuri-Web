@@ -5,7 +5,10 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./demo": "./src/demo.ts"
+    "./demo": "./src/demo.ts",
+    "./legal": "./src/legal.ts",
+    "./privacy": "./src/privacy.ts",
+    "./policies": "./src/policies.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

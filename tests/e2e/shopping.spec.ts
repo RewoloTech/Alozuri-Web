@@ -1,3 +1,5 @@
+import { CHECKOUT_LEGAL_ACCEPTANCE } from '../../packages/shared/src/legal';
+import { privacyChoice, CONSENT_COOKIE } from '../../packages/shared/src/privacy';
 import { searchPageFixture } from '../fixtures/search';
 import { test, expect, type Page } from '@playwright/test';
 const browserErrors = new WeakMap<Page, string[]>();
@@ -34,6 +36,14 @@ const second = {
 };
 const orderId = 'purchase_' + 'a'.repeat(48);
 async function setup(page: Page) {
+  await page.context().addCookies([
+    {
+      name: CONSENT_COOKIE,
+      value: encodeURIComponent(JSON.stringify(privacyChoice(false))),
+      domain: 'localhost',
+      path: '/',
+    },
+  ]);
   await page.route('http://127.0.0.1:8189/**', async (route) => {
     const req = route.request(),
       url = new URL(req.url());
@@ -71,11 +81,12 @@ async function setup(page: Page) {
     } else if (url.pathname.startsWith('/v1/packages/'))
       data = { plan: url.pathname.endsWith(second.id) ? second : plan };
     else if (url.pathname === '/v2/quote' || url.pathname === '/v2/checkout') {
-      const input = req.postDataJSON(),
-        items = input.items.map((i: { planId: string; quantity: number }) => ({
-          plan: i.planId === second.id ? second : plan,
-          quantity: i.quantity,
-        }));
+      const input = req.postDataJSON();
+      if (url.pathname === '/v2/checkout') expect(input.legal).toEqual(CHECKOUT_LEGAL_ACCEPTANCE);
+      const items = input.items.map((i: { planId: string; quantity: number }) => ({
+        plan: i.planId === second.id ? second : plan,
+        quantity: i.quantity,
+      }));
       const total = items.reduce(
           (sum: number, i: { plan: typeof plan; quantity: number }) =>
             sum + i.plan.priceCents * i.quantity,
@@ -258,7 +269,17 @@ async function openCheckout(page: Page) {
   await page.goto('/checkout');
   await page.getByRole('textbox', { name: 'Email address', exact: true }).fill('guest@example.com');
   await page.getByRole('textbox', { name: 'Confirm email address' }).fill('different@example.com');
-  await page.getByRole('checkbox').check();
+  const choices = page.getByRole('checkbox');
+  await expect(choices).toHaveCount(4);
+  await expect(page.getByRole('button', { name: 'Continue to payment' })).toBeDisabled();
+  for (const checkbox of await choices.all()) {
+    await expect(checkbox).not.toBeChecked();
+    await checkbox.check();
+  }
+  const viewport = page.viewportSize();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: '/tmp/alozuri-checkout-consent-mobile.png', fullPage: true });
+  if (viewport) await page.setViewportSize(viewport);
   await page.getByRole('button', { name: 'Continue to payment' }).click();
   await expect(page.getByText('Email addresses do not match.')).toBeVisible();
   await page.getByRole('textbox', { name: 'Confirm email address' }).fill('guest@example.com');

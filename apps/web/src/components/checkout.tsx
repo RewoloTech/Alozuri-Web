@@ -1,4 +1,9 @@
 'use client';
+import {
+  LEGAL_VERSION,
+  EARLY_SUPPLY_REQUEST,
+  CANCELLATION_ACKNOWLEDGEMENT,
+} from '@voyaspan/shared/legal';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -148,6 +153,9 @@ function CheckoutForIdentity() {
     lock(Boolean(session) || starting);
     return () => lock(false);
   }, [session, starting, lock]);
+  const [termsAccepted, setTermsAccepted] = useState(false),
+    [immediateSupplyRequested, setImmediateSupplyRequested] = useState(false),
+    [cancellationAcknowledged, setCancellationAcknowledged] = useState(false);
   const request = useRef(crypto.randomUUID()),
     submitting = useRef(false);
   useEffect(() => {
@@ -211,6 +219,10 @@ function CheckoutForIdentity() {
   async function start(e: React.FormEvent) {
     e.preventDefault();
     if (submitting.current || !quote) return;
+    if (!termsAccepted || !immediateSupplyRequested || !cancellationAcknowledged) {
+      setError('Please review the terms and immediate-supply choices before payment.');
+      return;
+    }
     if (email.trim().toLowerCase() !== confirmation.trim().toLowerCase()) {
       setError('Email addresses do not match.');
       return;
@@ -220,6 +232,7 @@ function CheckoutForIdentity() {
     setError('');
     try {
       const fingerprint = JSON.stringify({
+        legalVersion: LEGAL_VERSION,
         currency,
         items: JSON.parse(signature),
         email: email.trim().toLowerCase(),
@@ -252,6 +265,12 @@ function CheckoutForIdentity() {
             email: email.trim(),
             emailConfirmation: confirmation.trim(),
             compatible,
+            legal: {
+              version: LEGAL_VERSION,
+              termsAccepted,
+              immediateSupplyRequested,
+              cancellationAcknowledged,
+            },
             requestId: request.current,
             expectedTotalCents: quote.totalCents,
           }),
@@ -393,6 +412,55 @@ function CheckoutForIdentity() {
                   <Link href="/help#compatibility">Check compatibility</Link>
                 </span>
               </label>
+              <fieldset className="checkout-legal">
+                <legend>Your agreement and supply choices</legend>
+                <p>
+                  Review the <Link href="/terms">Terms and Conditions</Link>,{' '}
+                  <Link href="/refund-policy">Refund and Cancellation Policy</Link>,{' '}
+                  <Link href="/privacy">Privacy Policy</Link> and{' '}
+                  <Link href="/esim-compatibility">device requirements</Link>. No checkbox waives
+                  rights for faulty or misdescribed supply.
+                </p>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    required
+                    checked={termsAccepted}
+                    onChange={(e) => setTermsAccepted(e.target.checked)}
+                  />
+                  <span>
+                    I agree to the Terms and Conditions (version {LEGAL_VERSION}) and have read the
+                    Refund and Cancellation Policy.
+                  </span>
+                </label>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    required
+                    checked={immediateSupplyRequested}
+                    onChange={(e) => setImmediateSupplyRequested(e.target.checked)}
+                  />
+                  <span>{EARLY_SUPPLY_REQUEST}</span>
+                </label>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    required
+                    checked={cancellationAcknowledged}
+                    onChange={(e) => setCancellationAcknowledged(e.target.checked)}
+                  />
+                  <span>{CANCELLATION_ACKNOWLEDGEMENT}</span>
+                </label>
+                <p>
+                  If you prefer later supply, leave the early-supply choices unticked and{' '}
+                  <Link href="/contact">contact us before ordering</Link>. This online checkout
+                  supplies immediately; delayed delivery is not automatically scheduled.
+                </p>
+                <p>
+                  Continuing opens Stripe’s payment form. The final “Pay securely” button authorises
+                  payment of the displayed total.
+                </p>
+              </fieldset>
               {mode === 'disabled' || mode !== stripeCheckoutMode ? (
                 <p className="notice" role="status">
                   Payments are not currently configured for this storefront. Your cart is saved.
@@ -405,6 +473,9 @@ function CheckoutForIdentity() {
                   loading ||
                   !quote ||
                   !compatible ||
+                  !termsAccepted ||
+                  !immediateSupplyRequested ||
+                  !cancellationAcknowledged ||
                   mode === 'disabled' ||
                   mode !== stripeCheckoutMode
                 }

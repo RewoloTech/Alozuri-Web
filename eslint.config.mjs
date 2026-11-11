@@ -14,5 +14,7 @@ export default defineConfig([
     '**/out/**',
     '**/node_modules/**',
     '**/next-env.d.ts',
+    'test-results/**',
+    'playwright-report/**',
   ]),
 ]);

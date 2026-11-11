@@ -1,3 +1,5 @@
+import { legalSnapshot, legalSnapshotSchema } from './legal.js';
+import { BUSINESS, type CheckoutLegalAcceptance } from '../../../../packages/shared/src/legal.ts';
 import {
   ExchangeRates,
   currencySchema,
@@ -19,6 +21,7 @@ import type { Principal, Repository } from './repository.js';
 import { planSchema } from './validation.js';
 import {
   mergeCartItems,
+  dataLabel,
   type CartItem,
   type StoredPlan,
   type Plan,
@@ -87,6 +90,7 @@ const purchaseSchema = z
     accessHash: z.string(),
     paymentIntentId: z.string().optional(),
     paidAt: z.string().optional(),
+    legal: legalSnapshotSchema.optional(),
   })
   .refine(
     (p) =>
@@ -156,30 +160,49 @@ export async function priceCart(
   };
 }
 export interface OrderMailer {
-  send(input: { id: string; email: string; url: string }): Promise<void>;
+  send(input: {
+    id: string;
+    email: string;
+    url: string;
+    kind?: 'contract' | 'delivery';
+    text?: string;
+  }): Promise<{ providerMessageId: string } | void>;
 }
 export class ResendOrderMailer implements OrderMailer {
   constructor(
     private key: string,
     private from: string,
   ) {}
-  async send(input: { id: string; email: string; url: string }) {
+  async send(input: {
+    id: string;
+    email: string;
+    url: string;
+    kind?: 'contract' | 'delivery';
+    text?: string;
+  }) {
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
         Authorization: 'Bearer ' + this.key,
         'Content-Type': 'application/json',
-        'Idempotency-Key': input.id + ':delivery:v1',
+        'Idempotency-Key': input.id + ':' + (input.kind ?? 'delivery') + ':v1',
       },
       body: JSON.stringify({
         from: this.from,
         to: [input.email],
-        subject: 'Your Alozuri eSIM order',
-        text: `Your Alozuri order ${input.id} is ready to view. Open this private link for your eSIM installation details and order status:\n\n${input.url}\n\nKeep this link private. Install over Wi-Fi and follow your plan’s activation rules.`,
+        subject:
+          input.kind === 'contract'
+            ? 'Your Alozuri order confirmation and contract'
+            : 'Your Alozuri eSIM order',
+        text:
+          input.text ??
+          `Your Alozuri order ${input.id} is ready to view. Open this private link for your eSIM installation details and order status:\n\n${input.url}\n\nKeep this link private. Install over Wi-Fi and follow your plan’s activation rules.`,
       }),
       signal: AbortSignal.timeout(15000),
     });
     if (!response.ok) throw new Error('Order email delivery failed.');
+    const receipt = z.object({ id: z.string().min(1).max(200) }).parse(await response.json());
+    return { providerMessageId: receipt.id };
   }
 }
 export class CommerceService {
@@ -237,6 +260,7 @@ export class CommerceService {
       emailConfirmation: string;
       requestId: string;
       compatible: true;
+      legal: CheckoutLegalAcceptance;
       currency: Currency;
       expectedTotalCents: number;
     },
@@ -246,6 +270,7 @@ export class CommerceService {
       throw new CommerceError('Checkout is temporarily paused for catalogue maintenance.', 503);
     if (input.email.toLowerCase() !== input.emailConfirmation.toLowerCase())
       throw new CommerceError('Email addresses do not match.');
+    const acceptance = legalSnapshot(input.legal);
     const email = input.email.toLowerCase(),
       owner = user?.verified ? user.uid : 'guest',
       id = 'purchase_' + hash(this.mode + ':' + owner + ':' + input.requestId).slice(0, 48),
@@ -265,12 +290,14 @@ export class CommerceService {
       test: this.mode === 'test',
       createdAt: new Date().toISOString(),
       accessHash: hash(accessToken),
+      legal: acceptance,
     };
     const purchase = await this.db.runTransaction(async (t) => {
       const doc = await t.get(ref);
       if (doc.exists) {
         const p = purchaseSchema.parse(doc.data());
         if (
+          p.legal?.version !== acceptance.version ||
           p.email !== email ||
           p.totalCents !== proposed.totalCents ||
           p.currency !== proposed.currency ||
@@ -490,6 +517,7 @@ export class CommerceService {
               plan: line.plan,
               amountCents: line.plan.priceCents,
               currency: p.currency,
+              legalVersion: p.legal?.version ?? null,
               baseSellingPriceUsdCents: line.baseSellingPriceUsdCents ?? line.plan.priceCents,
               pricingVersion: line.pricingVersion ?? 'legacy',
               exchange: line.exchange ?? null,
@@ -516,7 +544,9 @@ export class CommerceService {
           status: 'paid',
           paidAt: new Date().toISOString(),
           paymentIntentId: intent.id,
-          ...(p.test ? {} : { emailDueAt: Date.now() }),
+          ...(p.test
+            ? {}
+            : { emailDueAt: Date.now(), ...(p.legal ? { contractEmailDueAt: Date.now() } : {}) }),
         });
       } else if (!p.paidAt)
         t.update(ref, {
@@ -551,6 +581,7 @@ export class CommerceService {
       test: p.test,
       createdAt: p.createdAt,
       allocations,
+      ...(p.legal ? { legal: p.legal } : {}),
     };
   }
   async activation(id: string, unitId: string, user: Principal | null, access: string | undefined) {
@@ -605,6 +636,54 @@ export class CommerceService {
   async notify() {
     if (!this.mailer) return { sent: 0 };
     let sent = 0;
+    const contracts = await this.db
+      .collection('purchases')
+      .where('contractEmailDueAt', '<=', Date.now())
+      .limit(10)
+      .get();
+    for (const doc of contracts.docs) {
+      const claimed = await this.db.runTransaction(async (t) => {
+        const d = await t.get(doc.ref);
+        if (
+          d.get('contractEmailSentAt') ||
+          d.get('contractEmailLeaseUntil') > Date.now() ||
+          d.get('test') !== false
+        )
+          return false;
+        t.update(doc.ref, { contractEmailLeaseUntil: Date.now() + 60000 });
+        return true;
+      });
+      if (!claimed) continue;
+      try {
+        const p = purchaseSchema.parse(doc.data());
+        if (!p.legal || !p.paidAt) throw new Error('Contract confirmation unavailable.');
+        const amount = (cents: number) => {
+          const n = BigInt(cents);
+          return `${n / 100n}.${String(n % 100n).padStart(2, '0')}`;
+        };
+        const text = `${BUSINESS.identity}\n${BUSINESS.address}\n${BUSINESS.email}\n\nOrder ${doc.id}\nPaid total: ${amount(p.totalCents)} ${p.currency}\n${p.items.map((i) => `${i.quantity} × ${i.plan.name}: ${amount(i.plan.priceCents)} ${p.currency} each; ${dataLabel(i.plan)}; ${i.plan.days} days; ${i.plan.countries.join(', ')}; ${i.plan.activation}; ${i.plan.fairUse}`).join('\n')}\n\nLegal acceptance recorded ${p.legal.acceptedAt} (version ${p.legal.version}).\n${p.legal.requestText}\n${p.legal.acknowledgementText}\n\n${p.legal.termsText}\n\n${p.legal.refundText}\n\nKeep this confirmation. Your private installation link will follow after supplier allocation. You can contact ${BUSINESS.email} to cancel or request help; do not send activation secrets.`;
+        const receipt = await this.mailer.send({
+          id: doc.id,
+          email: p.email,
+          url: this.site + '/contact',
+          kind: 'contract',
+          text,
+        });
+        await doc.ref.update({
+          ...(receipt ? { contractEmailProviderId: receipt.providerMessageId } : {}),
+          contractEmailSentAt: new Date().toISOString(),
+          contractEmailDueAt: Date.now() + 315360000000,
+          contractEmailLeaseUntil: 0,
+        });
+        sent++;
+      } catch {
+        await doc.ref.update({
+          contractEmailDueAt: Date.now() + 60000,
+          contractEmailLeaseUntil: 0,
+        });
+      }
+    }
+
     const docs = await this.db
       .collection('purchases')
       .where('emailDueAt', '<=', Date.now())

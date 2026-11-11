@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useDispatch, useSelector } from 'react-redux';
+import type { CheckoutLegalAcceptance } from '@voyaspan/shared/legal';
 import { money, type CartLine, type CartItem, type Plan } from '@voyaspan/shared';
 import { removeFromCart, quantityChanged, type RootState } from '@/lib/store';
 import { api } from '@/lib/api';
@@ -18,6 +19,14 @@ export type Purchase = {
   status: string;
   test: boolean;
   createdAt: string;
+  legal?: Omit<CheckoutLegalAcceptance, 'version'> & { version: string } & {
+    acceptedAt: string;
+    effectiveDate: string;
+    termsText: string;
+    refundText: string;
+    requestText: string;
+    acknowledgementText: string;
+  };
   allocations: { id: string; status: string; plan: Plan }[];
 };
 export function PurchaseStatus() {
@@ -143,6 +152,30 @@ function PrivatePurchase({ id }: { id: string }) {
               <p>Payment: {order.status.replaceAll('_', ' ')}</p>
               <p>Delivery email: {order.email}</p>
               <p>Total: {money(order.totalCents, order.currency)}</p>
+              {order.legal && (
+                <div>
+                  <p>
+                    Terms version {order.legal.version} · Accepted {order.legal.acceptedAt}
+                  </p>
+                  <button
+                    className="button"
+                    onClick={() => {
+                      if (!order.legal) return;
+                      const text = `Order ${order.id}\nTotal ${money(order.totalCents, order.currency)}\nAccepted ${order.legal.acceptedAt}\n${order.legal.requestText}\n${order.legal.acknowledgementText}\n\n${order.legal.termsText}\n\n${order.legal.refundText}`;
+                      const url = URL.createObjectURL(
+                        new Blob([text], { type: 'text/plain;charset=utf-8' }),
+                      );
+                      const link = document.createElement('a');
+                      link.href = url;
+                      link.download = 'Alozuri-contract-' + order.id + '.txt';
+                      link.click();
+                      setTimeout(() => URL.revokeObjectURL(url), 1000);
+                    }}
+                  >
+                    Download your contract
+                  </button>
+                </div>
+              )}
               {order.test ? (
                 <p className="notice">Stripe test order. No real charge or eSIM is issued.</p>
               ) : order.status === 'paid' && !ready ? (

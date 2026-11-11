@@ -7,14 +7,21 @@ import { demoPlans } from '@voyaspan/shared/demo';
 import { useCurrency } from './currency-provider';
 import { api, demoMode } from '@/lib/api';
 import { addToCart, type RootState } from '@/lib/store';
-export function PlanDetails({ id }: { id: string; review?: boolean }) {
+export function PlanDetails({
+  id,
+  initialPlan = null,
+}: {
+  id: string;
+  review?: boolean;
+  initialPlan?: Plan | null;
+}) {
   const { currency, refresh } = useCurrency();
   const dispatch = useDispatch(),
     cart = useSelector((s: RootState) => s.cart);
-  const [plan, setPlan] = useState<Plan | null>(() =>
-      demoMode ? (demoPlans.find((p) => p.id === id) ?? null) : null,
+  const [plan, setPlan] = useState<Plan | null>(
+      () => initialPlan ?? (demoMode ? (demoPlans.find((p) => p.id === id) ?? null) : null),
     ),
-    [loading, setLoading] = useState(!demoMode),
+    [loading, setLoading] = useState(!demoMode && !initialPlan),
     [adding, setAdding] = useState(false),
     [added, setAdded] = useState(false),
     [error, setError] = useState('');
@@ -111,6 +118,11 @@ export function PlanDetails({ id }: { id: string; review?: boolean }) {
             {plan.supplierNotes && (
               <section>
                 <h2>Supplier conditions</h2>
+                <p>
+                  These product-specific conditions do not override{' '}
+                  <Link href="/refund-policy">Alozuri’s Refund and Cancellation Policy</Link> or
+                  your statutory rights.
+                </p>
                 <p style={{ whiteSpace: 'pre-line' }}>{plan.supplierNotes}</p>
               </section>
             )}

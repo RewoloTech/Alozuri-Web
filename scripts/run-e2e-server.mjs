@@ -16,6 +16,7 @@ for (const file of [
   'packages/shared/package.json',
   'packages/shared/src',
   'apps/web/src',
+  'apps/web/public',
 ]) {
   mkdirSync(path.dirname(path.join(target, file)), { recursive: true });
   cpSync(path.join(source, file), path.join(target, file), { recursive: true });

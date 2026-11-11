@@ -517,7 +517,12 @@ export function Planner({
                   if (results !== null || loading) void search(allowance, e.target.checked);
                 }}
               />
-              Include regional and global plans covering this country
+              <span>
+                Also show regional and global plans
+                <small className="regional-plan-explanation">
+                  Off: plans for this country only. On: multi-country plans that also cover it.
+                </small>
+              </span>
             </label>
           )}
           <div className="planner-note">

@@ -105,6 +105,16 @@ export function firestoreFulfillmentStore(): FulfillmentStore {
           t.delete(jobRef);
           return null;
         }
+        // New contracts must be confirmed on a durable medium before digital supply begins.
+        const parentId = doc.get('parentOrderId');
+        if (typeof parentId === 'string') {
+          const parent = await t.get(db.collection('purchases').doc(parentId));
+          if (
+            (doc.get('legalVersion') || parent.get('legal')) &&
+            (!parent.exists || !parent.get('contractEmailSentAt'))
+          )
+            return null;
+        }
         const validated = liveOrderSchema.safeParse(doc.data());
         if (!validated.success) {
           t.update(ref, {

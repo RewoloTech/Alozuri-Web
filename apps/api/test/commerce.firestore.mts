@@ -1,3 +1,4 @@
+import { CHECKOUT_LEGAL_ACCEPTANCE } from '../../../packages/shared/src/legal.ts';
 import { convertPrice, priceExchange, type FxRates } from '../src/lib/exchange-rates.ts';
 import type { Currency } from '../../../packages/shared/src/index.ts';
 import { pricePackage } from '../src/lib/package-pricing.ts';
@@ -21,6 +22,7 @@ function fixture(
   testMode = false,
   capacity?: (items: { wholesaleUnits: number; quantity: number }[]) => Promise<void>,
   currency: Currency = 'USD',
+  emailFailure?: () => boolean,
 ) {
   const plans: StoredPlan[] = demoPlans.slice(0, 2).map((p) =>
     pricePackage(
@@ -36,7 +38,13 @@ function fixture(
     ),
   );
   let creates = 0;
-  const emails: { id: string; email: string; url: string }[] = [];
+  const emails: {
+    id: string;
+    email: string;
+    url: string;
+    kind?: 'contract' | 'delivery';
+    text?: string;
+  }[] = [];
   const intent = {
     id: 'pi_fixture_' + ++serial,
     livemode: !testMode,
@@ -94,6 +102,7 @@ function fixture(
     db,
     {
       send: async (input) => {
+        if (emailFailure?.()) throw new Error('Temporary email-provider failure');
         emails.push(input);
       },
     },
@@ -109,6 +118,7 @@ function fixture(
     emailConfirmation: 'guest@example.com',
     requestId: crypto.randomUUID(),
     compatible: true as const,
+    legal: CHECKOUT_LEGAL_ACCEPTANCE,
     currency,
     expectedTotalCents:
       convertPrice(plans[0].priceCents, currency, priceExchange(currency, rates)) * 2 +
@@ -178,6 +188,7 @@ test('guest multi-item checkout retries one intent, paid webhook allocates one e
   assert.equal(units.size, 3);
   assert.equal(new Set(units.docs.map((d) => d.id)).size, 3);
   assert.ok(units.docs.every((d) => d.get('chargeTotalCents') === f.input.expectedTotalCents));
+  await f.service.notify();
   const transactions = new Set<string>();
   let allocation = 0;
   const worker = new FulfillmentService(f.stripe, firestoreFulfillmentStore(), {
@@ -204,10 +215,14 @@ test('guest multi-item checkout retries one intent, paid webhook allocates one e
       await f.service.activation(first.orderId, units.docs[0].id, null, first.accessToken)
     ).ac.startsWith('LPA:1$'),
   );
+  // The worker's next scheduled notification run occurs after the pending-email retry.
+  await db.collection('purchases').doc(first.orderId).update({ emailDueAt: Date.now() });
   await f.service.notify();
   await f.service.notify();
-  assert.equal(f.emails.filter((e) => e.id === first.orderId).length, 1);
-  assert.ok(f.emails[0].url.includes('#access='));
+  assert.equal(f.emails.filter((e) => e.id === first.orderId).length, 2);
+  assert.equal(f.emails[0].kind, 'contract');
+  assert.ok(f.emails[0].text?.includes('Rewolo Technologies Ltd'));
+  assert.ok(f.emails[1].url.includes('#access='));
   const history = await f.service.history({
     uid: 'new-account',
     verified: true,
@@ -368,21 +383,58 @@ for (const currency of ['GBP', 'EUR'] as const)
 test('public Firestore clients cannot read supplier pricing or bypass the importer with direct writes', async () => {
   const f = fixture(true);
   await db.doc('packages/private-pricing-test').set(f.plans[0]);
-  const url =
-    'http://127.0.0.1:8188/v1/projects/demo-alozuri/databases/(default)/documents/packages/private-pricing-test';
-  assert.equal((await fetch(url)).status, 403);
-  assert.equal(
-    (
-      await fetch(url, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          fields: { priceCents: { integerValue: '1' }, pricingStatus: { stringValue: 'valid' } },
-        }),
-      })
-    ).status,
-    403,
-  );
+  const base = 'http://127.0.0.1:8188/v1/projects/demo-alozuri/databases/(default)/documents';
+  const now = Math.floor(Date.now() / 1000);
+  const token =
+    [
+      { alg: 'none', typ: 'JWT' },
+      {
+        iss: 'https://securetoken.google.com/demo-alozuri',
+        aud: 'demo-alozuri',
+        sub: 'attacker',
+        user_id: 'attacker',
+        iat: now,
+        exp: now + 3600,
+        auth_time: now,
+        firebase: { identities: {}, sign_in_provider: 'custom' },
+      },
+    ]
+      .map((value) => Buffer.from(JSON.stringify(value)).toString('base64url'))
+      .join('.') + '.';
+  for (const collection of ['purchases', 'orders', 'carts'])
+    await db.doc(collection + '/security-probe').set({ uid: 'victim', private: 'must-not-leak' });
+  for (const authenticated of [false, true]) {
+    const headers: Record<string, string> = authenticated
+      ? { Authorization: 'Bearer ' + token }
+      : {};
+    for (const path of [
+      'packages/private-pricing-test',
+      'packages',
+      'purchases/security-probe',
+      'orders/security-probe',
+      'carts/security-probe',
+    ]) {
+      const response = await fetch(base + '/' + path, { headers });
+      assert.equal(
+        response.status,
+        403,
+        `${authenticated ? 'Signed-in' : 'Anonymous'} client must not read ${path}`,
+      );
+      assert.ok(!(await response.text()).includes('must-not-leak'));
+    }
+    assert.equal(
+      (
+        await fetch(base + '/packages/private-pricing-test', {
+          method: 'PATCH',
+          headers: { ...headers, 'content-type': 'application/json' },
+          body: JSON.stringify({
+            fields: { priceCents: { integerValue: '1' }, pricingStatus: { stringValue: 'valid' } },
+          }),
+        })
+      ).status,
+      403,
+    );
+  }
 });
 
 test('maintenance pause blocks new prices/payments while verified payment webhooks can still finish existing orders', async () => {
@@ -444,4 +496,58 @@ test('checkout supplier revalidation skips unchanged writes, persists cost chang
   await assert.rejects(currentCheckoutPlan(initial.id, supplier), /unavailable/);
   assert.equal((await ref.get()).get('pricingStatus'), 'review_required');
   assert.equal((await ref.get()).get('active'), false);
+});
+
+test('new orders require consent, store immutable terms, and cannot fulfil before contract confirmation succeeds', async () => {
+  let mailBlocked = true;
+  const f = fixture(false, undefined, 'USD', () => mailBlocked);
+  const withoutConsent = {
+    ...f.input,
+    legal: { ...CHECKOUT_LEGAL_ACCEPTANCE, cancellationAcknowledged: false },
+  };
+  // API boundary rejects a missing or negative acknowledgement before a payment can be created.
+  const api = await createApp({
+    repository: { plans: async () => [], orders: async () => [], order: async () => null },
+    commerce: f.service,
+    payments: null,
+    fulfillment: null,
+  });
+  try {
+    const bad = await api.inject({ method: 'POST', url: '/v2/checkout', payload: withoutConsent });
+    assert.equal(bad.statusCode, 400);
+    assert.equal(f.getCreates(), 0);
+    const { legal: omitted, ...missing } = f.input;
+    assert.ok(omitted);
+    assert.equal(
+      (await api.inject({ method: 'POST', url: '/v2/checkout', payload: missing })).statusCode,
+      400,
+    );
+    const started = await f.service.checkout(f.input, null);
+    f.intent.status = 'succeeded';
+    f.intent.amount_received = f.intent.amount;
+    await f.event();
+    const children = await db
+      .collection('orders')
+      .where('parentOrderId', '==', started.orderId)
+      .get();
+    const store = firestoreFulfillmentStore();
+    assert.equal(await store.claim(children.docs[0].id), null);
+    const original = (await db.doc('purchases/' + started.orderId).get()).get('legal');
+    assert.ok(original.termsText.includes('Rewolo Technologies Ltd'));
+    assert.ok(original.acknowledgementText.includes('not waived'));
+    assert.equal((await f.service.notify()).sent, 0);
+    assert.equal(await store.claim(children.docs[0].id), null);
+    mailBlocked = false;
+    await db.doc('purchases/' + started.orderId).update({ contractEmailDueAt: Date.now() });
+    await f.service.notify();
+    assert.ok(
+      f.emails.some((e) => e.kind === 'contract' && e.text?.includes('Model cancellation notice')),
+    );
+    assert.ok(await store.claim(children.docs[0].id));
+    const owned = await f.service.order(started.orderId, null, started.accessToken);
+    assert.equal(owned.legal?.termsText, original.termsText);
+    await assert.rejects(f.service.order(started.orderId, null, 'wrong'), /not found/);
+  } finally {
+    await api.close();
+  }
 });

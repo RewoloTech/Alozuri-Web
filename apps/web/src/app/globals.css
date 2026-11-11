@@ -1,5 +1,24 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap');
 @import 'tailwindcss';
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url(/fonts/inter-latin.woff2) format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 500 800;
+  font-display: swap;
+  src: url(/fonts/manrope-latin.woff2) format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
 :root {
   --blue: #4338ca;
   --ink: #171c2e;
@@ -1099,11 +1118,17 @@ h1 {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  font-size: 10px;
+  font-size: 13px;
+  line-height: 1.6;
   font-weight: 400;
   color: var(--muted);
 }
+.checkbox-label > span {
+  flex: 1;
+  min-width: 0;
+}
 .checkbox-label input {
+  flex: 0 0 16px;
   margin-top: 3px;
   accent-color: var(--blue);
   width: 16px;
@@ -2086,9 +2111,19 @@ h1 {
 }
 
 .nav-signup {
+  transition:
+    background-color 220ms ease,
+    color 220ms ease,
+    border-color 220ms ease;
   background: var(--blue);
   color: white;
   border-color: var(--blue);
+}
+.nav-signup:hover,
+.nav-signup:focus-visible {
+  color: #fff;
+  background: #362ba8;
+  border-color: #362ba8;
 }
 .name-fields {
   display: grid;
@@ -2192,6 +2227,10 @@ h1 {
   gap: 20px;
   padding: 20px 0;
   border-bottom: 1px solid var(--border);
+}
+.summary-line > strong {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 .summary-line p {
   font-size: 13px;
@@ -2375,4 +2414,248 @@ h1 {
   .currency-select {
     width: 55px;
   }
+}
+
+/* Legal information and first-party privacy controls. */
+.policy-page {
+  max-width: 880px;
+}
+.policy-page h1 {
+  font-size: clamp(30px, 6vw, 48px);
+  overflow-wrap: anywhere;
+}
+.policy-copy {
+  max-width: 72ch;
+  font-size: 16px;
+  line-height: 1.8;
+}
+.policy-copy section {
+  margin: 36px 0;
+  scroll-margin-top: 100px;
+}
+.policy-copy h2 {
+  font-size: 22px;
+  line-height: 1.4;
+}
+.policy-copy p,
+.policy-company p {
+  margin: 14px 0;
+  overflow-wrap: anywhere;
+}
+.policy-contents {
+  margin: 24px 0;
+}
+.policy-contents ol {
+  padding-left: 24px;
+  columns: 2;
+  column-gap: 28px;
+}
+.policy-contents li {
+  margin: 6px 0;
+  break-inside: avoid;
+}
+.policy-page a,
+.company-disclosure a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.policy-version {
+  color: #50586b;
+  font-size: 14px;
+}
+.policy-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 28px;
+}
+.policy-company address,
+.company-disclosure address {
+  font-style: normal;
+}
+.company-disclosure {
+  padding: 24px 0;
+  color: #50586b;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.footer-bottom > div {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.cookie-banner {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  background: white;
+  color: #182035;
+  border-top: 1px solid #dcddeb;
+  box-shadow: 0 -4px 24px #18203514;
+  padding: 18px max(18px, calc((100vw - 1180px) / 2));
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+.cookie-banner h2 {
+  margin: 0 0 6px;
+  font-size: 18px;
+}
+.cookie-banner p {
+  margin: 0;
+  max-width: 74ch;
+  line-height: 1.6;
+  font-size: 14px;
+}
+.cookie-banner a {
+  text-decoration: underline;
+}
+.cookie-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+.cookie-actions .button {
+  background: white;
+  color: #182035;
+  border: 1px solid #6b7280;
+  min-height: 44px;
+  font-size: 14px;
+  padding: 10px 14px;
+}
+.cookie-actions .button:focus-visible,
+.support-shortcut:focus-visible {
+  outline: 3px solid #4b3dcc;
+  outline-offset: 3px;
+}
+.privacy-dialog {
+  margin: auto;
+  border: 1px solid #dcddeb;
+  border-radius: 18px;
+  padding: 28px;
+  max-width: 620px;
+  width: calc(100% - 36px);
+  max-height: 85vh;
+  overflow: auto;
+  color: #182035;
+}
+.privacy-dialog::backdrop {
+  background: #18203580;
+}
+.privacy-dialog p {
+  margin: 16px 0;
+  line-height: 1.7;
+}
+.privacy-dialog .checkbox-label {
+  font-size: 14px;
+  line-height: 1.6;
+  min-height: 44px;
+}
+.privacy-dialog input[type='checkbox'] {
+  min-width: 22px;
+  min-height: 22px;
+}
+.privacy-storage-message {
+  position: fixed;
+  bottom: 8px;
+  left: 18px;
+  z-index: 1001;
+  padding: 14px;
+  max-width: 85vw;
+  background: white;
+  border: 1px solid #6b7280;
+}
+.support-shortcut {
+  position: fixed;
+  bottom: 18px;
+  right: 18px;
+  z-index: 50;
+  padding: 12px 16px;
+  border-radius: 24px;
+  background: #4b3dcc;
+  color: white;
+  box-shadow: 0 3px 12px #18203526;
+  font-weight: 600;
+  font-size: 14px;
+}
+.support-options {
+  margin: 24px 0;
+}
+@media (max-width: 900px) {
+  .cookie-banner {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    max-height: 45vh;
+    overflow: auto;
+  }
+  .cookie-actions .button {
+    flex: 1;
+  }
+}
+@media (max-width: 600px) {
+  .policy-contents ol {
+    columns: 1;
+  }
+  .footer-bottom {
+    align-items: flex-start;
+  }
+  .footer-bottom > div {
+    justify-content: flex-start;
+  }
+}
+@media print {
+  .site-header,
+  .site-footer,
+  .cookie-banner,
+  .support-shortcut,
+  .privacy-dialog,
+  .policy-contents {
+    display: none !important;
+  }
+  .policy-page {
+    max-width: none;
+    padding: 0;
+  }
+  .policy-copy {
+    max-width: none;
+  }
+}
+.checkout-legal {
+  border: 1px solid #dcddeb;
+  border-radius: 12px;
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+}
+.checkout-legal legend {
+  font-weight: 700;
+  padding: 0 6px;
+}
+.checkout-legal p,
+.checkout-legal .checkbox-label {
+  font-size: 13px;
+  line-height: 1.7;
+  margin: 0;
+}
+.checkout-legal .checkbox-label {
+  align-items: flex-start;
+  min-height: 44px;
+}
+.checkout-legal input {
+  min-width: 20px;
+  min-height: 20px;
+  margin-top: 3px;
+}
+.checkout-legal a {
+  text-decoration: underline;
+}
+
+.regional-plan-explanation {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  line-height: 1.5;
 }

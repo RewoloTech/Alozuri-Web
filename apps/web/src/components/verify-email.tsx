@@ -1,4 +1,5 @@
 'use client';
+import { safeAccountDestination } from '@voyaspan/shared';
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { sendEmailVerification } from 'firebase/auth';
@@ -7,9 +8,7 @@ export function VerifyEmail() {
   const { user, loading, logout } = useAuth(),
     router = useRouter(),
     search = useSearchParams();
-  const raw = search.get('next'),
-    destination =
-      raw?.startsWith('/') && !raw.startsWith('//') && !raw.includes('\\') ? raw : '/dashboard';
+  const destination = safeAccountDestination(search.get('next'));
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
     [notice, setNotice] = useState('');
