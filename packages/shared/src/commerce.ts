@@ -25,7 +25,7 @@ export function mergeCartItems(a: CartItem[], b: CartItem[]): CartItem[] {
     throw new Error('You can purchase up to ten eSIMs per order.');
   return [...items].map(([planId, quantity]) => ({ planId, quantity }));
 }
-export function coverageLabel(plan: Plan) {
+export function coverageLabel(plan: Pick<Plan, 'countries'>) {
   return plan.countries.length === 1 ? 'Local coverage' : 'Multi-country coverage';
 }
 export type SearchState = {

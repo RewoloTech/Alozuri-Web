@@ -10,6 +10,35 @@ The export contains eight Japan products explicitly named Unlimited but returned
 
 The interface offers all plans, 1/3/5/10/20/50 GB or more, daily plans, and unlimited with fair-use conditions. Changing allowance after a search refreshes results automatically; the URL restores the selected allowance. Tabs switch immediately, including an explicitly marked draft trip before its second country is selected. Switching to single destination preserves the saved trip and asks for one country without leaving the trip tab active. Single-destination results default to local-only packages; the customer can explicitly include regional/global coverage. The API supports `coverage=local|all`. Every result must cover **all** chosen countries. The API validates `dataType=all|fixed|daily|unlimited` and `minGb`; client prices never control checkout.
 
+## Retail pricing and gross profit
+
+The supplier supplies wholesale costs; Alozuri calculates retail prices. `adaptPackage` applies `priceRetail` during sync and again when checkout revalidates the supplier product. The current default is **1.8 × wholesale cost**, rounded up to whole USD cents, with a 30% minimum-margin guard and a $0.50 minimum selling price. At the default multiplier the 80% markup exceeds the 30% guard. Prices shown to customers are the saved retail `priceCents` in Firestore, not the CSV's suggested retail column or a browser-provided amount. No markup or existing selling prices were changed by the search audit.
+
+A read-only audit on 2026-11-11 found 3,283 active products, gross margins of 44.44–45.00% after cent rounding, and no price below $0.50. A France 50 GB product cost $17.00 wholesale and sold for $30.60: **$13.60 gross profit**, **80% markup on cost**, **44.44% gross margin on sales**. These are not net profits: Stripe fees, taxes, refunds, exchange costs and operating expenses are not included. Actual fees vary by transaction; do not invent a fixed net profit. Supplier cost and product codes remain private; search responses contain an explicit public-field allowlist.
+
+## Indexed, paginated search
+
+The storefront uses `GET /v2/search/plans`; the existing `/v1/packages/match` route remains available for compatibility. Products already have typed country arrays, data type, numeric allowance, daily policy, duration, currency and retail cents. No manually maintained search tags are needed. Provider adapters must populate those fields from verified supplier data. Country names support common aliases (UK, USA, UAE, Ivory Coast, Türkiye) and accent-insensitive matching, restricted to countries available in the catalogue.
+
+The repository loads active Firestore products into a five-minute per-instance snapshot. A country-to-product inverted index is built once for each snapshot and intersects the smallest country sets first. Allowance and local-only filters operate on that candidate set. This avoids a Firestore scan per keystroke or result page. At the current catalogue size this in-process index is sufficient; a much larger catalogue or additional text/relevance requirements should be benchmarked before adding an external search service.
+
+Search returns 12 product summaries per page (API maximum 48), a total, allowance counts and a cursor. Sorting applies to the entire matching set before paging, with deterministic tie-breakers. Recommended results prioritise a range of allowance sizes while preserving **every** matching product, including products sharing a GB size. Show more appends the next page. Numeric facets represent fixed total allowances; daily and unlimited semantics remain separate.
+
+Cursors are bounded, validated public bookmarks tied to filters, sort, page size and catalogue revision. They are not authentication tokens. A changed catalogue returns 409 and asks the customer to refresh instead of combining inconsistent pages. Requests accept only validated allowlisted parameters; malformed filters/cursors are rejected before repository access. Search has a 60-request/minute per-client, per-instance limit. Cloud Run proxy trust is restricted to the immediate private socket peer, preventing arbitrary earlier forwarded addresses from selecting a new bucket. This in-memory limiter is not a strict service-wide quota across replicas.
+
+The browser cancels superseded requests and ignores stale responses, including when changing allowance, countries or sort. Country options support keyboard navigation, Enter activation and Escape; selection restores focus. Results include explicit loading, empty, error, refresh and pagination states. Search selections, allowance and sort remain in the URL.
+
+## Read-only catalogue audit
+
+```sh
+# A previously downloaded supplier response (kept outside Git):
+node --import tsx scripts/audit-search.mts /path/to/supplier-catalogue.json
+# Current authenticated supplier catalogue using ignored server credentials:
+node --env-file=apps/api/.env --import tsx scripts/audit-search.mts --live
+```
+
+The script never writes the database, creates payments or buys supplier products. On 2026-11-11 it accepted all 3,283 current supplier products across 205 countries and compared **4,176** country/coverage/allowance/trip searches with an independent full-scan oracle, traversing every result page. All exact product-ID sets matched. Index construction took 20.89 ms and warm search CPU time had a 0.005 ms median / 0.021 ms p95 in this local run. These are in-process timings, **not HTTP latency or a load test**. A sample page returned 12 of 82 matches in 4,391 JSON bytes, with no private provider fields.
+
 ## Daily sync
 
 `.github/workflows/catalogue-sync.yml` runs daily at **03:17 UTC**, and supports manual dispatch. GitHub scheduled jobs can start late; this is a daily refresh, not an exact-time guarantee. `scripts/sync-catalogue.mts` uses short-lived Google workload identity, reads supplier credentials from Secret Manager, fetches catalogue data and writes Firestore. It never calls supplier purchasing or Stripe endpoints.

@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { countries, type Country } from '@voyaspan/shared';
+import { countries, filterDestinations, type Country } from '@voyaspan/shared';
 import { api, demoMode } from '@/lib/api';
 export function DestinationDirectory() {
   const [items, setItems] = useState<Country[]>(demoMode ? countries : []),
@@ -21,15 +21,14 @@ export function DestinationDirectory() {
       active = false;
     };
   }, []);
-  const filtered = items.filter((c) =>
-    (c.name + ' ' + c.code).toLowerCase().includes(query.toLowerCase()),
-  );
+  const filtered = filterDestinations(items, query);
   return (
     <>
       <label className="settings-form">
         Search destinations
         <input
           type="search"
+          maxLength={80}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search a country…"

@@ -66,7 +66,12 @@ export function createRepository(demo: boolean): Repository {
             throw error;
           });
       }
-      return (await cache).filter((p) => Date.parse(p.syncedAt) > Date.now() - 36 * 60 * 60 * 1000);
+      const snapshot = await cache;
+      const visible = snapshot.filter(
+        (p) => Date.parse(p.syncedAt) > Date.now() - 36 * 60 * 60 * 1000,
+      );
+      // Retain snapshot identity while valid, so the search index is built once per cache refresh.
+      return visible.length === snapshot.length ? snapshot : visible;
     },
     async orders(uid) {
       const docs = await database().collection('orders').where('uid', '==', uid).limit(100).get();

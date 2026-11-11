@@ -29,7 +29,7 @@ npm run typecheck:tests
 
 The test server uses port 3100 and a temporary source copy, preserving the developer's normal Next.js server and generated files. Stop any previous test server on that port before starting another browser suite. Do not run Cypress and Playwright simultaneously because they use the same isolated test port. For an already running **test-configured** server, use `npm run cypress:run`.
 
-API requests are intercepted at `http://127.0.0.1:8189`; unexpected commerce endpoints fail the test. Tests cover explicit single/trip selection, full coverage, refresh and browser history, persistent cart quantities/totals/removal, empty cart, 375/390/768px layouts, guest email validation, declined-payment retry, Apple Pay/Google Pay callback contracts and unsupported-wallet card fallback. Test isolation clears browser storage between cases; refresh tests check persistence within a case. Browser exceptions fail tests.
+API requests are intercepted at `http://127.0.0.1:8189`; unexpected commerce endpoints fail the test. Tests cover explicit single/trip selection, full coverage, refresh and browser history, persistent cart quantities/totals/removal, empty cart, 375/390/768px layouts, guest email validation, declined-payment retry, Apple Pay/Google Pay callback contracts and unsupported-wallet card fallback. Search regression cases also cover 50 GB/unlimited results, stale-response cancellation, local-only coverage, pagination without duplicate or omitted products, catalogue-revision refresh, filter counts and country aliases. Playwright additionally checks native Enter activation and focus restoration in the country picker. Test isolation clears browser storage between cases; refresh tests check persistence within a case. Browser exceptions fail tests.
 
 Cypress uses a Stripe contract stub. These tests verify our UI and callback handling, **not** Stripe authentication, actual wallet availability or completed wallet transactions. They require no Stripe keys, Firebase login, Resend account or supplier balance. Do not replace fixtures with live credentials. The launcher removes an inherited `ELECTRON_RUN_AS_NODE` flag that can prevent Cypress from starting inside editors/agents.
 
@@ -65,3 +65,7 @@ STRIPE_SANDBOX_API_URL=https://YOUR_TEST_API npm run test:stripe:deployed
 ```
 
 This runner refuses a backend unless `/v1/config` reports test checkout mode. It uses a verified catalogue product and real Stripe test cards, waits for the deployed signed webhook to mark the order paid, and does not simulate webhook delivery. Keep `STRIPE_TEST_PUBLISHABLE_KEY` in the ignored local API environment file when the local storefront uses a live publishable key. Test payments never create real supplier delivery jobs or delivery-email jobs.
+
+## Search and pricing audit (2026-11-11)
+
+The read-only current supplier audit and its scope/measurements are documented in [catalogue and filters](catalogue-and-filters.md). Search tests cover strict parameter validation before database access, cursor/filter/revision binding, stable global sorting, complete country intersection, daily/unlimited distinctions, public-field projection and forwarded-address rate-limit isolation. Gross-margin figures are computed from actual stored cost/retail values, not assumed Stripe fees.

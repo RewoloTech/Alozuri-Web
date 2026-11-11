@@ -1,3 +1,4 @@
+import { searchPageFixture } from '../fixtures/search';
 import { test, expect, type Page } from '@playwright/test';
 const browserErrors = new WeakMap<Page, string[]>();
 test.beforeEach(({ page }) => {
@@ -57,11 +58,11 @@ async function setup(page: Page) {
           { code: 'IT', name: 'Italy', flag: '🇮🇹', region: 'Europe' },
         ],
       };
-    else if (url.pathname === '/v1/packages/match') {
+    else if (url.pathname === '/v2/search/plans') {
       const selected = (url.searchParams.get('countries') || '').split(',');
-      data = {
-        plans: [plan, second].filter((p) => selected.every((c) => p.countries.includes(c))),
-      };
+      data = searchPageFixture(
+        [plan, second].filter((p) => selected.every((c) => p.countries.includes(c))),
+      );
     } else if (url.pathname.startsWith('/v1/packages/'))
       data = { plan: url.pathname.endsWith(second.id) ? second : plan };
     else if (url.pathname === '/v2/quote' || url.pathname === '/v2/checkout') {
@@ -125,7 +126,7 @@ test('single and multi destination selection survives mode changes, refresh and 
   await selectCountry(page, 'Switzerland');
   await selectCountry(page, 'Italy');
   await page.getByRole('button', { name: 'Find my eSIM' }).click();
-  await expect(page.getByText('1 plans. Every stop covered.')).toBeVisible();
+  await expect(page.getByText('1 plan. Every stop covered.')).toBeVisible();
   await page.getByRole('button', { name: 'Single destination' }).click();
   await expect(page.getByText(/Choose one country for a single-destination/)).toBeVisible();
   await page.getByRole('textbox', { name: 'Search countries' }).fill('France');
@@ -294,4 +295,31 @@ test('unsupported wallets are hidden and card checkout remains available', async
     ).toBe(true);
     await page.screenshot({ path: `test-results/checkout-${width}.png`, fullPage: true });
   }
+});
+
+test('country picker supports native keyboard activation and returns focus after selection', async ({
+  page,
+}) => {
+  await setup(page);
+  await page.route('**/v1/countries', async (route) =>
+    route.fulfill({
+      json: {
+        countries: [
+          { code: 'GB', name: 'United Kingdom', flag: '🇬🇧', region: 'Europe' },
+          { code: 'CI', name: 'Côte d’Ivoire', flag: '🇨🇮', region: 'Africa' },
+        ],
+      },
+    }),
+  );
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Choose destination' }).click();
+  const search = page.getByRole('textbox', { name: 'Search countries' });
+  await search.fill('ivory coast');
+  await search.press('ArrowDown');
+  await expect(page.getByRole('dialog').getByRole('button', { name: /Côte/ })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/countries=CI/);
+  await expect(page.locator('.country-chip')).toHaveText(/Côte/);
+  await expect(page.getByRole('button', { name: 'Change destination' })).toBeFocused();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
 });

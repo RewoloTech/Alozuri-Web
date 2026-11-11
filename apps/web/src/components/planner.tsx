@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useDispatch, useSelector } from 'react-redux';
 import {
@@ -27,9 +27,13 @@ import {
   countryName,
   matchPlans,
   money,
-  type Plan,
+  type PlanSummary,
+  type SearchPage,
+  type SearchSort,
+  SEARCH_SORTS,
+  filterDestinations,
+  planSummary,
   type Country,
-  suggestedPlans,
   readSearch,
   coverageLabel,
   dataLabel,
@@ -68,15 +72,6 @@ export function Planner({
     window.addEventListener('popstate', restore);
     return () => window.removeEventListener('popstate', restore);
   }, [dispatch, destinationMode, initialKey]);
-  function syncUrl() {
-    const url = new URL(window.location.href);
-    url.searchParams.set('mode', saved.mode);
-    url.searchParams.set('countries', saved.countries.join(','));
-    url.searchParams.set('single', saved.single || '');
-    url.searchParams.set('trip', saved.trip.join(','));
-    url.searchParams.set('intent', saved.chooseSingle ? 'country' : saved.chooseTrip ? 'trip' : '');
-    window.history.pushState({}, '', url);
-  }
   useEffect(() => {
     if (!saved.initialized) return;
     const url = new URL(window.location.href);
@@ -91,19 +86,25 @@ export function Planner({
       window.history.pushState({}, '', url);
     }
   }, [saved]);
+  const [countriesLoading, setCountriesLoading] = useState(!demoMode);
   const [availableCountries, setAvailableCountries] = useState<Country[]>(
     demoMode ? countries : [],
   );
-  const [showAll, setShowAll] = useState(false);
   useEffect(() => {
     if (!demoMode)
       void api<{ countries: Country[] }>('/v1/countries')
         .then((r) => setAvailableCountries(r.countries))
-        .catch(() => setError('Destinations could not be loaded. Refresh the page and try again.'));
+        .catch(() => setError('Destinations could not be loaded. Refresh the page and try again.'))
+        .finally(() => setCountriesLoading(false));
   }, []);
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
-  const [results, setResults] = useState<Plan[] | null>(null);
+  const [page, setPage] = useState<SearchPage | null>(null);
+  const results = page?.plans ?? null;
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshRequired, setRefreshRequired] = useState(false);
+  const [sort, setSort] = useState<SearchSort>('recommended');
+  const controller = useRef<AbortController | null>(null);
   const [loading, setLoading] = useState(false);
   const [allowance, setAllowance] = useState<DataAllowance>('all');
   const requestVersion = useRef(0);
@@ -111,8 +112,13 @@ export function Planner({
     const restore = () => {
       const value = new URLSearchParams(window.location.search).get('allowance');
       setAllowance(DATA_ALLOWANCES.find((v) => v === value) || 'all');
+      setSort(
+        SEARCH_SORTS.find((s) => s === new URLSearchParams(window.location.search).get('sort')) ||
+          'recommended',
+      );
+      controller.current?.abort();
       requestVersion.current++;
-      setResults(null);
+      setPage(null);
       setLoading(false);
     };
     restore();
@@ -120,8 +126,8 @@ export function Planner({
     return () => window.removeEventListener('popstate', restore);
   }, []);
   const selectionKey = selected.join(',');
-  const [sort, setSort] = useState('recommended');
   const picker = useRef<HTMLDivElement>(null);
+  const pickerId = useId();
   const resultRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     function close(e: MouseEvent) {
@@ -130,93 +136,146 @@ export function Planner({
     document.addEventListener('mousedown', close);
     return () => document.removeEventListener('mousedown', close);
   }, []);
-  const filtered = availableCountries.filter(
+  const filtered = filterDestinations(availableCountries, query).filter(
     (c) =>
-      ((mode === 'country' && !saved.chooseTrip) ||
-        saved.chooseSingle ||
-        !selected.includes(c.code)) &&
-      `${c.name} ${c.code}`.toLowerCase().includes(query.toLowerCase()),
+      (mode === 'country' && !saved.chooseTrip) || saved.chooseSingle || !selected.includes(c.code),
   );
-  const sorted = useMemo(
-    () =>
-      results
-        ? [...results].sort((a, b) =>
-            sort === 'price' || sort === 'recommended'
-              ? a.priceCents - b.priceCents
-              : sort === 'data'
-                ? Number(b.dataType === 'unlimited') - Number(a.dataType === 'unlimited') ||
-                  b.dataGb - a.dataGb ||
-                  a.priceCents - b.priceCents
-                : comparePlanValue(a, b),
-          )
-        : null,
-    [results, sort],
-  );
+  const sorted = results;
+  const total = page?.total ?? 0;
   function add(code: string) {
     dispatch(chooseCountry(code));
     setOpen(false);
     setQuery('');
-    setResults(null);
-    setShowAll(false);
+    setPage(null);
+    picker.current?.querySelector<HTMLButtonElement>('.add-country')?.focus();
   }
   useEffect(() => {
     requestVersion.current++;
-    setResults(null);
+    controller.current?.abort();
+    setPage(null);
     setLoading(false);
+    setLoadingMore(false);
+    setRefreshRequired(false);
+    setError('');
   }, [selectionKey, mode]);
-  async function search(value: DataAllowance = allowance, regional = includeRegional) {
+  useEffect(
+    () => () => {
+      requestVersion.current++;
+      controller.current?.abort();
+    },
+    [],
+  );
+  async function search(
+    value: DataAllowance = allowance,
+    regional = includeRegional,
+    order: SearchSort = sort,
+    cursor?: string,
+  ) {
     const { minGb, dataType } = allowanceFilter(value);
     const version = ++requestVersion.current;
-    syncUrl();
+    controller.current?.abort();
+    const abort = new AbortController();
+    controller.current = abort;
     const url = new URL(window.location.href);
     url.searchParams.set('allowance', value);
     url.searchParams.set('coverage', regional ? 'all' : 'local');
-    window.history.replaceState({}, '', url);
-    if (saved.chooseTrip) {
-      setError('Add at least two destinations for a multi-country search.');
-      setOpen(true);
-      return;
-    }
-    if (saved.chooseSingle) {
-      setError('Choose one country before searching in single-destination mode.');
-      setOpen(true);
-      return;
-    }
-    if (!selected.length) {
-      setError('Add at least one destination to find your eSIM.');
-      setOpen(true);
-      return;
-    }
-    setLoading(true);
-    setError('');
-    try {
-      const plans = demoMode
-        ? matchPlans(demoPlans, selected, minGb, dataType).filter(
-            (p) => mode === 'trip' || regional || p.countries.length === 1,
-          )
-        : (
-            await api<{ plans: Plan[] }>(
-              `/v1/packages/match?countries=${selected.join(',')}&minGb=${minGb}&dataType=${dataType}&coverage=${mode === 'country' && !regional ? 'local' : 'all'}`,
-            )
-          ).plans;
-      if (version !== requestVersion.current) return;
-      setResults(plans);
-      setShowAll(false);
-      setTimeout(
-        () =>
-          resultRef.current?.scrollIntoView({
-            behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
-              ? 'auto'
-              : 'smooth',
-            block: 'start',
-          }),
-        60,
+    url.searchParams.set('sort', order);
+    if (!cursor && url.href !== window.location.href) window.history.pushState({}, '', url);
+    if (saved.chooseTrip || saved.chooseSingle || !selected.length) {
+      setError(
+        saved.chooseTrip
+          ? 'Add at least two destinations for a multi-country search.'
+          : saved.chooseSingle
+            ? 'Choose one country before searching in single-destination mode.'
+            : 'Add at least one destination to find your eSIM.',
       );
+      setOpen(true);
+      return;
+    }
+    const previous = page;
+    if (cursor) setLoadingMore(true);
+    else {
+      setLoading(true);
+      setPage(null);
+    }
+    setError('');
+    setRefreshRequired(false);
+    try {
+      let response: SearchPage;
+      if (demoMode) {
+        const matches = matchPlans(demoPlans, selected, minGb, dataType).filter(
+          (p) => mode === 'trip' || regional || p.countries.length === 1,
+        );
+        matches.sort(
+          order === 'value'
+            ? comparePlanValue
+            : order === 'data'
+              ? (a, b) => b.dataGb - a.dataGb
+              : (a, b) => a.priceCents - b.priceCents,
+        );
+        const facets = Object.fromEntries(
+          DATA_ALLOWANCES.map((k) => {
+            const f = allowanceFilter(k);
+            return [
+              k,
+              matchPlans(demoPlans, selected, f.minGb, f.dataType).filter(
+                (p) => mode === 'trip' || regional || p.countries.length === 1,
+              ).length,
+            ];
+          }),
+        ) as SearchPage['facets'];
+        response = {
+          plans: matches.map(planSummary),
+          total: matches.length,
+          nextCursor: null,
+          facets,
+          revision: 'demo',
+        };
+      } else {
+        const params = new URLSearchParams({
+          countries: selected.join(','),
+          minGb: String(minGb),
+          dataType,
+          coverage: mode === 'country' && !regional ? 'local' : 'all',
+          sort: order,
+          pageSize: '12',
+        });
+        if (cursor) params.set('cursor', cursor);
+        response = await api<SearchPage>('/v2/search/plans?' + params, { signal: abort.signal });
+      }
+      if (version !== requestVersion.current) return;
+      if (cursor && previous && response.revision !== previous.revision)
+        throw new Error('The catalogue changed. Refresh your search.');
+      setPage(
+        cursor && previous
+          ? { ...response, plans: [...previous.plans, ...response.plans] }
+          : response,
+      );
+      if (!cursor)
+        setTimeout(
+          () =>
+            resultRef.current?.scrollIntoView({
+              behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+                ? 'auto'
+                : 'smooth',
+              block: 'start',
+            }),
+          60,
+        );
     } catch (e) {
-      if (version === requestVersion.current)
-        setError(e instanceof Error ? e.message : 'Could not find plans. Please try again.');
+      if (version === requestVersion.current && !abort.signal.aborted) {
+        const message = e instanceof Error ? e.message : 'Could not find plans. Please try again.';
+        setError(message);
+        if (cursor && /catalogue changed|search page/i.test(message)) {
+          setRefreshRequired(true);
+          setPage(null);
+        }
+      }
     } finally {
-      if (version === requestVersion.current) setLoading(false);
+      if (version === requestVersion.current) {
+        setLoading(false);
+        setLoadingMore(false);
+      }
     }
   }
   return (
@@ -230,8 +289,9 @@ export function Planner({
           <button
             onClick={() => {
               dispatch(switchSearch('trip'));
-              setResults(null);
+              setPage(null);
             }}
+            aria-label="Multi-country trip"
             aria-pressed={mode === 'trip'}
             className={mode === 'trip' ? 'active' : ''}
           >
@@ -242,7 +302,7 @@ export function Planner({
             onClick={() => {
               dispatch(switchSearch('country'));
               if (selected.length > 1) setOpen(true);
-              setResults(null);
+              setPage(null);
             }}
             aria-pressed={mode === 'country'}
             className={mode === 'country' ? 'active' : ''}
@@ -291,14 +351,20 @@ export function Planner({
                       aria-label={`Remove ${countryName(code)}`}
                       onClick={() => {
                         dispatch(removeCountry(code));
-                        setResults(null);
+                        setPage(null);
                       }}
                     >
                       <X size={13} />
                     </button>
                   </span>
                 ))}
-                <button className="add-country" aria-expanded={open} onClick={() => setOpen(!open)}>
+                <button
+                  className="add-country"
+                  aria-haspopup="dialog"
+                  aria-expanded={open}
+                  aria-controls={open ? pickerId : undefined}
+                  onClick={() => setOpen(!open)}
+                >
                   <Plus size={16} />
                   {saved.chooseTrip
                     ? 'Add destination'
@@ -310,16 +376,39 @@ export function Planner({
                 </button>
               </div>
               {open && (
-                <div className="country-popover">
+                <div
+                  className="country-popover"
+                  id={pickerId}
+                  role="dialog"
+                  aria-label="Choose a country"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      e.preventDefault();
+                      setOpen(false);
+                      picker.current?.querySelector<HTMLButtonElement>('.add-country')?.focus();
+                    }
+                  }}
+                >
                   <div className="country-search">
                     <Search size={17} />
                     <input
                       aria-label="Search countries"
                       placeholder="Search a country…"
                       value={query}
+                      maxLength={80}
                       onChange={(e) => setQuery(e.target.value)}
                       autoFocus
                       onKeyDown={(e) => {
+                        if (e.key === 'ArrowDown') {
+                          e.preventDefault();
+                          picker.current
+                            ?.querySelector<HTMLButtonElement>('.country-options button')
+                            ?.focus();
+                        }
+                        if (e.key === 'Enter' && filtered.length === 1) {
+                          e.preventDefault();
+                          add(filtered[0].code);
+                        }
                         if (e.key === 'Escape') {
                           setOpen(false);
                           (
@@ -334,7 +423,20 @@ export function Planner({
                       <X size={16} />
                     </button>
                   </div>
-                  <div className="country-options">
+                  <div
+                    className="country-options"
+                    onKeyDown={(e) => {
+                      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+                      const buttons = [...e.currentTarget.querySelectorAll('button')];
+                      const active = document.activeElement;
+                      if (!(active instanceof HTMLButtonElement) || !buttons.length) return;
+                      e.preventDefault();
+                      const index = buttons.indexOf(active);
+                      buttons[
+                        (index + (e.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length
+                      ]?.focus();
+                    }}
+                  >
                     {filtered.map((c) => (
                       <button key={c.code} onClick={() => add(c.code)}>
                         <span>
@@ -343,7 +445,11 @@ export function Planner({
                         <Plus size={14} />
                       </button>
                     ))}
-                    {!filtered.length && <p>No matching destinations.</p>}
+                    {countriesLoading ? (
+                      <p role="status">Loading destinations…</p>
+                    ) : (
+                      !filtered.length && <p>No matching destinations.</p>
+                    )}
                   </div>
                 </div>
               )}
@@ -359,15 +465,21 @@ export function Planner({
                     if (results !== null || loading) void search(value);
                   }}
                 >
-                  <option value="all">All data plans</option>
-                  <option value="1">1 GB or more</option>
-                  <option value="3">3 GB or more</option>
-                  <option value="5">5 GB or more</option>
-                  <option value="10">10 GB or more</option>
-                  <option value="20">20 GB or more</option>
-                  <option value="50">50 GB or more</option>
-                  <option value="daily">Daily data plans</option>
-                  <option value="unlimited">Unlimited (check fair use)</option>
+                  <option value="all">
+                    All data plans{page ? ` (${page.facets['all']})` : ''}
+                  </option>
+                  <option value="1">1 GB or more{page ? ` (${page.facets['1']})` : ''}</option>
+                  <option value="3">3 GB or more{page ? ` (${page.facets['3']})` : ''}</option>
+                  <option value="5">5 GB or more{page ? ` (${page.facets['5']})` : ''}</option>
+                  <option value="10">10 GB or more{page ? ` (${page.facets['10']})` : ''}</option>
+                  <option value="20">20 GB or more{page ? ` (${page.facets['20']})` : ''}</option>
+                  <option value="50">50 GB or more{page ? ` (${page.facets['50']})` : ''}</option>
+                  <option value="daily">
+                    Daily data plans{page ? ` (${page.facets['daily']})` : ''}
+                  </option>
+                  <option value="unlimited">
+                    Unlimited (check fair use){page ? ` (${page.facets['unlimited']})` : ''}
+                  </option>
                 </select>
                 <ChevronDown size={16} />
               </span>
@@ -405,6 +517,12 @@ export function Planner({
                 : 'Verified supplier coverage · Secure Stripe checkout'}
             </span>
           </div>
+          {loading && <p role="status">Searching current plans…</p>}
+          {refreshRequired && (
+            <button className="button" onClick={() => void search()}>
+              Refresh results
+            </button>
+          )}
           {error && (
             <p role="alert" className="error-message">
               {error}
@@ -419,14 +537,14 @@ export function Planner({
               <div>
                 <span className="eyebrow">MATCHED TO YOUR ITINERARY</span>
                 <h2>
-                  {sorted.length
+                  {total
                     ? mode === 'country'
-                      ? `${sorted.length} ${includeRegional ? 'matching' : 'local'} plans for ${selected.map(countryName).join(', ')}.`
-                      : `${sorted.length} plans. Every stop covered.`
+                      ? `${total} ${includeRegional ? 'matching' : 'local'} ${total === 1 ? 'plan' : 'plans'} for ${selected.map(countryName).join(', ')}.`
+                      : `${total} ${total === 1 ? 'plan' : 'plans'}. Every stop covered.`
                     : 'No complete match for this itinerary'}
                 </h2>
                 <p>
-                  {sorted.length
+                  {total
                     ? mode === 'country' && !includeRegional
                       ? 'These plans cover only your selected country. Enable regional plans to compare broader coverage.'
                       : `Covers all your selected countries: ${selected.map(countryName).join(', ')}.`
@@ -441,33 +559,35 @@ export function Planner({
                   <select
                     aria-label="Sort plans"
                     value={sort}
-                    onChange={(e) => setSort(e.target.value)}
+                    onChange={(e) => {
+                      const order = SEARCH_SORTS.find((v) => v === e.target.value) || 'recommended';
+                      setSort(order);
+                      void search(allowance, includeRegional, order);
+                    }}
                   >
                     <option value="recommended">Recommended data sizes</option>
-                    <option value="value">Best value per GB</option>
+                    <option value="value">Value per GB (fixed data)</option>
                     <option value="price">Lowest total price</option>
                     <option value="data">Most data</option>
                   </select>
                 </label>
               )}
             </div>
-            <div className="plan-grid">
-              {(showAll || sorted.length <= 4
-                ? sorted
-                : sort === 'recommended'
-                  ? suggestedPlans(sorted)
-                  : sorted.slice(0, 4)
-              ).map((p, i) => (
-                <PlanCard
-                  key={p.id}
-                  plan={p}
-                  highlight={i === 0 && sort === 'value' && p.dataType === 'fixed'}
-                />
+            <p className="muted" role="status">
+              Showing {sorted.length} of {total} matching plans
+            </p>
+            <div className="plan-grid" aria-live="off">
+              {sorted.map((p) => (
+                <PlanCard key={p.id} plan={p} />
               ))}
             </div>
-            {sorted.length > 4 && (
-              <button className="button" onClick={() => setShowAll(!showAll)}>
-                {showAll ? 'Show recommendations' : `Show all ${sorted.length} matching plans`}
+            {page?.nextCursor && (
+              <button
+                className="button"
+                disabled={loadingMore}
+                onClick={() => void search(allowance, includeRegional, sort, page.nextCursor!)}
+              >
+                {loadingMore ? 'Loading more…' : `Show more plans (${sorted.length} of ${total})`}
               </button>
             )}
           </>
@@ -476,7 +596,7 @@ export function Planner({
     </>
   );
 }
-export function PlanCard({ plan, highlight = false }: { plan: Plan; highlight?: boolean }) {
+export function PlanCard({ plan, highlight = false }: { plan: PlanSummary; highlight?: boolean }) {
   return (
     <article className={`plan-card ${highlight ? 'featured' : ''}`}>
       <div className="plan-top">

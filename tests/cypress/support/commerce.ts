@@ -1,3 +1,4 @@
+import { searchPageFixture } from '../../fixtures/search';
 import type { CartItem, Plan } from '../../../packages/shared/src/index';
 
 export const plan: Plan = {
@@ -46,12 +47,12 @@ export function mockCommerce() {
           { code: 'IT', name: 'Italy', flag: '🇮🇹', region: 'Europe' },
         ],
       };
-    else if (url.pathname === '/v1/packages/match') {
+    else if (url.pathname === '/v2/search/plans') {
       req.alias = 'matches';
       const countries = (url.searchParams.get('countries') || '').split(',');
-      body = {
-        plans: [plan, localPlan].filter((p) => countries.every((c) => p.countries.includes(c))),
-      };
+      body = searchPageFixture(
+        [plan, localPlan].filter((p) => countries.every((c) => p.countries.includes(c))),
+      );
     } else if (url.pathname.startsWith('/v1/packages/'))
       body = { plan: url.pathname.endsWith(localPlan.id) ? localPlan : plan };
     else if (url.pathname === '/v2/quote' || url.pathname === '/v2/checkout') {

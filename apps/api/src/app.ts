@@ -20,6 +20,13 @@ import {
 import { configuredCommerce, CommerceError, type CommerceService } from './lib/commerce.js';
 import { registerCommerceRoutes } from './lib/commerce-routes.js';
 import { documentId } from './lib/validation.js';
+import { platformProxyTrust } from './lib/proxy.js';
+import {
+  SearchError,
+  searchCatalogue,
+  searchQuerySchema,
+  parseSearchCursor,
+} from './lib/search.js';
 import { registerEsimWebhook, type EsimWebhookInbox } from './lib/esim-webhook.js';
 const code = z
   .string()
@@ -44,6 +51,7 @@ export async function createApp(
     verify?: (token: string) => Promise<Principal>;
     demo?: boolean;
     logger?: boolean;
+    trustPlatformProxy?: boolean;
     origins?: string[];
     payments?: PaymentService | null;
     commerce?: CommerceService | null;
@@ -59,6 +67,7 @@ export async function createApp(
     options.fulfillment === undefined ? configuredFulfillment() : options.fulfillment;
   const commerce = options.commerce === undefined ? configuredCommerce() : options.commerce;
   const app = Fastify({
+    trustProxy: platformProxyTrust(options.trustPlatformProxy ?? Boolean(process.env.K_SERVICE)),
     bodyLimit: 64 * 1024,
     logger: options.logger
       ? {
@@ -83,6 +92,8 @@ export async function createApp(
     reply.header('Cache-Control', 'no-store');
   });
   app.setErrorHandler((error, _request, reply) => {
+    if (error instanceof SearchError)
+      return reply.code(error.statusCode).send({ error: error.message });
     if (error instanceof CommerceError)
       return reply.code(error.statusCode).send({ error: error.message });
     if (error instanceof CheckoutError) return reply.code(400).send({ error: error.message });
@@ -200,6 +211,15 @@ export async function createApp(
       plans: query.coverage === 'local' ? matches.filter((p) => p.countries.length === 1) : matches,
     };
   });
+  app.get(
+    '/v2/search/plans',
+    { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } },
+    async (request) => {
+      const { cursor, ...filters } = searchQuerySchema.parse(request.query);
+      const bookmark = parseSearchCursor(cursor);
+      return searchCatalogue(await repository.plans()).search(filters, bookmark);
+    },
+  );
   app.get<{ Params: { id: string } }>('/v1/packages/:id', async (request, reply) => {
     z.object({}).strict().parse(request.query);
     const id = idSchema.parse(request.params.id);

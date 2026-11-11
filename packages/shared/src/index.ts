@@ -35,12 +35,9 @@ export const countries: Country[] = [
   ['EG', 'Egypt', '🇪🇬', 'Africa'],
   ['MA', 'Morocco', '🇲🇦', 'Africa'],
 ].map(([code, name, flag, region]) => ({ code, name, flag, region }));
+const regionNames = new Intl.DisplayNames(['en'], { type: 'region', fallback: 'none' });
 export function countryName(code: string) {
-  return (
-    countries.find((c) => c.code === code)?.name ??
-    new Intl.DisplayNames(['en'], { type: 'region' }).of(code) ??
-    code
-  );
+  return countries.find((c) => c.code === code)?.name ?? regionNames.of(code) ?? code;
 }
 export type Plan = {
   id: string;
@@ -127,15 +124,18 @@ export function dataSizeLabel(dataGb: number): string {
     ? `${Number((dataGb * 1024).toFixed(2))} MB`
     : `${Number(dataGb.toFixed(2))} GB`;
 }
-export function dataLabel(plan: Plan): string {
+export function dataLabel(plan: Pick<Plan, 'dataGb' | 'dataType' | 'dailyPolicy'>): string {
   const size = dataSizeLabel(plan.dataGb);
   if (plan.dataType === 'unlimited') return 'Unlimited';
   if (plan.dataType === 'daily')
     return plan.dailyPolicy === 'reduced' ? `Unlimited · ${size}/day high-speed` : `${size}/day`;
   return size;
 }
-export function comparePlanValue(a: Plan, b: Plan): number {
-  const cost = (p: Plan) =>
+export function comparePlanValue(
+  a: Pick<Plan, 'dataType' | 'dataGb' | 'priceCents'>,
+  b: Pick<Plan, 'dataType' | 'dataGb' | 'priceCents'>,
+): number {
+  const cost = (p: Pick<Plan, 'dataType' | 'dataGb' | 'priceCents'>) =>
     p.dataType === 'fixed' && p.dataGb > 0 ? p.priceCents / p.dataGb : Infinity;
   return cost(a) - cost(b) || a.priceCents - b.priceCents;
 }
@@ -265,9 +265,7 @@ export function suggestedPlans(plans: Plan[], limit = 4): Plan[] {
 }
 export function isCountryCode(code: string): boolean {
   return (
-    /^[A-Z]{2}$/.test(code) &&
-    !['ZZ', 'XA', 'XB'].includes(code) &&
-    Boolean(new Intl.DisplayNames(['en'], { type: 'region', fallback: 'none' }).of(code))
+    /^[A-Z]{2}$/.test(code) && !['ZZ', 'XA', 'XB'].includes(code) && Boolean(regionNames.of(code))
   );
 }
 
@@ -282,3 +280,12 @@ export {
   SUPPORTED_CURRENCIES,
 } from './commerce.ts';
 export type { CartLine, CartItem, SearchState } from './commerce.ts';
+
+export { filterDestinations, planSummary, SEARCH_SORTS } from './search.ts';
+export type {
+  PlanSummary,
+  SearchSort,
+  CoverageFilter,
+  SearchFilters,
+  SearchPage,
+} from './search.ts';
