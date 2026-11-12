@@ -405,3 +405,121 @@ test('verified customers can navigate usage, orders and profile, update names an
   await expect(page.getByRole('link', { name: 'Sign in', exact: true })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Data usage', exact: true })).toHaveCount(0);
 });
+
+test('Data usage shows separate eSIM readings without opening orders, and explains pending and refunded units', async ({
+  page,
+}) => {
+  await setup(page);
+  await signup(page);
+  const purchase = 'purchase_' + 'a'.repeat(48);
+  const units = ['b', 'c', 'd', 'e'].map((character) => 'order_' + character.repeat(48));
+  const usageRequests: string[] = [];
+  await page.route('http://127.0.0.1:8189/v2/orders', async (route) => {
+    if (route.request().method() === 'OPTIONS') return route.fallback();
+    expect(route.request().headers().authorization).toMatch(/^Bearer /);
+    const common = {
+      email: 'fixture@example.test',
+      items: [{ plan, quantity: 3 }],
+      totalCents: 3600,
+      currency: 'USD',
+      createdAt: '2026-11-11T12:00:00.000Z',
+    };
+    await route.fulfill({
+      json: {
+        orders: [
+          {
+            ...common,
+            id: purchase,
+            status: 'paid',
+            test: false,
+            allocations: units
+              .slice(0, 3)
+              .map((id, index) => ({
+                id,
+                plan: { ...plan, name: `Travel eSIM ${index + 1}` },
+                status: index === 2 ? 'paid' : 'ready',
+              })),
+          },
+          {
+            ...common,
+            id: 'purchase_' + 'b'.repeat(48),
+            status: 'paid',
+            test: true,
+            allocations: [{ id: 'order_' + 'f'.repeat(48), plan, status: 'ready' }],
+          },
+          {
+            ...common,
+            id: 'purchase_' + 'c'.repeat(48),
+            status: 'refunded',
+            test: false,
+            allocations: [{ id: units[3], plan, status: 'refunded' }],
+          },
+        ],
+      },
+      headers: { 'Access-Control-Allow-Origin': 'http://localhost:3100' },
+    });
+  });
+  await page.route('http://127.0.0.1:8189/v2/orders/**/usage', async (route) => {
+    if (route.request().method() === 'OPTIONS') return route.fallback();
+    expect(route.request().headers().authorization).toMatch(/^Bearer /);
+    const path = new URL(route.request().url()).pathname;
+    usageRequests.push(path);
+    const amount = path.includes(units[0]) ? 1 : 2,
+      gb = 1073741824;
+    await route.fulfill({
+      json: {
+        usage: {
+          state: 'available',
+          stale: false,
+          snapshot: {
+            kind: 'fixed',
+            usedBytes: amount * gb,
+            totalBytes: 5 * gb,
+            remainingBytes: (5 - amount) * gb,
+            profileStatus: 'IN_USE',
+            expiresAt: null,
+            checkedAt: '2026-11-12T12:00:00.000Z',
+          },
+        },
+      },
+      headers: { 'Access-Control-Allow-Origin': 'http://localhost:3100' },
+    });
+  });
+  await page.goto('/account/usage');
+  const cards = page.locator('.usage-card');
+  await expect(cards).toHaveCount(4);
+  await expect(cards.nth(0).getByRole('region', { name: 'Data usage', exact: true })).toContainText(
+    '4 GB',
+  );
+  await expect(cards.nth(1).getByRole('region', { name: 'Data usage', exact: true })).toContainText(
+    '3 GB',
+  );
+  await expect(cards.nth(2)).toContainText('Your eSIM is being prepared.');
+  await expect(cards.nth(3)).toContainText('cancelled or refunded');
+  expect(usageRequests.sort()).toEqual(
+    units
+      .slice(0, 2)
+      .map((unit) => `/v2/orders/${purchase}/units/${unit}/usage`)
+      .sort(),
+  );
+  expect(new URL(page.url()).pathname).toBe('/account/usage');
+  for (const width of [375, 390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    const card = cards.first(),
+      action = card.getByRole('link', { name: 'View order and installation' });
+    const reading = await card
+      .getByRole('region', { name: 'Data usage', exact: true })
+      .boundingBox();
+    const button = await action.boundingBox();
+    expect(button!.y - (reading!.y + reading!.height)).toBeGreaterThanOrEqual(16);
+    expect(button!.height).toBeGreaterThanOrEqual(44);
+    if (width === 390 || width === 1440)
+      await card.screenshot({ path: `/tmp/alozuri-usage-direct-${width}.png` });
+  }
+  await page.reload();
+  await expect(cards).toHaveCount(4);
+  await expect(cards.first()).toContainText('4 GB');
+});

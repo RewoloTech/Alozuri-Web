@@ -579,6 +579,7 @@ export class CommerceService {
       test: p.test,
       createdAt: p.createdAt,
       contractDownloadAvailable: Boolean(p.paidAt && p.legal),
+      ...(p.paidAt ? { paidAt: p.paidAt } : {}),
       allocations,
       ...(p.legal ? { legal: p.legal } : {}),
     };

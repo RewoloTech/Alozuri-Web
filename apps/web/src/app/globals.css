@@ -3390,3 +3390,21 @@ h1 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+.purchase-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-block: 16px;
+}
+.purchase-actions .button {
+  min-height: 44px;
+  white-space: normal;
+  text-align: center;
+}
+.purchase-card > .surface + .surface {
+  margin-top: 16px;
+}
+.usage-card > .esim-usage {
+  margin-top: 16px;
+}

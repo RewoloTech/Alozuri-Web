@@ -1,5 +1,4 @@
 import { sampleConfirmation } from '../fixtures/order-confirmation';
-import { renderContractPdf } from '../../apps/api/src/lib/contract-pdf';
 import { readFile } from 'node:fs/promises';
 import type { Plan } from '../../packages/shared/src/index';
 import { CHECKOUT_LEGAL_ACCEPTANCE } from '../../packages/shared/src/legal';
@@ -1204,57 +1203,67 @@ for (const wallet of ['apple', 'google'] as const)
     await expect(page.getByRole('button', { name: /^Pay / })).toBeEnabled();
   });
 
-test('private order contract downloads a PDF on request without generating on page load, and failures can retry', async ({
-  page,
-}) => {
-  await setup(page);
-  const source = sampleConfirmation();
-  const pdf = await renderContractPdf(source);
-  const token = 'private-contract-browser-fixture';
-  const documentPath = '/v2/orders/' + source.id + '/contract.pdf';
-  await page.route('http://127.0.0.1:8189/v2/orders/' + source.id, async (route) => {
-    if (route.request().method() === 'OPTIONS') return route.fallback();
-    expect(route.request().headers()['x-order-access']).toBe(token);
-    await route.fulfill({
-      json: { ...source, status: 'paid', allocations: [], contractDownloadAvailable: true },
-      headers: { 'Access-Control-Allow-Origin': 'http://localhost:3100' },
-    });
-  });
-  let requests = 0;
-  await page.route('http://127.0.0.1:8189' + documentPath, async (route) => {
-    if (route.request().method() === 'OPTIONS') return route.fallback();
-    requests++;
-    expect(route.request().headers()['x-order-access']).toBe(token);
-    if (requests === 1)
-      return route.fulfill({
-        status: 503,
-        json: { error: 'Please retry your contract download.' },
+for (const legacy of [false, true])
+  test(`private order generates its own PDF in the browser (${legacy ? 'older API without PDF flag' : 'current API'}) and font failures can retry`, async ({
+    page,
+  }) => {
+    await setup(page);
+    const source = sampleConfirmation();
+    const token = 'private-contract-browser-fixture';
+    const documentPath = '/v2/orders/' + source.id + '/contract.pdf';
+    let pdfRequests = 0,
+      fontRequests = 0;
+    await page.route('http://127.0.0.1:8189/v2/orders/' + source.id, async (route) => {
+      if (route.request().method() === 'OPTIONS') return route.fallback();
+      expect(route.request().headers()['x-order-access']).toBe(token);
+      const { paidAt, ...older } = source;
+      await route.fulfill({
+        json: {
+          ...(legacy ? older : source),
+          status: 'paid',
+          allocations: [],
+          ...(!legacy ? { contractDownloadAvailable: true } : {}),
+        },
         headers: { 'Access-Control-Allow-Origin': 'http://localhost:3100' },
       });
-    await route.fulfill({
-      contentType: 'application/pdf',
-      body: pdf,
-      headers: { 'Access-Control-Allow-Origin': 'http://localhost:3100' },
+      expect(paidAt).toBeTruthy();
     });
+    await page.route('http://127.0.0.1:8189' + documentPath, async (route) => {
+      pdfRequests++;
+      await route.fulfill({
+        status: 404,
+        json: { error: 'The PDF endpoint is deliberately unavailable' },
+      });
+    });
+    await page.route('**/fonts/inter-pdf-700.ttf', async (route) => {
+      fontRequests++;
+      if (fontRequests === 1) return route.fulfill({ status: 503, body: 'Temporary font failure' });
+      await route.continue();
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/checkout/success?order=' + source.id + '#access=' + token);
+    await page.getByText('Order documents', { exact: true }).click();
+    const button = page.getByRole('button', { name: 'Download your contract PDF', exact: true });
+    await expect(button).toBeEnabled();
+    expect(fontRequests).toBe(0);
+    await button.click();
+    await expect(page.getByRole('main').getByRole('alert')).toContainText(
+      'The PDF font could not be loaded. Please retry.',
+    );
+    await expect(button).toBeEnabled();
+    const pending = page.waitForEvent('download');
+    await button.click();
+    const download = await pending;
+    expect(download.suggestedFilename()).toBe('Alozuri-Order-Confirmation.pdf');
+    const path = await download.path();
+    expect(path).toBeTruthy();
+    const bytes = await readFile(path!);
+    expect(bytes.subarray(0, 5).toString()).toBe('%PDF-');
+    expect(bytes.subarray(-10).toString()).toContain('%%EOF');
+    expect(bytes.length).toBeGreaterThan(10000);
+    expect(bytes.length).toBeLessThan(150000);
+    await download.saveAs(`/tmp/alozuri-browser-contract-${legacy ? 'legacy' : 'current'}.pdf`);
+    expect(fontRequests).toBe(2);
+    expect(pdfRequests).toBe(0);
+    expect(new URL(page.url()).pathname).toBe('/checkout/success');
   });
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto('/checkout/success?order=' + source.id + '#access=' + token);
-  await page.getByText('Order documents', { exact: true }).click();
-  const button = page.getByRole('button', { name: 'Download your contract PDF', exact: true });
-  await expect(button).toBeEnabled();
-  expect(requests).toBe(0);
-  await button.click();
-  await expect(page.getByRole('main').getByRole('alert')).toContainText(
-    'Please retry your contract download.',
-  );
-  await expect(button).toBeEnabled();
-  const pending = page.waitForEvent('download');
-  await button.click();
-  const download = await pending;
-  expect(download.suggestedFilename()).toBe('Alozuri-Order-Confirmation.pdf');
-  const path = await download.path();
-  expect(path).toBeTruthy();
-  expect(await readFile(path!)).toEqual(pdf);
-  expect(requests).toBe(2);
-  expect(new URL(page.url()).pathname).toBe('/checkout/success');
-});

@@ -4,9 +4,14 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useDispatch, useSelector } from 'react-redux';
-import { money, type CartLine, type CartItem, type Plan } from '@voyaspan/shared';
+import { money, dataLabel, type CartLine, type CartItem, type Plan } from '@voyaspan/shared';
 import { removeFromCart, quantityChanged, type RootState } from '@/lib/store';
-import { api, apiBlob } from '@/lib/api';
+import { api } from '@/lib/api';
+import {
+  CONTRACT_PDF_FILENAME,
+  contractPaymentConfirmed,
+  type ContractLegal,
+} from '@voyaspan/shared/contract';
 import { useAuth } from './auth-provider';
 import { InstallationDetails } from './installation-details';
 import { EsimUsagePanel } from './esim-usage';
@@ -23,16 +28,11 @@ export type Purchase = {
   status: string;
   test: boolean;
   createdAt: string;
-  legal?: {
-    version: string;
-    noticeText?: string;
-    acceptedAt: string;
-    effectiveDate: string;
-    termsText: string;
-    refundText: string;
-    requestText: string;
-    acknowledgementText: string;
-  };
+  paidAt?: string;
+  customerName?: string;
+  subtotalCents?: number;
+  taxCents?: number;
+  legal?: ContractLegal;
   allocations: { id: string; status: string; plan: Plan }[];
 };
 export function PurchaseStatus() {
@@ -168,24 +168,22 @@ function PrivatePurchase({ id }: { id: string }) {
                   </p>
                   <button
                     className="button"
-                    disabled={!order.contractDownloadAvailable || downloadingContract}
+                    disabled={!contractPaymentConfirmed(order) || downloadingContract}
                     onClick={async () => {
                       setDownloadingContract(true);
                       setContractError('');
                       try {
-                        const pdf = await apiBlob(
-                          '/v2/orders/' + encodeURIComponent(id) + '/contract.pdf',
-                          { headers: access ? { 'x-order-access': access } : {} },
-                          Boolean(user?.emailVerified),
-                        );
+                        if (!order.legal) throw new Error('The recorded contract is unavailable.');
+                        const { createContractPdf } = await import('@/lib/contract-download');
+                        const pdf = await createContractPdf({ ...order, legal: order.legal });
                         const url = URL.createObjectURL(pdf);
                         const link = document.createElement('a');
                         link.href = url;
-                        link.download = 'Alozuri-Order-Confirmation.pdf';
+                        link.download = CONTRACT_PDF_FILENAME;
                         document.body.appendChild(link);
                         link.click();
                         link.remove();
-                        setTimeout(() => URL.revokeObjectURL(url), 1000);
+                        setTimeout(() => URL.revokeObjectURL(url), 60000);
                       } catch (error) {
                         setContractError(
                           error instanceof Error
@@ -199,7 +197,7 @@ function PrivatePurchase({ id }: { id: string }) {
                   >
                     {downloadingContract ? 'Preparing PDF…' : 'Download your contract PDF'}
                   </button>
-                  {!order.contractDownloadAvailable && (
+                  {!contractPaymentConfirmed(order) && (
                     <p role="status">The PDF becomes available after payment is confirmed.</p>
                   )}
                   {contractError && <p role="alert">{contractError}</p>}
@@ -274,10 +272,12 @@ function AccountPurchases({ view }: { view: PurchaseView }) {
   const uid = user?.uid,
     verified = user?.emailVerified;
   const [orders, setOrders] = useState<Purchase[] | null>(null),
-    [error, setError] = useState('');
+    [error, setError] = useState(''),
+    [refresh, setRefresh] = useState(0);
   useEffect(() => {
     if (!uid || !verified) return;
     let active = true;
+    setError('');
     void api<{ orders: Purchase[] }>('/v2/orders', {}, uid)
       .then((r) => {
         if (active) setOrders(r.orders);
@@ -288,7 +288,7 @@ function AccountPurchases({ view }: { view: PurchaseView }) {
     return () => {
       active = false;
     };
-  }, [uid, verified]);
+  }, [uid, verified, refresh]);
   return (
     <section className="container section">
       <div className="page-intro">
@@ -317,7 +317,12 @@ function AccountPurchases({ view }: { view: PurchaseView }) {
           </Link>
         </div>
       ) : error ? (
-        <p role="alert">{error}</p>
+        <div className="surface stack">
+          <p role="alert">{error}</p>
+          <button className="button" onClick={() => setRefresh((value) => value + 1)}>
+            Retry loading {view === 'usage' ? 'eSIMs' : 'purchases'}
+          </button>
+        </div>
       ) : orders === null ? (
         <p role="status">Loading purchases…</p>
       ) : !orders.length ? (
@@ -325,19 +330,23 @@ function AccountPurchases({ view }: { view: PurchaseView }) {
           <h2>No purchases yet</h2>
           <Link href="/destinations">Explore destinations →</Link>
         </div>
+      ) : view === 'usage' ? (
+        <AccountUsage orders={orders} />
       ) : (
         <div className="stack">
           {orders.map((order) => (
-            <article className="surface" key={order.id}>
+            <article className="surface purchase-card" key={order.id}>
               <h2>{order.items.map((i) => i.plan.name).join(', ')}</h2>
               <p>
                 {new Date(order.createdAt).toLocaleDateString('en-GB')} ·{' '}
                 {money(order.totalCents, order.currency)} · {order.test ? 'Test order · ' : ''}
                 {order.status.replaceAll('_', ' ')}
               </p>
-              <Link className="button" href={'/checkout/success?order=' + order.id}>
-                View order and installation
-              </Link>
+              <div className="purchase-actions">
+                <Link className="button" href={'/checkout/success?order=' + order.id}>
+                  View order and installation
+                </Link>
+              </div>
               {view === 'orders' ? null : order.test ? (
                 <p className="fine-print">Test order. No eSIM usage is available.</p>
               ) : (
@@ -368,5 +377,53 @@ function AccountPurchases({ view }: { view: PurchaseView }) {
         <Link href="/dashboard">Earlier orders and account settings →</Link>
       </p>
     </section>
+  );
+}
+
+function AccountUsage({ orders }: { orders: Purchase[] }) {
+  const units = orders
+    .filter((order) => !order.test)
+    .flatMap((order) => (order.allocations ?? []).map((unit) => ({ order, unit })));
+  return units.length ? (
+    <div className="stack">
+      {units.map(({ order, unit }) => (
+        <article className="surface usage-card" key={unit.id}>
+          <h2>{unit.plan.name}</h2>
+          <p>
+            {dataLabel(unit.plan)} · {unit.plan.days} days · {unit.plan.countries.length}{' '}
+            {unit.plan.countries.length === 1 ? 'country' : 'countries'}
+          </p>
+          {unit.status === 'ready' && order.status === 'paid' ? (
+            <EsimUsagePanel purchaseId={order.id} unitId={unit.id} />
+          ) : (
+            <p role="status">
+              {['refunded', 'refund_pending', 'cancelled'].includes(order.status) ||
+              ['refunded', 'refund_pending', 'cancelled'].includes(unit.status)
+                ? 'Usage is unavailable for this cancelled or refunded eSIM.'
+                : unit.status === 'provision_error' || order.status === 'attention'
+                  ? 'This eSIM needs support before usage can be shown.'
+                  : 'Your eSIM is being prepared. Usage becomes available after delivery.'}
+            </p>
+          )}
+          <div className="purchase-actions">
+            <Link className="button" href={'/checkout/success?order=' + order.id}>
+              View order and installation
+            </Link>
+          </div>
+        </article>
+      ))}
+    </div>
+  ) : (
+    <div className="surface">
+      <h2>No eSIMs available for usage yet</h2>
+      <p>
+        {orders.some((order) => !order.test && order.status === 'paid')
+          ? 'Your paid order is being prepared. Your eSIM will appear here after it is allocated.'
+          : 'Usage is available for delivered eSIMs. Test orders do not contain a live eSIM.'}
+      </p>
+      <Link className="button" href="/account/orders">
+        View orders
+      </Link>
+    </div>
   );
 }

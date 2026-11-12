@@ -12,7 +12,9 @@
     "./featured": "./src/featured.ts",
     "./currency": "./src/currency.ts",
     "./destination-inspiration": "./src/destination-inspiration.ts",
-    "./esim-usage": "./src/esim-usage.ts"
+    "./esim-usage": "./src/esim-usage.ts",
+    "./contract": "./src/contract.ts",
+    "./contract-document": "./src/contract-document.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
