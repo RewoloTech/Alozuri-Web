@@ -1,3 +1,6 @@
+import { sampleConfirmation } from '../fixtures/order-confirmation';
+import { renderContractPdf } from '../../apps/api/src/lib/contract-pdf';
+import { readFile } from 'node:fs/promises';
 import type { Plan } from '../../packages/shared/src/index';
 import { CHECKOUT_LEGAL_ACCEPTANCE } from '../../packages/shared/src/legal';
 import { privacyChoice, CONSENT_COOKIE } from '../../packages/shared/src/privacy';
@@ -230,7 +233,7 @@ test('cart persists, aggregates quantities and remains usable at mobile widths',
   await expect(page.getByRole('link', { name: 'Explore destinations' })).toBeVisible();
 });
 
-async function mockStripe(page: Page, wallets = true) {
+async function mockStripe(page: Page, wallets: boolean | 'apple' | 'google' = true) {
   await page.addInitScript(
     ({ wallets }) => {
       let calls = 0;
@@ -265,7 +268,7 @@ async function mockStripe(page: Page, wallets = true) {
                     type === 'expressCheckout'
                       ? {
                           availablePaymentMethods: wallets
-                            ? { applePay: true, googlePay: true }
+                            ? { applePay: wallets !== 'google', googlePay: wallets !== 'apple' }
                             : null,
                         }
                       : {},
@@ -282,7 +285,11 @@ async function mockStripe(page: Page, wallets = true) {
             node = target;
             if (type === 'expressCheckout') {
               if (wallets)
-                for (const name of ['Apple Pay', 'Google Pay']) {
+                for (const name of wallets === 'apple'
+                  ? ['Apple Pay']
+                  : wallets === 'google'
+                    ? ['Google Pay']
+                    : ['Apple Pay', 'Google Pay']) {
                   const b = document.createElement('button');
                   b.type = 'button';
                   b.textContent = name;
@@ -776,7 +783,9 @@ test('the entire data allowance field opens its native picker, including the lab
     await field.screenshot({ path: `/tmp/alozuri-allowance-${width}.png` });
   }
   await select.focus();
-  await page.keyboard.press('ArrowDown');
+  // Space opens a native select on both Linux CI and macOS. ArrowDown can
+  // change the selected option without opening it on Linux.
+  await page.keyboard.press('Space');
   await expect.poll(() => select.evaluate((element) => element.matches(':open'))).toBe(true);
   await select.click();
   await expect.poll(() => select.evaluate((element) => element.matches(':open'))).toBe(false);
@@ -1172,4 +1181,80 @@ test('plan cards keep equal heights and align prices and actions despite wrapped
     if (width === 390)
       await cards.first().screenshot({ path: '/tmp/alozuri-aligned-plan-card-mobile.png' });
   }
+});
+
+for (const wallet of ['apple', 'google'] as const)
+  test(`only the eligible ${wallet} wallet is shown and card checkout remains usable`, async ({
+    page,
+  }) => {
+    await mockStripe(page, wallet);
+    await openCheckout(page);
+    await expect(
+      page.getByRole('button', {
+        name: wallet === 'apple' ? 'Apple Pay' : 'Google Pay',
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', {
+        name: wallet === 'apple' ? 'Google Pay' : 'Apple Pay',
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^Pay / })).toBeEnabled();
+  });
+
+test('private order contract downloads a PDF on request without generating on page load, and failures can retry', async ({
+  page,
+}) => {
+  await setup(page);
+  const source = sampleConfirmation();
+  const pdf = await renderContractPdf(source);
+  const token = 'private-contract-browser-fixture';
+  const documentPath = '/v2/orders/' + source.id + '/contract.pdf';
+  await page.route('http://127.0.0.1:8189/v2/orders/' + source.id, async (route) => {
+    if (route.request().method() === 'OPTIONS') return route.fallback();
+    expect(route.request().headers()['x-order-access']).toBe(token);
+    await route.fulfill({
+      json: { ...source, status: 'paid', allocations: [], contractDownloadAvailable: true },
+      headers: { 'Access-Control-Allow-Origin': 'http://localhost:3100' },
+    });
+  });
+  let requests = 0;
+  await page.route('http://127.0.0.1:8189' + documentPath, async (route) => {
+    if (route.request().method() === 'OPTIONS') return route.fallback();
+    requests++;
+    expect(route.request().headers()['x-order-access']).toBe(token);
+    if (requests === 1)
+      return route.fulfill({
+        status: 503,
+        json: { error: 'Please retry your contract download.' },
+        headers: { 'Access-Control-Allow-Origin': 'http://localhost:3100' },
+      });
+    await route.fulfill({
+      contentType: 'application/pdf',
+      body: pdf,
+      headers: { 'Access-Control-Allow-Origin': 'http://localhost:3100' },
+    });
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/checkout/success?order=' + source.id + '#access=' + token);
+  await page.getByText('Order documents', { exact: true }).click();
+  const button = page.getByRole('button', { name: 'Download your contract PDF', exact: true });
+  await expect(button).toBeEnabled();
+  expect(requests).toBe(0);
+  await button.click();
+  await expect(page.getByRole('main').getByRole('alert')).toContainText(
+    'Please retry your contract download.',
+  );
+  await expect(button).toBeEnabled();
+  const pending = page.waitForEvent('download');
+  await button.click();
+  const download = await pending;
+  expect(download.suggestedFilename()).toBe('Alozuri-Order-Confirmation.pdf');
+  const path = await download.path();
+  expect(path).toBeTruthy();
+  expect(await readFile(path!)).toEqual(pdf);
+  expect(requests).toBe(2);
+  expect(new URL(page.url()).pathname).toBe('/checkout/success');
 });

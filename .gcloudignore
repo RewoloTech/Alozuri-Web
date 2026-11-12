@@ -1,0 +1,13 @@
+.gcloudignore
+.git
+.github
+#!include:.gitignore
+**/.env
+**/.env.*
+**/node_modules
+**/.next
+apps/web/src
+apps/web/public
+test-results
+playwright-report
+gha-creds-*.json

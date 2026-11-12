@@ -1,3 +1,10 @@
+import { OrderWorker } from './lib/order-worker.js';
+import {
+  configuredOrderTaskQueue,
+  orderWorkSchema,
+  verifyOrderTaskIdentity,
+} from './lib/order-task-queue.js';
+import { database } from './lib/firebase.js';
 import { defaultFeaturedReader } from './lib/featured-bundles.js';
 import {
   parseFeaturedBundles,
@@ -78,6 +85,8 @@ export async function createApp(
     commerce?: CommerceService | null;
     fulfillment?: FulfillmentService | null;
     esimWebhook?: { token?: string; inbox?: EsimWebhookInbox };
+    orderWorker?: Pick<OrderWorker, 'run'> | null;
+    verifyOrderTask?: (header: string | undefined) => Promise<boolean>;
   } = {},
 ) {
   const demo = options.demo ?? process.env.DEMO_MODE !== 'false';
@@ -106,6 +115,14 @@ export async function createApp(
   const fulfillment =
     options.fulfillment === undefined ? configuredFulfillment() : options.fulfillment;
   const commerce = options.commerce === undefined ? configuredCommerce() : options.commerce;
+  const taskQueue = configuredOrderTaskQueue();
+  const taskMode = taskQueue !== null;
+  const orderWorker =
+    options.orderWorker === undefined
+      ? taskQueue && commerce && fulfillment
+        ? new OrderWorker(database(), commerce, fulfillment, taskQueue)
+        : null
+      : options.orderWorker;
   const app = Fastify({
     trustProxy: platformProxyTrust(options.trustPlatformProxy ?? Boolean(process.env.K_SERVICE)),
     bodyLimit: 64 * 1024,
@@ -193,9 +210,27 @@ export async function createApp(
       throw error;
     }
   });
+  app.post('/internal/orders/process', { config: { rateLimit: false } }, async (request, reply) => {
+    if (
+      !(await (options.verifyOrderTask ?? verifyOrderTaskIdentity)(request.headers.authorization))
+    )
+      return reply.code(401).send({ error: 'Task authentication required.' });
+    const work = orderWorkSchema.parse(request.body);
+    z.object({}).strict().parse(request.query);
+    if (!orderWorker)
+      return reply.code(503).send({ error: 'Order queue worker is not configured.' });
+    const result = await orderWorker.run(work);
+    if (result.state === 'attention')
+      app.log.warn({ operation: 'order-processing' }, 'Order processing requires review.');
+    return reply.code(result.state === 'pending' ? 503 : 200).send(result);
+  });
   app.post('/internal/fulfillment/run', async (request, reply) => {
     if (!(await verifyFulfillmentIdentity(request.headers.authorization)))
       return reply.code(401).send({ error: 'Worker authentication required.' });
+    if (taskMode)
+      return reply
+        .code(410)
+        .send({ error: 'Scheduled order polling is retired; use the order task queue.' });
     z.object({})
       .strict()
       .parse(request.body ?? {});

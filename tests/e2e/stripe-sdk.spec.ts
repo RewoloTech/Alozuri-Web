@@ -120,6 +120,6 @@ test('real Stripe Payment Element declines a test card, retries the same intent 
   const documents = page.locator('details.order-documents');
   await expect(documents).not.toHaveAttribute('open', '');
   await documents.getByText('Order documents', { exact: true }).click();
-  await expect(documents.getByRole('button', { name: 'Download your contract' })).toBeVisible();
+  await expect(documents.getByRole('button', { name: 'Download your contract PDF' })).toBeVisible();
   await page.screenshot({ path: 'test-results/stripe-real-confirmation.png', fullPage: true });
 });

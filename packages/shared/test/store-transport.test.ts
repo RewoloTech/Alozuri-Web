@@ -10,6 +10,7 @@ test('store transport permits customer operations without exposing internal or a
     ['PUT', '/v2/cart'],
     ['GET', '/v2/orders/purchase_test/units/order_test/activation'],
     ['GET', '/v2/orders/purchase_test/units/order_test/usage'],
+    ['GET', '/v2/orders/purchase_test/contract.pdf'],
   ])
     assert.equal(allowedStoreRequest(method, path), true);
   for (const [method, path] of [
@@ -20,6 +21,8 @@ test('store transport permits customer operations without exposing internal or a
     ['POST', '/v2/orders/purchase_test/units/order_test/usage'],
     ['GET', '/v1/admin/status'],
     ['DELETE', '/v2/cart'],
+    ['POST', '/v2/orders/purchase_test/contract.pdf'],
+    ['GET', '/v2/orders/purchase_test/contractXpdf'],
     ['GET', '/v1/packages/../admin'],
     ['POST', '/v1/orders/order_test/resume-checkout'],
   ])

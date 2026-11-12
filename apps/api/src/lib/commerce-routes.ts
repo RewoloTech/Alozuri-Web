@@ -1,4 +1,5 @@
 import { checkoutLegalSchema } from './legal.js';
+import { CONTRACT_PDF_FILENAME } from './confirmation-order.js';
 import { currencySchema } from './exchange-rates.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -71,6 +72,23 @@ export function registerCommerceRoutes(
       await user(req.headers.authorization),
       z.string().max(200).optional().parse(req.headers['x-order-access']),
     ),
+  );
+  app.get<{ Params: { id: string } }>(
+    '/v2/orders/:id/contract.pdf',
+    { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
+    async (req, reply) => {
+      z.object({}).strict().parse(req.query);
+      const pdf = await commerce().contractPdf(
+        id.parse(req.params.id),
+        await user(req.headers.authorization),
+        z.string().max(200).optional().parse(req.headers['x-order-access']),
+      );
+      return reply
+        .type('application/pdf')
+        .header('Content-Disposition', `attachment; filename="${CONTRACT_PDF_FILENAME}"`)
+        .header('X-Robots-Tag', 'noindex, nofollow')
+        .send(pdf);
+    },
   );
   app.get<{ Params: { id: string; unit: string } }>(
     '/v2/orders/:id/units/:unit/activation',

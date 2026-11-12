@@ -300,6 +300,7 @@ function CheckoutForIdentity() {
       submitting.current ||
       accountBusy ||
       cart.syncing ||
+      (!buy && cart.syncFailed) ||
       !quote ||
       !compatible ||
       !quoteReady ||
@@ -428,13 +429,15 @@ function CheckoutForIdentity() {
       ? 'Finish signing in to continue. Your order is saved.'
       : progressLabel
         ? 'You can enter your details while we confirm your order. You will review payment before being charged.'
-        : !quoteReady
-          ? 'We could not confirm your total. Please retry below.'
-          : mode === 'disabled' || mode !== stripeCheckoutMode
-            ? 'Payments are currently unavailable. Your cart is saved.'
-            : !compatible
-              ? 'Confirm that your device supports eSIM above to continue.'
-              : 'Next: choose your payment method and review before paying.';
+        : !buy && cart.syncFailed
+          ? 'Resolve your cart sync issue before continuing to payment.'
+          : !quoteReady
+            ? 'We could not confirm your total. Please retry below.'
+            : mode === 'disabled' || mode !== stripeCheckoutMode
+              ? 'Payments are currently unavailable. Your cart is saved.'
+              : !compatible
+                ? 'Confirm that your device supports eSIM above to continue.'
+                : 'Next: choose your payment method and review before paying.';
   return (
     <section className="container section">
       <Link className="text-link" href="/cart">
@@ -493,6 +496,12 @@ function CheckoutForIdentity() {
               />
               <h2>Review your order</h2>
               {cart.syncing && <p role="status">Syncing your saved cart…</p>}
+              {!buy && cart.syncFailed && (
+                <p className="error-message" role="alert">
+                  {cart.error}{' '}
+                  <Link href="/cart">Return to your cart to resolve this before paying.</Link>
+                </p>
+              )}
               <p>The order summary shows your plans and final total in {currency}.</p>
               <label className="checkbox-label">
                 <input
@@ -520,6 +529,7 @@ function CheckoutForIdentity() {
                   starting ||
                   accountBusy ||
                   cart.syncing ||
+                  (!buy && cart.syncFailed) ||
                   loading ||
                   !quoteReady ||
                   !compatible ||
@@ -554,10 +564,16 @@ function CheckoutForIdentity() {
           )}
         </div>
         <OrderSummary
-          lines={preview.items}
-          total={quoteReady && quote ? quote.totalCents : preview.total}
-          currency={currency}
-          updating={loading}
+          lines={session ? session.quote.items : preview.items}
+          total={
+            session
+              ? session.quote.totalCents
+              : quoteReady && quote
+                ? quote.totalCents
+                : preview.total
+          }
+          currency={session?.quote.currency ?? currency}
+          updating={!session && loading}
         />
       </div>
     </section>

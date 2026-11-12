@@ -5,3 +5,6 @@ node_modules
 **/.env*
 .git
 *.tsbuildinfo
+gha-creds-*.json
+test-results
+playwright-report

@@ -684,13 +684,25 @@ h1 {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  flex-shrink: 0;
   font-size: 0.875rem;
-  white-space: nowrap;
 }
 .sort-control select {
-  border: 0;
-  background: none;
-  max-width: 150px;
+  width: 252px;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px 36px 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: white
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='m3 4 3 3 3-3' fill='none' stroke='%231b2035' stroke-width='1.5'/%3E%3C/svg%3E")
+    no-repeat right 12px center;
+  appearance: none;
+  font: inherit;
+  cursor: pointer;
 }
 .plan-grid {
   display: grid;
@@ -1854,6 +1866,14 @@ h1 {
     align-items: flex-start;
     flex-direction: column;
     gap: 14px;
+  }
+  .sort-control {
+    width: 100%;
+    font-size: 1rem;
+  }
+  .sort-control select {
+    flex: 1;
+    width: 100%;
   }
   .results-heading h2 {
     font-size: 23px;

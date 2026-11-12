@@ -70,7 +70,9 @@ async function relay(request: Request, context: { params: Promise<{ path: string
     }
     body = Buffer.concat(chunks).toString('utf8');
   }
-  const headers = new Headers({ Accept: 'application/json' });
+  const headers = new Headers({
+    Accept: path.endsWith('/contract.pdf') ? 'application/pdf' : 'application/json',
+  });
   if (body !== undefined) headers.set('Content-Type', 'application/json');
   for (const name of ['authorization', 'x-order-access']) {
     const value = request.headers.get(name);
@@ -86,6 +88,19 @@ async function relay(request: Request, context: { params: Promise<{ path: string
       signal: AbortSignal.any([request.signal, AbortSignal.timeout(45000)]),
     });
     const responseHeaders = new Headers(privateHeaders);
+    if (
+      request.method === 'GET' &&
+      /^\/v2\/orders\/purchase_[a-f0-9]{48}\/contract\.pdf$/.test(path) &&
+      upstream.ok &&
+      upstream.headers.get('content-type')?.includes('application/pdf')
+    ) {
+      responseHeaders.set('Content-Type', 'application/pdf');
+      responseHeaders.set(
+        'Content-Disposition',
+        'attachment; filename="Alozuri-Order-Confirmation.pdf"',
+      );
+      return new Response(upstream.body, { status: upstream.status, headers: responseHeaders });
+    }
     responseHeaders.set('Content-Type', 'application/json');
     const retryAfter = upstream.headers.get('retry-after');
     if (retryAfter) responseHeaders.set('Retry-After', retryAfter);

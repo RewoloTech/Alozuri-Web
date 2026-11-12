@@ -1,3 +1,5 @@
+import { OrderWorker } from '../src/lib/order-worker.ts';
+import type { OrderWork } from '../src/lib/order-task-queue.ts';
 import { checkoutSessionFixture } from './fixtures/stripe-session.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -164,4 +166,58 @@ test('pending refunds stay pending and late paid events cannot restart delivery'
 test.after(async () => {
   await db.terminate();
   await deleteApp(app);
+});
+
+test('legacy paid checkout repairs queue submission on replay and processes its own order only', async () => {
+  const tasks: OrderWork[] = [];
+  let unavailable = true;
+  const queue = {
+    enqueue: async (work: OrderWork) => {
+      if (unavailable) throw new Error('Unavailable');
+      tasks.push(work);
+    },
+  };
+  const payments = firestorePaymentStore('live', queue);
+  const order = await payments.reserve('queued-legacy-buyer', crypto.randomUUID(), plan);
+  await payments.bind(order.id, 'cs_live_queue_legacy');
+  const session = checkoutSessionFixture({
+    id: 'cs_live_queue_legacy',
+    livemode: true,
+    mode: 'payment',
+    payment_intent: 'pi_legacy_queue',
+    payment_status: 'paid',
+    status: 'complete',
+    amount_total: order.amountCents,
+    currency: 'usd',
+    client_reference_id: order.id,
+    metadata: { voyaspanOrderId: order.id, voyaspanUid: 'queued-legacy-buyer' },
+  });
+  await assert.rejects(payments.apply('evt_legacy_queue', session, 'paid'), /dispatch unavailable/);
+  assert.equal((await db.doc('orderWork/' + order.id).get()).get('status'), 'pending');
+  unavailable = false;
+  await payments.apply('evt_legacy_queue', session, 'paid');
+  await payments.apply('evt_legacy_queue', session, 'paid');
+  assert.deepEqual(tasks, [{ kind: 'order', id: order.id, generation: 1 }]);
+  let calls = 0;
+  const worker = new OrderWorker(
+    db,
+    {
+      notify: async () => {
+        throw new Error('Legacy purchase must not send a new routine email');
+      },
+    },
+    {
+      run: async (ids) => {
+        calls++;
+        assert.deepEqual(ids, [order.id]);
+        await db.doc('orders/' + order.id).update({ status: 'ready' });
+        await db.doc('fulfillmentJobs/' + order.id).delete();
+        return { processed: 1, failed: 0 };
+      },
+    },
+    queue,
+  );
+  assert.equal((await worker.run(tasks[0])).state, 'complete');
+  assert.equal((await worker.run(tasks[0])).state, 'ignored');
+  assert.equal(calls, 1);
 });

@@ -1,3 +1,10 @@
+import {
+  orderTaskConfig,
+  configuredOrderTaskQueue,
+  recordOrderWork,
+  dispatchOrderWork,
+  type OrderTaskQueue,
+} from './order-task-queue.js';
 import { createHash } from 'node:crypto';
 import Stripe from 'stripe';
 import type { FastifyInstance } from 'fastify';
@@ -63,7 +70,10 @@ function paymentOrder(
   };
 }
 export type PaymentMode = 'test' | 'live';
-export function firestorePaymentStore(mode: PaymentMode = 'test'): PaymentStore {
+export function firestorePaymentStore(
+  mode: PaymentMode = 'test',
+  taskQueue: OrderTaskQueue | null = configuredOrderTaskQueue(),
+): PaymentStore {
   return {
     async find(uid, id) {
       const doc = await database().collection('orders').doc(id).get();
@@ -201,6 +211,7 @@ export function firestorePaymentStore(mode: PaymentMode = 'test'): PaymentStore 
             : session.payment_intent?.id;
         if (firstPayment && mode === 'live') {
           if (!paymentIntent) throw new CheckoutError('Payment receipt unavailable.');
+          if (taskQueue) recordOrderWork(t, db, { kind: 'order', id, generation: 1 });
           // Queue delivery in the same transaction that records payment. Never rely on the browser.
           t.create(db.collection('fulfillmentJobs').doc(id), {
             nextAttemptAt: Date.now(),
@@ -227,6 +238,7 @@ export function firestorePaymentStore(mode: PaymentMode = 'test'): PaymentStore 
           test: mode === 'test',
         });
       });
+      if (taskQueue && mode === 'live') await dispatchOrderWork(db, taskQueue, id);
     },
   };
 }
@@ -553,8 +565,9 @@ export function configuredPayments(): PaymentService | null {
       process.env.FULFILLMENT_ENABLED !== 'true' ||
       !process.env.ESIM_ACCESS_CODE ||
       !process.env.ESIM_SECRET_KEY ||
-      !process.env.FULFILLMENT_WORKER_AUDIENCE ||
-      !process.env.FULFILLMENT_WORKER_SERVICE_ACCOUNT)
+      (!orderTaskConfig() &&
+        (!process.env.FULFILLMENT_WORKER_AUDIENCE ||
+          !process.env.FULFILLMENT_WORKER_SERVICE_ACCOUNT)))
   )
     return null;
   return new PaymentService(

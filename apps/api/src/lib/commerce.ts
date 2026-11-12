@@ -1,7 +1,15 @@
+import {
+  orderTaskConfig,
+  configuredOrderTaskQueue,
+  recordOrderWork,
+  dispatchOrderWork,
+  type OrderTaskQueue,
+} from './order-task-queue.js';
 import { legalSnapshot, legalSnapshotSchema } from './legal.js';
 import { ResendOrderMailer, type OrderMailer } from './order-email.js';
 import { OrderConfirmations } from './order-confirmations.js';
 import { CONFIRMATION_VERSION, orderReference } from './confirmation-order.js';
+import { confirmationOrderSchema } from './confirmation-order.js';
 export { ResendOrderMailer, type OrderMailer } from './order-email.js';
 import { type CheckoutLegalInput } from '../../../../packages/shared/src/legal.ts';
 import {
@@ -182,6 +190,7 @@ export class CommerceService {
       ((items: { wholesaleUnits: number; quantity: number }[]) => Promise<void>) | null = null,
     private rates: Pick<ExchangeRates, 'current'> = new ExchangeRates(),
     private usageReader = new EsimUsageService(db, new SupplierClient()),
+    private taskQueue: OrderTaskQueue | null = configuredOrderTaskQueue(),
   ) {
     const url = new URL(site);
     if (
@@ -514,6 +523,8 @@ export class CommerceService {
                 createdAt: p.createdAt,
               });
           }
+        if (!p.test && this.taskQueue)
+          recordOrderWork(t, this.db, { kind: 'purchase', id, generation: 1 });
         t.update(ref, {
           status: 'paid',
           paidAt,
@@ -537,6 +548,9 @@ export class CommerceService {
         });
       t.create(eventRef, { orderId: id, type: event.type, receivedAt: new Date().toISOString() });
     });
+    // Even a duplicate event must repair a committed payment whose queue write failed.
+    if (this.taskQueue && this.mode === 'live')
+      await dispatchOrderWork(this.db, this.taskQueue, id);
   }
   async order(id: string, user: Principal | null, access: string | undefined) {
     const doc = await this.db.collection('purchases').doc(id).get();
@@ -563,9 +577,21 @@ export class CommerceService {
       status: p.status,
       test: p.test,
       createdAt: p.createdAt,
+      contractDownloadAvailable: Boolean(p.paidAt && p.legal),
       allocations,
       ...(p.legal ? { legal: p.legal } : {}),
     };
+  }
+  async contractPdf(id: string, user: Principal | null, access: string | undefined) {
+    const doc = await this.db.collection('purchases').doc(id).get();
+    if (!doc.exists) throw new CommerceError('Order not found.', 404);
+    const purchase = purchaseSchema.parse(doc.data());
+    if (!this.authorized(purchase, user, access)) throw new CommerceError('Order not found.', 404);
+    if (!purchase.paidAt || !purchase.legal)
+      throw new CommerceError('Your contract is available after payment is confirmed.', 409);
+    const order = confirmationOrderSchema.parse({ ...doc.data(), id });
+    const { renderContractPdf } = await import('./contract-pdf.js');
+    return renderContractPdf(order);
   }
   async activation(id: string, unitId: string, user: Principal | null, access: string | undefined) {
     await this.order(id, user, access);
@@ -657,9 +683,11 @@ export class CommerceService {
       })
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
-  async notify() {
+  async notify(purchaseId?: string) {
     if (!this.mailer) return { sent: 0, failed: 0, attention: 0 };
-    return new OrderConfirmations(this.db, this.mailer, this.site, (id) => this.token(id)).run();
+    return new OrderConfirmations(this.db, this.mailer, this.site, (id) => this.token(id)).run(
+      purchaseId,
+    );
   }
 }
 export async function checkSupplierCapacity(
@@ -701,8 +729,9 @@ export function configuredCommerce() {
       !process.env.ESIM_ACCESS_CODE ||
       !process.env.ESIM_SECRET_KEY ||
       !process.env.RESEND_API_KEY ||
-      !process.env.FULFILLMENT_WORKER_AUDIENCE ||
-      !process.env.FULFILLMENT_WORKER_SERVICE_ACCOUNT)
+      (!orderTaskConfig() &&
+        (!process.env.FULFILLMENT_WORKER_AUDIENCE ||
+          !process.env.FULFILLMENT_WORKER_SERVICE_ACCOUNT)))
   )
     return null;
   return new CommerceService(

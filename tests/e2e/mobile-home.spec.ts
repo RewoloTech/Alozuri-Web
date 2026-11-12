@@ -200,3 +200,46 @@ test('mobile floating chat opens accessibly and returns keyboard focus', async (
   await account.click();
   await expect(page.getByRole('navigation', { name: 'Account navigation' })).toBeVisible();
 });
+
+test('sort labels fit completely on mobile and desktop and keep working', async ({ page }) => {
+  const requests: string[] = [];
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    if (url.pathname === '/v2/search/plans') requests.push(url.searchParams.get('sort') || '');
+  });
+  await page.goto('/?mode=country&countries=FR');
+  await page.getByRole('button', { name: 'Find my eSIM', exact: true }).click();
+  const sort = page.getByRole('combobox', { name: 'Sort plans', exact: true });
+  for (const width of [320, 360, 375, 390, 430, 768, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const value of ['recommended', 'value', 'price', 'data']) {
+      await sort.selectOption(value);
+      await expect(sort).toHaveValue(value);
+      const dimensions = await sort.evaluate((node: HTMLSelectElement) => {
+        const style = getComputedStyle(node);
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        if (!context) throw new Error('Text measurement unavailable');
+        context.font = style.font;
+        return {
+          available:
+            node.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight),
+          needed: context.measureText(node.selectedOptions[0].text).width,
+          height: node.getBoundingClientRect().height,
+        };
+      });
+      expect(dimensions.available).toBeGreaterThanOrEqual(dimensions.needed);
+      expect(dimensions.height).toBeGreaterThanOrEqual(44);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+    }
+    if (width === 390 || width === 1440) {
+      await sort.selectOption('recommended');
+      await page
+        .locator('.results-heading')
+        .screenshot({ path: `/tmp/alozuri-sort-labels-${width}.png` });
+    }
+  }
+  for (const value of ['recommended', 'value', 'price', 'data']) expect(requests).toContain(value);
+});

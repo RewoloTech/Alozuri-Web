@@ -16,13 +16,13 @@ jobs:
     env:
       GOOGLE_CLOUD_PROJECT: alozuri
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 22
           cache: npm
       - run: npm ci
-      - uses: google-github-actions/auth@v3
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
         with:
           project_id: alozuri
           workload_identity_provider: projects/259378235356/locations/global/workloadIdentityPools/alozuri-github/providers/catalogue

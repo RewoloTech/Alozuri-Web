@@ -20,7 +20,7 @@ The worker independently verifies payment before issuing each unit, retries pend
 
 ## One complete purchase confirmation
 
-Verified Stripe success queues one `email-v1` confirmation in the existing minute worker. Its sender is `Alozuri <orders@alozuri.com>`, reply-to is `support@alozuri.com`, and subject is **Your Alozuri eSIM order confirmation**. The email contains a readable order reference, the recorded payment date, full plan details, one secure status/install link, installation steps, and the complete accepted Terms and Refund Policy beneath the practical information. HTML uses inline styles, a fluid layout and the existing brand logo; plain text contains the same transaction and contract. There are no attachments, generated documents or additional services.
+Verified Stripe success queues one `email-v1` confirmation in the existing minute worker. Its sender is `Alozuri <orders@alozuri.com>`, reply-to is `support@alozuri.com`, and subject is **Your Alozuri eSIM order confirmation**. The email contains a readable order reference, the recorded payment date, full plan details, one secure status/install link, installation steps, and the complete accepted Terms and Refund Policy beneath the practical information. HTML uses inline styles, a fluid layout and the existing brand logo; plain text contains the same transaction and contract. There are no email attachments or additional services. Customers can separately download their contract as a PDF from the private order page.
 
 Checkout freezes the business identity, terms/refund versions and full policy text with the existing legal acceptance timestamp. The worker reads those snapshots and plan prices/countries, never the current catalogue or website policy content. The payment timestamp comes from the signed Stripe success event, not email-generation time. Test payments do not send customer email or issue supplier profiles. Missing customer names, tax rates and expiry dates are not invented.
 
@@ -33,6 +33,14 @@ Checkout no longer supplies `receipt_email` to Stripe, which otherwise forces an
 Deployment must update the API worker and publish `/images/alozuri-email-logo.png` on the storefront. Confirm the Resend domain and API-key permissions, run a controlled real mailbox test, and check Gmail, Outlook and Apple Mail before claiming live delivery. Do not overlap old and new worker revisions during the cutover. Unattempted legacy notifications can join the single-email queue; already-sent or ambiguous legacy messages are retired without an automatic resend. Review `legacy_send_review_required` records against provider history manually. Never clear an uncertain send's timestamp/hash or change its key just to retry it.
 
 The implementation preserves existing accepted legal content; it does not establish a new legal or VAT policy. Business/legal review of the underlying content and tax configuration remains applicable.
+
+## Contract PDF downloads
+
+The order page downloads `Alozuri-Order-Confirmation.pdf` using `GET /v2/orders/:id/contract.pdf`. The same guest access header or verified-owner checks used for private orders apply; an administrator cannot bypass ownership. Unpaid orders return 409. The PDF uses immutable purchase/terms snapshots and recorded timestamps, excludes activation credentials and access tokens, and is returned with PDF/attachment and no-store headers. Opening or polling the order page does not generate a PDF.
+
+PDFKit renders only after the customer clicks Download; each request is handled in memory without saving a PDF in Firestore, Firebase Storage or the server filesystem. The existing single email remains HTML/plain text without a PDF attachment. Static licensed Inter fonts are bundled during the API build by `scripts/copy-assets.mjs`; no browser engine is used. Deploy both the website download control and the API endpoint before enabling the feature in production.
+
+On 12 November 2026, a read-only Stripe check found all three checkout domains active for both wallets, but the live default payment configuration had Google Pay off/unavailable. Its Google Pay display preference was enabled and then retrieved again: both Google Pay and Apple Pay reported available/on. Browser/device eligibility still applies. No wallet payment was made during this configuration change.
 
 ## Currency and tax limits
 
@@ -163,3 +171,7 @@ After release verify public configuration, add-to-cart, cart quote and guest che
 ## Authorised bundle/pricing activation — 11 November 2026
 
 The owner subsequently approved the live pricing migration and API/frontend rollout. Both are now deployed, checkout is open in live mode, and the four derived bundle records refresh through the existing daily workflow. The backed-up migration and live product/currency/cart/checkout-quote checks passed. The owner chose to retain the current supplier balance; capacity checks continue to block orders before charging when available supplier credit is insufficient. Full activation evidence and remaining real-wallet/delivery verification limits are in [production-release.md](production-release.md).
+
+## Payment-triggered queue migration
+
+The replacement for the minute fulfilment poll is implemented but has not been activated. Follow [the order-processing runbook](order-processing.md) for queue configuration, service identity/IAM, pending-order migration, verification and rollback. The default remains scheduler mode to preserve the existing live flow until approval. Do not deploy queue mode with an unconfigured queue or disable the existing scheduler before the replacement is validated. No additional application service is required.

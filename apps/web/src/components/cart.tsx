@@ -15,6 +15,7 @@ import {
 } from '@voyaspan/shared';
 import { quantityChanged, removeFromCart, restoreCart, type RootState } from '@/lib/store';
 import { api } from '@/lib/api';
+import { authClient } from '@/lib/firebase';
 import { useCurrency } from './currency-provider';
 import { useAuth } from './auth-provider';
 export type Quote = {
@@ -106,7 +107,14 @@ export function Cart() {
   const { user } = useAuth();
   async function restoreSavedCart() {
     try {
-      const result = await api<{ items: CartLine[]; version: number }>('/v2/cart', {}, true);
+      if (!user?.emailVerified) return;
+      const result = await api<{ items: CartLine[]; version: number }>('/v2/cart', {}, user.uid);
+      if (authClient().currentUser?.uid !== user.uid) return;
+      // This explicit choice replaces local edits with the saved account cart.
+      // Do not replay a frozen guest intent against that account snapshot on reload.
+      localStorage.removeItem('alozuri-cart-merge');
+      localStorage.removeItem('alozuri-cart-merge-intent');
+      localStorage.setItem('alozuri-cart-owner', user.uid);
       localStorage.setItem('alozuri-cart', JSON.stringify(result.items));
       if (user) localStorage.removeItem('alozuri-cart-pending-' + user.uid);
       window.location.reload();
@@ -200,7 +208,8 @@ export function Cart() {
   const displayedItems = preview.items;
   const total = priceReady ? quote.totalCents : preview.total;
   // Checkout independently verifies the total before it can create a payment.
-  const checkoutBlocked = cart.syncing || displayedItems.some((line) => line.unavailable);
+  const checkoutBlocked =
+    cart.syncing || cart.syncFailed || displayedItems.some((line) => line.unavailable);
   return (
     <section className="container section">
       <div className="page-intro">
@@ -305,7 +314,9 @@ export function Cart() {
             <p className="fine-print" role="status">
               {cart.syncing
                 ? 'Your checkout will be ready when your saved cart finishes syncing.'
-                : 'Remove unavailable plans to continue to checkout.'}
+                : cart.syncFailed
+                  ? 'Resolve the cart sync message above before continuing.'
+                  : 'Remove unavailable plans to continue to checkout.'}
             </p>
           )}
         </OrderSummary>
