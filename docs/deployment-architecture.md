@@ -34,3 +34,7 @@ At the inspection on 12 November 2026, GitHub `main` and website production were
 ## Coordinated manual release workflow
 
 [The manual Release production action](releases.md) adds one entry point for both existing services. It selects changed services against their live commits, stages/checks the API, rolls out the website from the same selected commit and reports both results. A Git push still runs checks only. The Firebase console Rollout button remains website-only. Deployment IAM/environment configuration must be approved before enabling this workflow; no cloud identity or production rollout was created during preparation.
+
+## Daily catalogue trigger
+
+The daily catalogue sync is owned by Cloud Scheduler job `alozuri-catalogue-daily` at 03:17 UTC. It authenticates to the existing API using the dedicated catalogue caller. The GitHub catalogue workflow is manual-only. No separate application or server is deployed for this timer. The legacy minute fulfilment job stays paused and order fulfilment continues through Cloud Tasks. See [catalogue sync configuration](catalogue-and-filters.md#daily-sync).

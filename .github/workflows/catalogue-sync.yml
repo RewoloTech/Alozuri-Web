@@ -1,7 +1,5 @@
-name: Daily supplier catalogue sync
+name: Manual supplier catalogue sync
 on:
-  schedule:
-    - cron: '17 3 * * *'
   workflow_dispatch:
 permissions:
   contents: read

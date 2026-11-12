@@ -90,25 +90,25 @@ CORS_ORIGINS=https://alozuri.com
 FULFILLMENT_ENABLED=true
 FULFILLMENT_WORKER_AUDIENCE=https://YOUR_ALOZURI_API/internal/fulfillment/run
 FULFILLMENT_WORKER_SERVICE_ACCOUNT=alozuri-scheduler@alozuri.iam.gserviceaccount.com
-CATALOGUE_SYNC_AUDIENCE=https://YOUR_ALOZURI_API/internal/catalogue/sync
-CATALOGUE_SYNC_SERVICE_ACCOUNT=alozuri-scheduler@alozuri.iam.gserviceaccount.com
+CATALOGUE_SYNC_AUDIENCE=https://YOUR_ALOZURI_API
+CATALOGUE_SYNC_SERVICE_ACCOUNT=alozuri-catalogue-scheduler@alozuri.iam.gserviceaccount.com
 ```
 
 Verify `alozuri.com` in Resend with its required DNS records before using `orders@alozuri.com`. The confirmation worker retrieves sent-email delivery status; its Resend key must permit retrieval as well as sending. Sending-only keys cannot perform this check. The legacy `ORDER_EMAIL_FROM` variable no longer changes the sender. Live cart checkout fails closed without the signing secret, email provider, live payment configuration, supplier credentials and authenticated delivery-worker configuration. Change `PAYMENTS_MODE` to `live` only after deployment checks pass.
 
 Deploy the root Dockerfile to Cloud Run with a dedicated runtime account, Firestore access, access to the specified secrets and a 300-second request timeout. Customer routes must be reachable publicly; private routes verify Firebase identity or the guest token. Worker/catalogue routes verify Google-signed OIDC tokens. Deploy `infra/firestore.rules` to project `alozuri`.
 
-Configure the recurring jobs after the API origin and scheduler identity exist:
+Configure the single daily catalogue job after the API origin and scheduler identity exist:
 
 ```sh
-node scripts/configure-fulfillment-worker.mjs \
+node scripts/configure-catalogue-scheduler.mjs \
   --project alozuri \
   --region europe-west4 \
   --api-url https://YOUR_ALOZURI_API \
-  --service-account alozuri-scheduler@alozuri.iam.gserviceaccount.com
+  --service-account alozuri-catalogue-scheduler@alozuri.iam.gserviceaccount.com
 ```
 
-The script configures minute delivery and daily catalogue sync; it does not grant IAM or enable paid services. Confirm OIDC invocation and sync a fresh supplier catalogue before enabling checkout. Monitor delivery queue age, delayed allocations, failed refunds, email retries, supplier balance and disputes.
+The script configures only daily catalogue sync at 03:17 UTC and pauses an existing legacy minute fulfilment job. The former script filename remains a compatibility entry point with the same catalogue-only behaviour. It does not grant IAM or enable services. GitHub catalogue sync is manual-only; order processing uses Cloud Tasks. Confirm OIDC invocation and sync a fresh supplier catalogue before enabling checkout. Monitor delivery queue age, delayed allocations, failed refunds, email retries, supplier balance and disputes.
 
 ## Stripe webhooks and wallets
 

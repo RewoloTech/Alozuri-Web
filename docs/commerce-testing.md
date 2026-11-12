@@ -4,7 +4,7 @@ This release imports real eSIM Access **fixed-data BASE packages** into Firestor
 
 ## Daily catalogue
 
-The `voyaspan-catalogue-daily` Cloud Scheduler job runs at **03:00 Europe/London every day**. It POSTs to `/internal/catalogue/sync` using a Google-signed OIDC token for the dedicated scheduler service account. Customer tokens and unsigned requests cannot trigger the sync.
+The `alozuri-catalogue-daily` Cloud Scheduler job runs at **03:17 UTC every day**. It POSTs to `/internal/catalogue/sync` using a Google-signed OIDC token for the dedicated scheduler service account. Customer tokens and unsigned requests cannot trigger the sync.
 
 The server fetches `/api/v1/open/package/list` with `type: BASE`, validates explicit country coverage, USD prices, bytes, total validity and activation rules, then upserts stable package IDs and disables removed packages. Daily/day-pass products and invalid or unsupported records are excluded rather than mispriced. Supplier requests retry 429/5xx responses. A Firestore lease prevents overlapping syncs, and a severe unexpected catalogue shrink aborts the run.
 
