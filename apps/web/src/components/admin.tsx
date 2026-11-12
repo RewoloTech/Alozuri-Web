@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { PricingHistory } from './pricing-history';
 import type { OperationsReport } from '@alozuri/shared/financial';
 import { londonMonth } from '@alozuri/shared/financial';
-import { countryName } from '@alozuri/shared';
+import { OperationsCountries } from './operations-countries';
 import { AccountGate } from './account-gate';
 import { useAuth } from './auth-provider';
 import { api } from '@/lib/api';
@@ -267,6 +267,10 @@ function OperationsAccount() {
                     </div>
                     <div className="surface operations-transactions">
                       <h2>Transactions</h2>
+                      <p className="fine-print">
+                        Includes unpaid checkout attempts. Summary totals include confirmed payments
+                        only.
+                      </p>
                       <p className="fine-print operations-table-hint">
                         Scroll horizontally to see all transaction columns.
                       </p>
@@ -315,9 +319,11 @@ function OperationsAccount() {
                                   </td>
                                   <td>{r.reference}</td>
                                   <td>
-                                    {r.packages
-                                      .map((p) => p.countries.map(countryName).join(', '))
-                                      .join('; ')}
+                                    {r.packages.map((p, i) => (
+                                      <div key={i}>
+                                        <OperationsCountries countries={p.countries} />
+                                      </div>
+                                    ))}
                                   </td>
                                   <td>
                                     {r.packages.map((p, i) => (
@@ -327,28 +333,34 @@ function OperationsAccount() {
                                     ))}
                                   </td>
                                   <td>
-                                    {gbp(r.supplierGbp)}
+                                    {r.paid ? gbp(r.supplierGbp) : '—'}
                                     <small>
-                                      {r.supplier.purchasedUnits === null
-                                        ? 'Supplier outcome pending'
-                                        : `USD ${(r.supplier.purchasedUnits / 10000).toFixed(4)}`}
+                                      {!r.paid
+                                        ? 'Payment not confirmed'
+                                        : r.supplier.purchasedUnits === null
+                                          ? 'Supplier outcome pending'
+                                          : `USD ${(r.supplier.purchasedUnits / 10000).toFixed(4)}`}
                                     </small>
                                   </td>
                                   <td>
-                                    {gbp(r.revenueGbp)}
-                                    {(r.selling.currency !== 'GBP' ||
-                                      r.selling.refundedMinor === null ||
-                                      (r.selling.refundedMinor !== null &&
-                                        r.selling.refundedMinor > 0)) && (
-                                      <small>
-                                        Paid {original(r.selling.amountMinor, r.selling.currency)}
-                                        {r.selling.refundedMinor === null &&
-                                          ' · refunds not reconciled'}
-                                        {r.selling.refundedMinor !== null &&
-                                          r.selling.refundedMinor > 0 &&
-                                          ` · refunded ${original(r.selling.refundedMinor, r.selling.currency)}`}
-                                      </small>
-                                    )}
+                                    {r.paid
+                                      ? gbp(r.revenueGbp)
+                                      : original(r.selling.amountMinor, r.selling.currency)}
+                                    {!r.paid && <small>Unpaid · excluded from totals</small>}
+                                    {r.paid &&
+                                      (r.selling.currency !== 'GBP' ||
+                                        r.selling.refundedMinor === null ||
+                                        (r.selling.refundedMinor !== null &&
+                                          r.selling.refundedMinor > 0)) && (
+                                        <small>
+                                          Paid {original(r.selling.amountMinor, r.selling.currency)}
+                                          {r.selling.refundedMinor === null &&
+                                            ' · refunds not reconciled'}
+                                          {r.selling.refundedMinor !== null &&
+                                            r.selling.refundedMinor > 0 &&
+                                            ` · refunded ${original(r.selling.refundedMinor, r.selling.currency)}`}
+                                        </small>
+                                      )}
                                   </td>
                                   <td>
                                     {gbp(r.feesGbp)}
@@ -363,15 +375,18 @@ function OperationsAccount() {
                                         </small>
                                       )}
                                   </td>
-                                  <td>{gbp(r.profitGbp)}</td>
-                                  <td>{margin(r.marginBps)}</td>
+                                  <td>{r.paid ? gbp(r.profitGbp) : '—'}</td>
+                                  <td>{r.paid ? margin(r.marginBps) : '—'}</td>
                                   <td>
-                                    {r.paymentStatus}
+                                    {r.paymentStatus === 'pending_payment'
+                                      ? 'Awaiting payment'
+                                      : r.paymentStatus.replaceAll('_', ' ')}
                                     <small>
-                                      {r.fulfilmentStatus} ·{' '}
-                                      {r.calculationStatus === 'final' ? 'Final' : 'Provisional'}
+                                      {r.paid
+                                        ? `${r.fulfilmentStatus.replaceAll('_', ' ')} · ${r.calculationStatus === 'final' ? 'Final' : 'Provisional'}`
+                                        : 'No confirmed sale'}
                                     </small>
-                                    {r.reasons.length > 0 && (
+                                    {r.paid && r.reasons.length > 0 && (
                                       <details>
                                         <summary>Pending details</summary>
                                         <ul>

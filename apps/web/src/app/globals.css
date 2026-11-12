@@ -3698,6 +3698,9 @@ body:has(.cart-line) .support-shortcut {
   min-height: 44px;
   cursor: pointer;
 }
+.operations-countries summary {
+  white-space: nowrap;
+}
 .operations-pagination {
   display: flex;
   justify-content: space-between;

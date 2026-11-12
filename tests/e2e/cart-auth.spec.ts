@@ -585,7 +585,7 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
         id: 'point1',
         packageId: 'france-price',
         name: 'France connection',
-        countries: ['FR'],
+        countries: ['FR', 'DE', 'IT', 'ES'],
         identitySource: 'snapshot',
         recordedAt: `${saleDate}T12:00:00.000Z`,
         kind: 'catalogue_sync',
@@ -662,7 +662,7 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
             wholesaleUnits: 50000,
             plan: {
               name: 'France connection',
-              countries: ['FR'],
+              countries: ['FR', 'DE', 'IT', 'ES'],
               priceCents: 1000,
               currency: 'GBP',
             },
@@ -672,14 +672,23 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
       { source: 'fixture', asOf: saleDate, numerator: '8', denominator: '10' },
     );
     row.supplier.purchasedUnits = 100000;
+    row.fulfilmentStatus = 'fulfilled';
     row.stripe.observedAt = `${saleDate}T12:02:00.000Z`;
     row.selling.refundedMinor = 0;
     row.stripe.revenueGbp = 2000;
     row.stripe.feesGbp = provisional ? null : 50;
     const ready = calculateFinancial(row);
+    const unpaid = calculateFinancial({
+      ...structuredClone(row),
+      id: 'unpaid-fixture',
+      reference: 'AZ-UNPAID',
+      paid: false,
+      paymentStatus: 'pending_payment',
+      supplier: { ...row.supplier, purchasedUnits: null },
+    });
     const rows =
       url.searchParams.get('from')! <= saleDate && url.searchParams.get('to')! >= saleDate
-        ? [ready]
+        ? [ready, unpaid]
         : [];
     await route.fulfill({
       headers,
@@ -726,6 +735,20 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
     await expect(page.getByRole('region', { name: 'Financial transactions' })).toContainText(
       'France connection',
     );
+    const transactions = page.getByRole('region', { name: 'Financial transactions' });
+    const countryDetails = transactions.locator('.operations-countries').first();
+    await expect(countryDetails).not.toHaveAttribute('open', '');
+    await expect(countryDetails.getByText('France, Germany, Italy, Spain')).not.toBeVisible();
+    await countryDetails.locator('summary').focus();
+    await page.keyboard.press('Enter');
+    await expect(countryDetails.getByText('France, Germany, Italy, Spain')).toBeVisible();
+    await countryDetails.locator('summary').click();
+    const unpaidRow = transactions.getByRole('row').filter({ hasText: 'AZ-UNPAID' });
+    await expect(unpaidRow).toContainText('Awaiting payment');
+    await expect(unpaidRow).toContainText('No confirmed sale');
+    await expect(unpaidRow).toContainText('£20.00');
+    await expect(unpaidRow).toContainText('Unpaid · excluded from totals');
+    await expect(unpaidRow.getByText('Pending', { exact: true })).toHaveCount(0);
     for (const width of [320, 375, 390, 430, 768, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       const fromBox = await page.getByLabel('From Date', { exact: true }).boundingBox();
@@ -766,6 +789,11 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
     await expect(
       pricingPanel.getByRole('region', { name: 'Catalogue pricing history' }),
     ).toContainText('France connection');
+    const pricingCountries = pricingPanel.locator('.operations-countries').first();
+    await expect(pricingCountries.getByText('France, Germany, Italy, Spain')).not.toBeVisible();
+    await pricingCountries.locator('summary').click();
+    await expect(pricingCountries.getByText('France, Germany, Italy, Spain')).toBeVisible();
+    await pricingCountries.locator('summary').click();
     await expect(pricingPanel.getByText('↑ Increased', { exact: true })).toBeVisible();
     await expect(pricingPanel.getByText('↓ Decreased', { exact: true })).toBeVisible();
     await expect(pricingPanel.getByText('— Unchanged', { exact: true })).toBeVisible();

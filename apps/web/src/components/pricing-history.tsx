@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import type { PricingHistoryReport } from '@alozuri/shared/pricing-history';
 import { londonMonth } from '@alozuri/shared/financial';
-import { countryName } from '@alozuri/shared';
+import { OperationsCountries } from './operations-countries';
 import { api } from '@/lib/api';
 const supplier = (value: number | null) =>
   value === null
@@ -184,11 +184,7 @@ export function PricingHistory({ uid }: { uid: string }) {
                       <tr key={row.packageId + ':' + row.id}>
                         <td>
                           <strong>{row.name}</strong>
-                          <small>
-                            {row.countries.length
-                              ? row.countries.map(countryName).join(', ')
-                              : 'Historical destination not recorded'}
-                          </small>
+                          <OperationsCountries countries={row.countries} />
                           {row.identitySource === 'current_catalogue' && (
                             <small>
                               Current name and destination; historical values not recorded.
