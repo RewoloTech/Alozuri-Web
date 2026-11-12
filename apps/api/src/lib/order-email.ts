@@ -11,6 +11,17 @@ import {
 } from './confirmation-order.js';
 
 export const ORDER_EMAIL_FROM = 'Alozuri <orders@alozuri.com>';
+export type InlineEmailImage = {
+  filename: string;
+  content: string;
+  content_type: 'image/png';
+  content_id: string;
+};
+export type InstallationEmailSection = {
+  html: string;
+  text: string;
+  attachments: InlineEmailImage[];
+};
 export type ConfirmationEmail = {
   id: string;
   version?: z.infer<typeof confirmationVersionSchema>;
@@ -18,6 +29,7 @@ export type ConfirmationEmail = {
   url: string;
   text: string;
   html: string;
+  attachments?: InlineEmailImage[];
 };
 export interface OrderMailer {
   send(input: ConfirmationEmail): Promise<{ providerMessageId: string }>;
@@ -69,7 +81,18 @@ export function confirmationEmail(
   order: ConfirmationOrder,
   url: string,
   version: z.infer<typeof confirmationVersionSchema> = 'email-v1',
+  installation?: InstallationEmailSection,
 ): ConfirmationEmail {
+  if (installation && version !== CONFIRMATION_VERSION)
+    throw new Error('Installation details require a ready confirmation.');
+  const steps = installation
+    ? [
+        installationSteps[0],
+        'On your phone, open Settings → Mobile/Cellular → Add eSIM.',
+        'Scan the QR code from another screen, or enter the SM-DP+ address and activation code manually.',
+        ...installationSteps.slice(3),
+      ]
+    : installationSteps;
   const site = new URL(url).origin;
   const business = order.legal.business ?? BUSINESS;
   const reference = orderReference(order.id);
@@ -127,7 +150,7 @@ export function confirmationEmail(
     ...(order.legal.acknowledgementText ? [order.legal.acknowledgementText] : []),
   ];
   const footerText = `Alozuri — One eSIM. Every stop.\n${business.company}\nCompany number ${business.number}\n${business.address}\n${business.email}\nTerms: ${site}/terms\nPrivacy Policy: ${site}/privacy\nCookie Policy: ${site}/cookies\nRefund Policy: ${site}/refund-policy\nContact: ${site}/contact`;
-  const text = `Your order is confirmed!\n\nThank you for choosing Alozuri. Access your eSIM through your secure order page.\n\nYOUR ORDER\nOrder reference: ${reference}\nPurchase date and time: ${order.paidAt}\n\n${summaryText}\n\nTotal paid: ${total}\nPayment status: Paid\n${tax}\n\nACCESS YOUR ESIM\nView & Install Your eSIM:\n${url}\n\n${pending}\n\nINSTALLATION\n${installationSteps.map((step, index) => `${index + 1}. ${step}`).join('\n')}\n\n${activationNote}\n${order.items.map(({ plan }) => `${plan.name}: ${plan.activation} Validity: ${plan.days} days.`).join('\n')}\n\nCompatibility and installation guide: ${site}/esim-compatibility\n\nIMPORTANT INFORMATION\n${important}\n\nYour Purchase Contract\n${contractMetadata.join('\n')}\n\nTERMS AND CONDITIONS\n${order.legal.termsText}\n\nREFUND AND CANCELLATION POLICY\n${order.legal.refundText}\n\n${footerText}`;
+  const text = `Your order is confirmed!\n\nThank you for choosing Alozuri. Access your eSIM through your secure order page.\n\nYOUR ORDER\nOrder reference: ${reference}\nPurchase date and time: ${order.paidAt}\n\n${summaryText}\n\nTotal paid: ${total}\nPayment status: Paid\n${tax}\n\nACCESS YOUR ESIM\nView & Install Your eSIM:\n${url}\n\n${pending}\n\nINSTALLATION\n${installation ? installation.text + '\n\n' : ''}${steps.map((step, index) => `${index + 1}. ${step}`).join('\n')}\n\n${activationNote}\n${order.items.map(({ plan }) => `${plan.name}: ${plan.activation} Validity: ${plan.days} days.`).join('\n')}\n\nCompatibility and installation guide: ${site}/esim-compatibility\n\nIMPORTANT INFORMATION\n${important}\n\nYour Purchase Contract\n${contractMetadata.join('\n')}\n\nTERMS AND CONDITIONS\n${order.legal.termsText}\n\nREFUND AND CANCELLATION POLICY\n${order.legal.refundText}\n\n${footerText}`;
   const summaryHtml = order.items
     .map(
       (item) =>
@@ -135,7 +158,7 @@ export function confirmationEmail(
     )
     .join('');
   const contractHtml = `<section aria-label="Your Purchase Contract" style="border-top:1px solid #dddbea;margin-top:32px;padding-top:8px">${heading('Your Purchase Contract')}<div style="font-size:14px;line-height:1.7;color:#41495e">${contractMetadata.map((line) => `<p style="margin:0 0 8px">${e(line)}</p>`).join('')}${heading('Terms and Conditions')}${legalEmailHtml(order.legal.termsText)}${heading('Refund and Cancellation Policy')}${legalEmailHtml(order.legal.refundText)}</div></section>`;
-  const html = `<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta charset="utf-8"><title>Your Alozuri eSIM order confirmation</title></head><body style="margin:0;background:#f6f6fb;font-family:Inter,Arial,sans-serif;color:#1b2035"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:24px 12px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:auto;background:#ffffff;border:1px solid #e2e3ed;border-radius:16px"><tr><td style="padding:28px 24px;overflow-wrap:anywhere;word-break:break-word"><img src="${e(site)}/images/alozuri-email-logo.png" width="132" height="40" alt="Alozuri" style="display:block;border:0;object-fit:contain;object-position:left"><h1 style="font-size:26px;line-height:1.25;margin:24px 0 12px">Your order is confirmed!</h1>${paragraph('Thank you for choosing Alozuri. Access your eSIM through your secure order page.')}${heading('Your Order')}<div style="background:#f5f4ff;border-radius:10px;padding:16px;font-size:15px;line-height:1.65">${detail('Order reference', reference)}${detail('Purchase date and time', order.paidAt)}${summaryHtml}${detail('Total paid', total)}${detail('Payment status', 'Paid')}<p style="font-size:14px;margin:0">${e(tax)}</p></div>${heading('Access your eSIM')}<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" bgcolor="#4b3dcc" style="border-radius:10px"><a href="${e(url)}" style="display:block;padding:16px 12px;color:#ffffff;text-decoration:none;font-size:16px;font-weight:bold;line-height:1.5">View &amp; Install Your eSIM</a></td></tr></table><div style="margin-top:16px">${paragraph(pending)}</div>${heading('Install when you are ready')}<ol style="padding-left:22px;font-size:16px;line-height:1.65;margin:0 0 16px">${installationSteps.map((step) => `<li style="margin-bottom:8px">${e(step)}</li>`).join('')}</ol>${paragraph(activationNote)}${order.items.map(({ plan }) => detail(plan.name, `${plan.activation} Validity: ${plan.days} days.`)).join('')}<p style="font-size:16px;line-height:1.65"><a href="${e(site)}/esim-compatibility" style="color:#4b3dcc">eSIM compatibility and installation guide</a></p>${heading('Important information')}${paragraph(important)}${contractHtml}<div style="border-top:1px solid #dddbea;margin-top:28px;padding-top:20px;font-size:14px;line-height:1.8;color:#656d83"><strong>Alozuri — One eSIM. Every stop.</strong><br>${e(business.company)}<br>Company number ${e(business.number)}<br>${e(business.address)}<br><a href="mailto:${e(business.email)}" style="color:#4b3dcc">${e(business.email)}</a><p style="margin-top:14px">${[
+  const html = `<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta charset="utf-8"><title>Your Alozuri eSIM order confirmation</title></head><body style="margin:0;background:#f6f6fb;font-family:Inter,Arial,sans-serif;color:#1b2035"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="padding:24px 12px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:auto;background:#ffffff;border:1px solid #e2e3ed;border-radius:16px"><tr><td style="padding:28px 24px;overflow-wrap:anywhere;word-break:break-word"><img src="${e(site)}/images/alozuri-email-logo.png" width="132" height="40" alt="Alozuri" style="display:block;border:0;object-fit:contain;object-position:left"><h1 style="font-size:26px;line-height:1.25;margin:24px 0 12px">Your order is confirmed!</h1>${paragraph('Thank you for choosing Alozuri. Access your eSIM through your secure order page.')}${heading('Your Order')}<div style="background:#f5f4ff;border-radius:10px;padding:16px;font-size:15px;line-height:1.65">${detail('Order reference', reference)}${detail('Purchase date and time', order.paidAt)}${summaryHtml}${detail('Total paid', total)}${detail('Payment status', 'Paid')}<p style="font-size:14px;margin:0">${e(tax)}</p></div>${heading('Access your eSIM')}<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" bgcolor="#4b3dcc" style="border-radius:10px"><a href="${e(url)}" style="display:block;padding:16px 12px;color:#ffffff;text-decoration:none;font-size:16px;font-weight:bold;line-height:1.5">View &amp; Install Your eSIM</a></td></tr></table><div style="margin-top:16px">${paragraph(pending)}</div>${heading('Install when you are ready')}${installation?.html ?? ''}<ol style="padding-left:22px;font-size:16px;line-height:1.65;margin:0 0 16px">${steps.map((step) => `<li style="margin-bottom:8px">${e(step)}</li>`).join('')}</ol>${paragraph(activationNote)}${order.items.map(({ plan }) => detail(plan.name, `${plan.activation} Validity: ${plan.days} days.`)).join('')}<p style="font-size:16px;line-height:1.65"><a href="${e(site)}/esim-compatibility" style="color:#4b3dcc">eSIM compatibility and installation guide</a></p>${heading('Important information')}${paragraph(important)}${contractHtml}<div style="border-top:1px solid #dddbea;margin-top:28px;padding-top:20px;font-size:14px;line-height:1.8;color:#656d83"><strong>Alozuri — One eSIM. Every stop.</strong><br>${e(business.company)}<br>Company number ${e(business.number)}<br>${e(business.address)}<br><a href="mailto:${e(business.email)}" style="color:#4b3dcc">${e(business.email)}</a><p style="margin-top:14px">${[
     ['Terms', '/terms'],
     ['Privacy Policy', '/privacy'],
     ['Cookie Policy', '/cookies'],
@@ -147,7 +170,15 @@ export function confirmationEmail(
         `<a href="${e(site + path)}" style="display:inline-block;padding:6px 8px 6px 0;color:#4b3dcc">${label}</a>`,
     )
     .join(' ')}</p></div></td></tr></table></td></tr></table></body></html>`;
-  return { id: order.id, version, email: order.email, url, text, html };
+  return {
+    id: order.id,
+    version,
+    email: order.email,
+    url,
+    text,
+    html,
+    ...(installation ? { attachments: installation.attachments } : {}),
+  };
 }
 export function confirmationPayload(input: ConfirmationEmail) {
   return {
@@ -157,6 +188,16 @@ export function confirmationPayload(input: ConfirmationEmail) {
     subject: 'Your Alozuri eSIM order confirmation',
     text: input.text,
     html: input.html,
+    ...(input.attachments?.length
+      ? {
+          attachments: input.attachments.map((image) => ({
+            filename: image.filename,
+            content: image.content,
+            content_type: image.content_type,
+            content_id: image.content_id,
+          })),
+        }
+      : {}),
   };
 }
 export const confirmationPayloadHash = (input: ConfirmationEmail) =>

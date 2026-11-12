@@ -7,8 +7,8 @@ export const CONFIRMATION_VERSION = 'email-v2-ready';
 export const confirmationVersionSchema = z.enum(['email-v1', CONFIRMATION_VERSION]);
 export const CONTRACT_PDF_FILENAME = 'Alozuri-Order-Confirmation.pdf';
 const cents = z.number().int().nonnegative().safe();
-// Deliberately select only confirmation data. No supplier credentials, access tokens,
-// Stripe identifiers, or eSIM activation fields can reach the email or PDF templates.
+// The contract snapshot excludes credentials and Stripe identifiers. Ready email
+// installation details are validated and supplied separately from private activation records.
 export const confirmationOrderSchema = z
   .object({
     id: z.string().regex(/^purchase_[a-f0-9]{48}$/),

@@ -31,7 +31,10 @@ jobs:
           docker build --tag alozuri-api:ci .
           docker run --rm --network none --env DEMO_MODE=true --entrypoint node alozuri-api:ci --input-type=module -e '
             import assert from "node:assert/strict";
+            import QRCode from "qrcode";
             import { createApp } from "./dist/apps/api/src/app.js";
+            const png = await QRCode.toBuffer("synthetic QR packaging check", { type: "png" });
+            assert.equal(png.readUInt32BE(0), 0x89504e47);
             const app = await createApp();
             const response = await app.inject({ method: "GET", url: "/health" });
             assert.equal(response.statusCode, 200);

@@ -25,3 +25,22 @@ export function sampleConfirmation(currency: 'USD' | 'GBP' | 'EUR' = 'GBP'): Con
     legal: legalSnapshot(CHECKOUT_LEGAL_ACCEPTANCE, '2026-11-11T12:00:00.000Z'),
   });
 }
+
+// Synthetic installation credentials only; never use real customer profiles in tests.
+export function sampleInstallations(order: ConfirmationOrder = sampleConfirmation()) {
+  let index = 0;
+  return order.items.flatMap((item) =>
+    Array.from({ length: item.quantity }, () => {
+      const serial = ++index;
+      return {
+        unitId: 'order_' + serial.toString(16).padStart(48, '0'),
+        planId: item.plan.id,
+        activation: {
+          ac: `LPA:1$rsp.example.test$SYNTHETIC-ESIM-${serial}${serial === 1 ? '$SYNTHETIC-CONFIRMATION' : ''}`,
+          iccid: '890000000000000' + String(serial).padStart(4, '0'),
+          esimTranNo: 'private-supplier-fixture-' + serial,
+        },
+      };
+    }),
+  );
+}

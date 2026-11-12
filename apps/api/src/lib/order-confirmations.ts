@@ -2,6 +2,11 @@ import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import { FieldValue, type Firestore, type DocumentReference } from 'firebase-admin/firestore';
 import { activationSchema } from './supplier.js';
+import { purchaseOwnerUid } from './purchase-ownership.js';
+import {
+  installationConfirmationEmail,
+  type EmailInstallation,
+} from './order-email-installation.js';
 import { confirmationOrderSchema, CONFIRMATION_VERSION } from './confirmation-order.js';
 import {
   confirmationEmail,
@@ -44,6 +49,7 @@ export class OrderConfirmations {
           current.get('confirmationDueAt') > this.now()
         )
           return null;
+        let installations: EmailInstallation[] | undefined;
         if (current.get('confirmationVersion') === CONFIRMATION_VERSION) {
           if (current.get('status') !== 'paid') return null;
           const order = confirmationOrderSchema.parse({ ...current.data(), id: current.id });
@@ -54,7 +60,11 @@ export class OrderConfirmations {
           if (units.size !== expected || units.size > 10 || units.empty) return null;
           if (
             units.docs.some(
-              (unit) => unit.get('status') !== 'ready' || unit.get('paymentBlocked') === true,
+              (unit) =>
+                unit.get('status') !== 'ready' ||
+                unit.get('paymentBlocked') === true ||
+                unit.get('uid') !==
+                  purchaseOwnerUid(current.id, z.string().nullable().parse(current.get('uid'))),
             )
           )
             return null;
@@ -70,6 +80,19 @@ export class OrderConfirmations {
             )
           )
             return null;
+          // Freeze the format before the first send. Older in-flight payloads keep
+          // their original content and provider key, including ambiguous timeouts.
+          if (
+            current.get('confirmationIncludesInstallation') === true ||
+            (current.get('confirmationFirstSendAt') === undefined &&
+              current.get('confirmationPayloadHash') === undefined)
+          ) {
+            installations = units.docs.map((unit, index) => ({
+              unitId: unit.id,
+              planId: z.string().parse(unit.get('plan.id')),
+              activation: activationSchema.parse(activations[index].data()),
+            }));
+          }
         }
         const attempts = Number(current.get('confirmationAttempts') || 0) + 1;
         t.update(doc.ref, {
@@ -77,19 +100,23 @@ export class OrderConfirmations {
           confirmationLeaseUntil: this.now() + leaseMs,
           confirmationStatus: 'preparing',
           confirmationAttempts: attempts,
+          ...(installations ? { confirmationIncludesInstallation: true } : {}),
         });
-        return { data: current.data(), attempts };
+        return { data: current.data(), attempts, installations };
       });
       if (!claimed) continue;
       try {
         const order = confirmationOrderSchema.parse({ ...claimed.data, id: doc.id });
-        const email = confirmationEmail(
-          order,
-          `${this.site}/checkout/success?order=${doc.id}#access=${this.token(doc.id)}`,
-          claimed.data?.confirmationVersion === CONFIRMATION_VERSION
-            ? CONFIRMATION_VERSION
-            : 'email-v1',
-        );
+        const url = `${this.site}/checkout/success?order=${doc.id}#access=${this.token(doc.id)}`;
+        const email = claimed.installations
+          ? await installationConfirmationEmail(order, url, claimed.installations)
+          : confirmationEmail(
+              order,
+              url,
+              claimed.data?.confirmationVersion === CONFIRMATION_VERSION
+                ? CONFIRMATION_VERSION
+                : 'email-v1',
+            );
         const payloadHash = confirmationPayloadHash(email);
         const canSend = await this.db.runTransaction(async (t) => {
           const current = await t.get(doc.ref);

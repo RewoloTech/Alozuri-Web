@@ -11,18 +11,23 @@
     "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {
+    "@alozuri/shared": "0.1.0",
     "@fastify/cors": "^11.1.0",
     "@fastify/rate-limit": "^10.3.0",
-    "@alozuri/shared": "0.1.0",
     "fastify": "^5.6.2",
     "firebase-admin": "14.5.0",
     "google-auth-library": "^11.3.4",
     "pdfkit": "^0.20.2",
+    "qrcode": "^1.5.4",
     "stripe": "^23.1.0",
     "zod": "^4.1.0"
   },
   "devDependencies": {
     "@types/pdfkit": "^0.17.7",
+    "@types/pngjs": "^6.0.5",
+    "@types/qrcode": "^1.5.6",
+    "jsqr": "^1.4.0",
+    "pngjs": "^7.0.0",
     "tsx": "^4.20.0"
   }
 }

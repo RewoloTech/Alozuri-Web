@@ -17,7 +17,12 @@ import assert from 'node:assert/strict';
 import Stripe from 'stripe';
 import { initializeApp, deleteApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
-import type { ConfirmationEmail } from '../src/lib/order-email.ts';
+import {
+  confirmationEmail,
+  confirmationPayloadHash,
+  type ConfirmationEmail,
+} from '../src/lib/order-email.ts';
+import { confirmationOrderSchema } from '../src/lib/confirmation-order.ts';
 import { CommerceService } from '../src/lib/commerce.ts';
 import { EsimUsageService, USAGE_CACHE_MS, type UsageSupplier } from '../src/lib/usage.ts';
 import type { UsageSnapshot } from '../../../packages/shared/src/esim-usage.ts';
@@ -2058,6 +2063,8 @@ test('ready-only queue waits for all saved QR profiles, then sends once without 
   assert.equal((await worker.run(tasks[tasks.length - 1])).state, 'scheduled');
   assert.equal(f.emails.length, 0); // Provider failure keeps email retryable after preparation.
   assert.equal((await ref.get()).get('confirmationStatus'), 'retry');
+  assert.equal((await ref.get()).get('confirmationIncludesInstallation'), true);
+  const firstInlineHash = (await ref.get()).get('confirmationPayloadHash');
   for (const unit of units.docs) {
     assert.equal((await unit.ref.get()).get('status'), 'ready');
     assert((await db.doc('orderActivations/' + unit.id).get()).exists);
@@ -2070,6 +2077,8 @@ test('ready-only queue waits for all saved QR profiles, then sends once without 
   assert(responses.some((r) => r.state === 'complete'));
   assert.equal(f.emails.length, 1);
   assert.equal(f.emails[0].version, 'email-v2-ready');
+  assert.equal(f.emails[0].attachments?.length, 3);
+  assert.equal(confirmationPayloadHash(f.emails[0]), firstInlineHash);
   assert(f.emails[0].text.includes('Your eSIM is ready.'));
   assert(!f.emails[0].text.includes('Your order is processing.'));
   assert.equal(supplierCalls.length, 3);
@@ -2101,6 +2110,15 @@ test('ready-only confirmation rejects partial units, missing credentials and blo
   await f.service.notify(result.orderId);
   assert.equal(f.emails.length, 0);
   await units.docs[0].ref.update({ paymentBlocked: false });
+  const activationRef = db.doc('orderActivations/' + units.docs[0].id);
+  await activationRef.update({ uid: 'another-customer' });
+  await f.service.notify(result.orderId);
+  assert.equal(f.emails.length, 0);
+  await units.docs[0].ref.update({ uid: 'another-customer' });
+  await f.service.notify(result.orderId); // Matching foreign credentials still cannot enter this purchase.
+  assert.equal(f.emails.length, 0);
+  await units.docs[0].ref.update({ uid: units.docs[0].get('uid') });
+  await activationRef.update({ uid: units.docs[0].get('uid') });
   const saved = units.docs[0].data();
   await units.docs[0].ref.delete();
   await f.service.notify(result.orderId);
@@ -2108,4 +2126,64 @@ test('ready-only confirmation rejects partial units, missing credentials and blo
   await units.docs[0].ref.set({ ...saved, status: 'ready', paymentBlocked: false });
   await Promise.all([f.service.notify(result.orderId), f.service.notify(result.orderId)]);
   assert.equal(f.emails.length, 1);
+});
+
+async function readyEmailPurchase(f: ReturnType<typeof fixture>) {
+  const result = await f.service.checkout(f.input, null);
+  f.intent.status = 'succeeded';
+  f.intent.amount_received = f.intent.amount;
+  await f.event();
+  const units = await db.collection('orders').where('parentOrderId', '==', result.orderId).get();
+  for (const unit of units.docs) {
+    await unit.ref.update({ status: 'ready' });
+    await db.doc('orderActivations/' + unit.id).set({
+      uid: unit.get('uid'),
+      ac: 'LPA:1$rsp.example.test$SYNTHETIC-' + unit.id,
+      iccid: '8900000000000000001',
+      esimTranNo: 'private-fixture-reference',
+    });
+  }
+  return { result, units, ref: db.doc('purchases/' + result.orderId) };
+}
+
+test('an older ready-email retry keeps its original payload and cannot gain new installation credentials', async () => {
+  const f = fixture(false, undefined, 'USD', undefined, undefined, undefined, null, false);
+  const { result, ref } = await readyEmailPurchase(f);
+  const snapshot = await ref.get();
+  const prior = confirmationEmail(
+    confirmationOrderSchema.parse({ ...snapshot.data(), id: snapshot.id }),
+    `https://alozuri.com/checkout/success?order=${result.orderId}#access=${result.accessToken}`,
+    'email-v2-ready',
+  );
+  await ref.update({
+    confirmationFirstSendAt: Date.now() - 1000,
+    confirmationPayloadHash: confirmationPayloadHash(prior),
+  });
+  await f.service.notify(result.orderId);
+  assert.equal(f.emails.length, 1);
+  assert.equal(f.emails[0].attachments, undefined);
+  assert.equal(confirmationPayloadHash(f.emails[0]), confirmationPayloadHash(prior));
+  assert.equal((await ref.get()).get('confirmationIncludesInstallation'), undefined);
+  await f.service.notify(result.orderId);
+  assert.equal(f.emails.length, 1);
+});
+
+test('changed private installation data after an attempted send requires review rather than a different retry', async () => {
+  let fail = true;
+  const f = fixture(false, undefined, 'USD', () => fail, undefined, undefined, null, false);
+  const { result, units, ref } = await readyEmailPurchase(f);
+  await f.service.notify(result.orderId);
+  assert.equal((await ref.get()).get('confirmationIncludesInstallation'), true);
+  const firstHash = (await ref.get()).get('confirmationPayloadHash');
+  assert.equal(typeof firstHash, 'string');
+  await db
+    .doc('orderActivations/' + units.docs[0].id)
+    .update({ ac: 'LPA:1$rsp.example.test$CHANGED-SYNTHETIC' });
+  await ref.update({ confirmationDueAt: Date.now() - 1 });
+  fail = false;
+  await f.service.notify(result.orderId);
+  assert.equal(f.emails.length, 0);
+  assert.equal((await ref.get()).get('confirmationStatus'), 'attention');
+  assert.equal((await ref.get()).get('confirmationError'), 'send_reconciliation_required');
+  assert.equal((await ref.get()).get('confirmationPayloadHash'), firstHash);
 });
