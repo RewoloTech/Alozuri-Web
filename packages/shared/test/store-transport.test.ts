@@ -44,3 +44,12 @@ test('store origin checks support the public App Hosting origin without trusting
     allowedStoreOrigin('https://alozuri.com', 'http://internal:8080', 'malformed-config'),
   );
 });
+
+test('profile transport permits own-profile operations but no arbitrary user or admin paths', () => {
+  assert.equal(allowedStoreRequest('GET', '/v2/profile'), true);
+  assert.equal(allowedStoreRequest('POST', '/v2/profile'), true);
+  assert.equal(allowedStoreRequest('PATCH', '/v2/profile'), true);
+  for (const path of ['/v2/profile/victim', '/v2/users/victim', '/users/victim', '/internal/users'])
+    assert.equal(allowedStoreRequest('PATCH', path), false);
+  assert.equal(allowedStoreRequest('PUT', '/v2/profile'), false);
+});

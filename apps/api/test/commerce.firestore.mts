@@ -1,3 +1,4 @@
+import { UserProfiles, type ProfileDirectory } from '../src/lib/user-profiles.ts';
 import { pendingOrderWork, prepareOrderWork } from '../src/lib/order-work-recovery.ts';
 import { OrderWorker } from '../src/lib/order-worker.ts';
 import {
@@ -888,6 +889,7 @@ test('single-email checkout preserves validation, legacy compatibility and verif
     fulfillment: null,
     commerce: f.service,
     demo: false,
+    profiles: new UserProfiles(db, profileDirectory('alice', f.input.email).directory),
     verify: async (token) => ({
       uid: token,
       email: f.input.email,
@@ -1700,6 +1702,271 @@ test('HTTP queue flow verifies payment, acknowledges scheduled waiting, and comp
     );
     assert.equal(supplied, 3);
     assert.equal(f.emails.length, 1);
+  } finally {
+    await server.close();
+  }
+});
+
+function profileDirectory(uid: string, email: string, verified = true) {
+  const current = {
+    uid,
+    email,
+    emailVerified: verified,
+    disabled: false,
+    displayName: 'Mary Jane Smith',
+    metadata: {
+      creationTime: '2026-01-01T10:00:00.000Z',
+      lastSignInTime: '2026-11-12T10:00:00.000Z',
+    },
+    providerData: [{ providerId: 'password' }],
+  };
+  const updates = 0;
+  const directory: ProfileDirectory = {
+    getUser: async (requested) => {
+      assert.equal(requested, uid);
+      return current;
+    },
+  };
+  return { current, directory, updates: () => updates };
+}
+test('user profile sync creates private validated records and only accepts names from the authenticated customer', async () => {
+  const source = profileDirectory('profile-owner', 'Profile.Owner@example.test');
+  const profiles = new UserProfiles(db, source.directory);
+  const principal = {
+    uid: source.current.uid,
+    email: source.current.email,
+    verified: true,
+    admin: false,
+  };
+  const server = await createApp({
+    payments: null,
+    commerce: null,
+    fulfillment: null,
+    profiles,
+    verify: async (token) => {
+      if (token !== 'owner') throw new Error('Invalid');
+      return principal;
+    },
+  });
+  try {
+    const url = '/v2/profile',
+      headers = { authorization: 'Bearer owner' };
+    assert.equal((await server.inject({ method: 'GET', url })).statusCode, 401);
+    assert.equal(
+      (
+        await server.inject({
+          method: 'POST',
+          url,
+          headers,
+          payload: { uid: 'victim', admin: true },
+        })
+      ).statusCode,
+      400,
+    );
+    assert.equal((await db.doc('users/victim').get()).exists, false);
+    const synced = await server.inject({ method: 'POST', url, headers, payload: {} });
+    assert.equal(synced.statusCode, 200);
+    const profile = synced.json().profile;
+    assert.equal(profile.uid, principal.uid);
+    assert.equal(profile.email, 'profile.owner@example.test');
+    assert.equal(profile.createdAt, source.current.metadata.creationTime);
+    assert.equal(profile.lastSignInAt, source.current.metadata.lastSignInTime);
+    const writeTime = (await db.doc('users/' + principal.uid).get()).updateTime;
+    await profiles.sync(principal);
+    assert.deepEqual((await db.doc('users/' + principal.uid).get()).updateTime, writeTime);
+    for (const payload of [
+      { firstName: 'Mary', lastName: 'Smith', admin: true },
+      { firstName: 'Mary', lastName: 'Smith', email: 'victim@example.test' },
+      { firstName: '<script>', lastName: 'Smith' },
+    ])
+      assert.equal(
+        (await server.inject({ method: 'PATCH', url, headers, payload })).statusCode,
+        400,
+      );
+    assert.equal(source.updates(), 0);
+    const updated = await server.inject({
+      method: 'PATCH',
+      url,
+      headers,
+      payload: { firstName: 'Mary Jane', lastName: 'Smith' },
+    });
+    assert.equal(updated.statusCode, 200);
+    assert.equal(updated.json().profile.firstName, 'Mary Jane');
+    assert.equal((await profiles.sync(principal)).firstName, 'Mary Jane');
+    assert.equal(source.current.displayName, 'Mary Jane Smith');
+    assert.ok(!JSON.stringify(updated.json()).includes('admin'));
+    assert.equal(
+      (
+        await server.inject({
+          method: 'PATCH',
+          url,
+          headers,
+          payload: { firstName: 'Mary', lastName: 'Smith' },
+        })
+      ).statusCode,
+      200,
+    );
+    source.current.disabled = true;
+    assert.equal((await server.inject({ method: 'GET', url, headers })).statusCode, 401);
+    const anonymous = await fetch(
+      `http://${process.env.FIRESTORE_EMULATOR_HOST}/v1/projects/demo-alozuri/databases/(default)/documents/users/${principal.uid}`,
+    );
+    assert.equal(anonymous.status, 403);
+  } finally {
+    await server.close();
+  }
+});
+
+test('verified guest claim atomically links purchase, eSIMs and activation records; email alone never opens another UID-owned account', async () => {
+  let calls = 0;
+  const f = await usageFixture({
+    usage: async () => {
+      calls++;
+      return usageReading;
+    },
+  });
+  const email = 'claim-' + crypto.randomUUID() + '@example.test';
+  await db.doc('purchases/' + f.result.orderId).update({ email });
+  const source = profileDirectory('claim-owner-' + crypto.randomUUID(), email, false);
+  const profiles = new UserProfiles(db, source.directory);
+  const principal = { uid: source.current.uid, email, verified: true, admin: false };
+  await profiles.sync(principal); // Even a stale verified token cannot override current Firebase state.
+  assert.equal((await db.doc('purchases/' + f.result.orderId).get()).get('uid'), null);
+  source.current.emailVerified = true;
+  await profiles.sync(principal);
+  const parent = await db.doc('purchases/' + f.result.orderId).get();
+  assert.equal(parent.get('uid'), principal.uid);
+  for (const unit of f.units) {
+    assert.equal((await unit.ref.get()).get('uid'), principal.uid);
+    assert.equal((await db.doc('orderActivations/' + unit.id).get()).get('uid'), principal.uid);
+  }
+  assert.equal(
+    (await f.service.usage(f.result.orderId, f.units[0].id, principal, undefined)).state,
+    'available',
+  );
+  const stranger = { uid: 'another-uid', email, verified: true, admin: true };
+  await assert.rejects(f.service.order(f.result.orderId, stranger, undefined), /not found/);
+  await assert.rejects(
+    f.service.usage(f.result.orderId, f.units[0].id, stranger, undefined),
+    /not found/,
+  );
+  await assert.rejects(
+    f.service.activation(f.result.orderId, f.units[0].id, stranger, undefined),
+    /not found/,
+  );
+  await assert.rejects(f.service.contractPdf(f.result.orderId, stranger, undefined), /not found/);
+  assert.ok(!(await f.service.history(stranger)).some((order) => order.id === f.result.orderId));
+  assert.equal(calls, 1);
+  source.current.email = 'new-address@example.test';
+  const updated = { ...principal, email: source.current.email };
+  await profiles.sync(updated);
+  assert.ok((await f.service.history(updated)).some((order) => order.id === f.result.orderId));
+  assert.equal(
+    (await f.service.order(f.result.orderId, null, f.result.accessToken)).id,
+    f.result.orderId,
+  );
+});
+
+test('usage rechecks current account ownership after a slow supplier request and withholds flagged payments', async () => {
+  let release!: () => void, entered!: () => void;
+  const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    }),
+    started = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+  const f = await usageFixture({
+    usage: async () => {
+      entered();
+      await gate;
+      return usageReading;
+    },
+  });
+  const principal = {
+    uid: 'old-email-session',
+    email: f.input.email,
+    verified: true,
+    admin: false,
+  };
+  const lookup = f.service.usage(f.result.orderId, f.units[0].id, principal, undefined);
+  await started;
+  await db.doc('purchases/' + f.result.orderId).update({ uid: 'new-owner' });
+  for (const unit of f.units) {
+    await unit.ref.update({ uid: 'new-owner' });
+    await db.doc('orderActivations/' + unit.id).update({ uid: 'new-owner' });
+  }
+  release();
+  await assert.rejects(lookup, /not found/);
+  await db.doc('purchases/' + f.result.orderId).update({ status: 'attention' });
+  const result = await f.service.usage(f.result.orderId, f.units[0].id, null, f.result.accessToken);
+  assert.equal(result.state, 'unavailable');
+  assert.equal(result.snapshot, null);
+});
+
+test('profile UID corruption and invalid activation payloads fail closed', async () => {
+  const source = profileDirectory('profile-corruption-check', 'corruption-check@example.test');
+  const profiles = new UserProfiles(db, source.directory);
+  const principal = {
+    uid: source.current.uid,
+    email: source.current.email,
+    verified: true,
+    admin: false,
+  };
+  await profiles.sync(principal);
+  await db.doc('users/' + principal.uid).update({ uid: 'other-person' });
+  await assert.rejects(profiles.read(principal), /ownership requires review/);
+  await assert.rejects(profiles.sync(principal), /ownership requires review/);
+  const f = await usageFixture({ usage: async () => usageReading });
+  await assert.rejects(
+    f.service.activation(f.result.orderId, f.units[0].id, null, f.result.accessToken),
+    /not ready/,
+  );
+  await db.doc('purchases/' + f.result.orderId).update({ status: 'attention' });
+  await assert.rejects(
+    f.service.activation(f.result.orderId, f.units[0].id, null, f.result.accessToken),
+    /not ready/,
+  );
+});
+
+test('authenticated checkout ensures a linked user profile before payment and rejects stale verified claims', async () => {
+  const f = fixture();
+  const source = profileDirectory(
+    'checkout-profile-' + crypto.randomUUID(),
+    'checkout-profile@example.test',
+    false,
+  );
+  const principal = {
+    uid: source.current.uid,
+    email: source.current.email,
+    verified: true,
+    admin: false,
+  };
+  const server = await createApp({
+    payments: null,
+    commerce: f.service,
+    fulfillment: null,
+    profiles: new UserProfiles(db, source.directory),
+    repository: { plans: async () => f.plans, orders: async () => [], order: async () => null },
+    verify: async () => principal,
+  });
+  try {
+    const request = {
+      method: 'POST' as const,
+      url: '/v2/checkout',
+      headers: { authorization: 'Bearer fixture-owner' },
+      payload: f.input,
+    };
+    assert.equal((await server.inject(request)).statusCode, 401);
+    assert.equal(f.getCreates(), 0);
+    source.current.emailVerified = true;
+    const purchased = await server.inject(request);
+    assert.equal(purchased.statusCode, 200);
+    assert.equal((await db.doc('users/' + principal.uid).get()).get('uid'), principal.uid);
+    assert.equal(
+      (await db.doc('purchases/' + purchased.json().orderId).get()).get('uid'),
+      principal.uid,
+    );
+    assert.equal(f.getCreates(), 1);
   } finally {
     await server.close();
   }

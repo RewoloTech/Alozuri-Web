@@ -1,3 +1,4 @@
+import type { UserProfiles } from './user-profiles.js';
 import { checkoutLegalSchema } from './legal.js';
 import { CONTRACT_PDF_FILENAME } from './confirmation-order.js';
 import { currencySchema } from './exchange-rates.js';
@@ -12,6 +13,7 @@ export function registerCommerceRoutes(
   service: CommerceService | null,
   repository: Repository,
   verify: (token: string) => Promise<Principal>,
+  profiles: UserProfiles | null = null,
 ) {
   async function user(header: string | undefined, required = false) {
     if (!header) {
@@ -63,6 +65,11 @@ export function registerCommerceRoutes(
         })
         .strict()
         .parse(req.body);
+      if (p && profiles) {
+        const profile = await profiles.sync(p, undefined, false);
+        if (!profile.emailVerified)
+          throw new CommerceError('Sign in with a verified account.', 401);
+      }
       return commerce().checkout(input, p);
     },
   );

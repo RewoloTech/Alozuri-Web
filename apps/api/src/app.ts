@@ -1,3 +1,5 @@
+import { UserProfiles, ProfileError } from './lib/user-profiles.js';
+import { registerProfileRoutes } from './lib/profile-routes.js';
 import { OrderWorker } from './lib/order-worker.js';
 import {
   configuredOrderTaskQueue,
@@ -74,6 +76,7 @@ const idSchema = documentId;
 export async function createApp(
   options: {
     repository?: Repository;
+    profiles?: UserProfiles | null;
     featured?: (currency: Currency) => Promise<FeaturedBundle[]>;
     exchangeRates?: Pick<ExchangeRates, 'current'>;
     verify?: (token: string) => Promise<Principal>;
@@ -139,6 +142,7 @@ export async function createApp(
       : false,
   });
   await app.register(cors, {
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH'],
     origin:
       options.origins ??
       (process.env.CORS_ORIGINS || 'http://localhost:3000').split(',').map((s) => s.trim()),
@@ -149,6 +153,8 @@ export async function createApp(
     reply.header('Cache-Control', 'no-store');
   });
   app.setErrorHandler((error, _request, reply) => {
+    if (error instanceof ProfileError)
+      return reply.code(error.statusCode).send({ error: error.message });
     if (error instanceof SearchError)
       return reply.code(error.statusCode).send({ error: error.message });
     if (error instanceof CommerceError)
@@ -183,7 +189,10 @@ export async function createApp(
   }
   registerEsimWebhook(app, options.esimWebhook);
   await registerStripeWebhook(app, payments, commerce);
-  registerCommerceRoutes(app, commerce, repository, verify);
+  const profiles =
+    options.profiles === undefined ? (demo ? null : new UserProfiles()) : options.profiles;
+  registerCommerceRoutes(app, commerce, repository, verify, profiles);
+  registerProfileRoutes(app, profiles, verify);
   app.get('/v1/config', async () => ({
     paymentMode: payments?.mode ?? 'disabled',
     catalogueMode: demo ? 'preview' : 'live',

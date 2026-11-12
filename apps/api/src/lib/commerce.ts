@@ -1,3 +1,5 @@
+import { ownsPurchase, purchaseOwnerUid } from './purchase-ownership.js';
+import { activationSchema } from './supplier.js';
 import {
   orderTaskConfig,
   configuredOrderTaskQueue,
@@ -219,8 +221,7 @@ export class CommerceService {
       .digest('base64url');
   }
   private authorized(p: Purchase, user: Principal | null, access: string | undefined) {
-    if (user?.verified && (p.uid === user.uid || user.email?.toLowerCase() === p.email))
-      return true;
+    if (ownsPurchase(p, user)) return true;
     if (!access) return false;
     const actual = Buffer.from(hash(access)),
       expected = Buffer.from(p.accessHash);
@@ -496,7 +497,7 @@ export class CommerceService {
             const childId = 'order_' + hash(id + ':' + index++).slice(0, 48),
               childRef = this.db.collection('orders').doc(childId);
             t.create(childRef, {
-              uid: p.uid || 'guest_' + hash(id).slice(0, 24),
+              uid: purchaseOwnerUid(id, p.uid),
               plan: line.plan,
               amountCents: line.plan.priceCents,
               currency: p.currency,
@@ -596,11 +597,20 @@ export class CommerceService {
   async activation(id: string, unitId: string, user: Principal | null, access: string | undefined) {
     await this.order(id, user, access);
     return this.db.runTransaction(async (t) => {
-      const [unit, a] = await Promise.all([
+      const [parent, unit, a] = await Promise.all([
+        t.get(this.db.collection('purchases').doc(id)),
         t.get(this.db.collection('orders').doc(unitId)),
         t.get(this.db.collection('orderActivations').doc(unitId)),
       ]);
+      if (!parent.exists) throw new CommerceError('Order not found.', 404);
+      const purchase = purchaseSchema.parse(parent.data());
+      if (!this.authorized(purchase, user, access))
+        throw new CommerceError('Order not found.', 404);
       if (
+        purchase.status !== 'paid' ||
+        !purchase.paidAt ||
+        purchase.test ||
+        unit.get('uid') !== purchaseOwnerUid(id, purchase.uid) ||
         unit.get('parentOrderId') !== id ||
         unit.get('test') !== false ||
         unit.get('status') !== 'ready' ||
@@ -609,11 +619,9 @@ export class CommerceService {
         a.get('uid') !== unit.get('uid')
       )
         throw new CommerceError('Installation details are not ready.', 404);
-      return {
-        ac: a.get('ac') as string,
-        iccid: a.get('iccid') as string,
-        esimTranNo: a.get('esimTranNo') as string,
-      };
+      const activation = activationSchema.safeParse(a.data());
+      if (!activation.success) throw new CommerceError('Installation details are not ready.', 404);
+      return activation.data;
     });
   }
   async usage(
@@ -628,7 +636,9 @@ export class CommerceService {
     if (this.mode !== 'live' || purchase.test)
       return { state: 'unavailable', snapshot: null, stale: false };
     try {
-      return await this.usageReader.get(id, unitId);
+      const usage = await this.usageReader.get(id, unitId);
+      await this.order(id, user, access); // Ownership may change while the supplier is responding.
+      return usage;
     } catch (error) {
       if (error instanceof UsageError) throw new CommerceError(error.message, error.statusCode);
       throw error;
@@ -647,7 +657,11 @@ export class CommerceService {
         : Promise.resolve(null),
     ]);
     const purchases = [
-      ...new Map([...owned.docs, ...(email?.docs || [])].map((d) => [d.id, d])).values(),
+      ...new Map(
+        [...owned.docs, ...(email?.docs.filter((doc) => doc.get('uid') === null) || [])].map(
+          (d) => [d.id, d],
+        ),
+      ).values(),
     ];
     const allocations = new Map<string, { id: string; status: string; plan: Plan }[]>();
     const chunks: string[][] = [];

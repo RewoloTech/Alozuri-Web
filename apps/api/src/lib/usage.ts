@@ -1,3 +1,4 @@
+import { purchaseOwnerUid } from './purchase-ownership.js';
 import { createHash, randomUUID } from 'node:crypto';
 import type { Firestore, Transaction } from 'firebase-admin/firestore';
 import { z } from 'zod';
@@ -44,15 +45,13 @@ export class EsimUsageService {
       parent.get('test') !== false ||
       unit.get('test') !== false ||
       unit.get('paymentBlocked') === true ||
-      ['refunded', 'cancelled', 'refund_pending'].includes(parent.get('status')) ||
+      parent.get('status') !== 'paid' ||
       ['refunded', 'refund_pending', 'cancelled', 'provision_error'].includes(unit.get('status'))
     )
       return null;
     if (typeof parent.get('paidAt') !== 'string' || unit.get('status') !== 'ready')
       return undefined;
-    const uid =
-      parent.get('uid') ||
-      'guest_' + createHash('sha256').update(purchaseId).digest('hex').slice(0, 24);
+    const uid = purchaseOwnerUid(purchaseId, parent.get('uid') ?? null);
     if (!activation.exists || unit.get('uid') !== uid || activation.get('uid') !== uid)
       return undefined;
     const parsed = referenceSchema.safeParse({

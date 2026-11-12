@@ -1,4 +1,5 @@
 'use client';
+import { AccountNavigation } from './account-navigation';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -263,22 +264,21 @@ function PrivatePurchase({ id }: { id: string }) {
     </section>
   );
 }
-export function PurchaseHistory() {
+type PurchaseView = 'esims' | 'usage' | 'orders';
+export function PurchaseHistory({ view = 'esims' }: { view?: PurchaseView }) {
   const { user } = useAuth();
-  return <PurchaseHistoryForIdentity key={user?.uid ?? 'guest'} />;
+  return <AccountPurchases key={(user?.uid ?? 'guest') + view} view={view} />;
 }
-function PurchaseHistoryForIdentity() {
-  const { user } = useAuth();
-  return <AccountPurchases key={user?.uid ?? 'guest'} />;
-}
-function AccountPurchases() {
+function AccountPurchases({ view }: { view: PurchaseView }) {
   const { user, loading } = useAuth();
+  const uid = user?.uid,
+    verified = user?.emailVerified;
   const [orders, setOrders] = useState<Purchase[] | null>(null),
     [error, setError] = useState('');
   useEffect(() => {
-    if (!user?.emailVerified) return;
+    if (!uid || !verified) return;
     let active = true;
-    void api<{ orders: Purchase[] }>('/v2/orders', {}, true)
+    void api<{ orders: Purchase[] }>('/v2/orders', {}, uid)
       .then((r) => {
         if (active) setOrders(r.orders);
       })
@@ -288,14 +288,19 @@ function AccountPurchases() {
     return () => {
       active = false;
     };
-  }, [user]);
+  }, [uid, verified]);
   return (
     <section className="container section">
       <div className="page-intro">
         <span className="eyebrow">YOUR ALOZURI</span>
-        <h1>My eSIMs</h1>
-        <p>Your purchases and installation details, in one place.</p>
+        <h1>{view === 'usage' ? 'Data usage' : view === 'orders' ? 'Orders' : 'My eSIMs'}</h1>
+        <p>
+          {view === 'usage'
+            ? 'Check the data usage for each of your delivered eSIMs.'
+            : 'Your purchases and installation details, in one place.'}
+        </p>
       </div>
+      <AccountNavigation active={view} />
       {loading ? (
         <p role="status">Checking your account…</p>
       ) : !user?.emailVerified ? (
@@ -304,7 +309,10 @@ function AccountPurchases() {
             Sign in with your verified delivery email to find your purchases. Guest customers can
             also use the private link in their delivery email.
           </p>
-          <Link className="button primary" href="/login?next=/account/esims">
+          <Link
+            className="button primary"
+            href={'/login?next=' + encodeURIComponent('/account/' + view)}
+          >
             Sign in
           </Link>
         </div>
@@ -330,7 +338,7 @@ function AccountPurchases() {
               <Link className="button" href={'/checkout/success?order=' + order.id}>
                 View order and installation
               </Link>
-              {order.test ? (
+              {view === 'orders' ? null : order.test ? (
                 <p className="fine-print">Test order. No eSIM usage is available.</p>
               ) : (
                 (order.allocations ?? []).map((unit) => (
@@ -339,7 +347,9 @@ function AccountPurchases() {
                     {unit.status === 'ready' ? (
                       <>
                         <EsimUsagePanel purchaseId={order.id} unitId={unit.id} />
-                        <InstallationDetails purchaseId={order.id} orderId={unit.id} />
+                        {view === 'esims' && (
+                          <InstallationDetails purchaseId={order.id} orderId={unit.id} />
+                        )}
                       </>
                     ) : (
                       <p>

@@ -1,10 +1,11 @@
 'use client';
 import Link from 'next/link';
 import { AccountGate } from './account-gate';
+import { AccountNavigation } from './account-navigation';
 import { useEffect, useState } from 'react';
 import { sendEmailVerification, updateProfile } from 'firebase/auth';
 import { Globe2, ShieldCheck, Receipt, ArrowRight } from 'lucide-react';
-import { money, accountName, nameFields, type CustomerOrder } from '@voyaspan/shared';
+import { money, nameFields, accountName, type CustomerOrder } from '@voyaspan/shared';
 import { useAuth } from './auth-provider';
 import { api, demoMode } from '@/lib/api';
 export function Dashboard() {
@@ -16,7 +17,8 @@ export function Dashboard() {
   );
 }
 function AccountDashboard() {
-  const { user, loading, logout } = useAuth();
+  const { user, loading, logout, profile, profileError, profileLoading, refreshProfile } =
+    useAuth();
   const [orders, setOrders] = useState<CustomerOrder[]>([]);
   const [fetching, setFetching] = useState(false);
   const [error, setError] = useState('');
@@ -76,7 +78,7 @@ function AccountDashboard() {
           <span className="eyebrow">YOUR ALOZURI</span>
           <h1>
             {user
-              ? `Hi, ${user.displayName?.split(' ')[0] || 'traveller'}.`
+              ? `Hi, ${(profile?.displayName ?? user.displayName)?.split(' ')[0] || 'traveller'}.`
               : 'Every adventure, in one place.'}
           </h1>
           <p>Your plans, payment status and eSIM installation details.</p>
@@ -91,6 +93,16 @@ function AccountDashboard() {
           </button>
         )}
       </div>
+      <AccountNavigation active="profile" />
+      {profileError && (
+        <div className="error-message" role="alert">
+          {profileError}{' '}
+          <button className="text-link" onClick={refreshProfile}>
+            Retry profile sync
+          </button>
+        </div>
+      )}
+      {profileLoading && <p role="status">Syncing your profile…</p>}
       {!user && (
         <div className="notice">
           {demoMode
@@ -170,7 +182,7 @@ function AccountDashboard() {
       <div className="detail-layout">
         <div className="surface">
           <div className="section-heading">
-            <h2>My eSIMs & orders</h2>
+            <h2>Earlier orders</h2>
             <Link className="text-link" href="/#planner">
               Find a plan <ArrowRight size={16} />
             </Link>
@@ -217,6 +229,7 @@ function AccountDashboard() {
               <>
                 <p>{user.email}</p>
                 <form
+                  key={profile?.updatedAt ?? 'auth-profile'}
                   className="settings-form"
                   onSubmit={(e) => {
                     e.preventDefault();
@@ -224,6 +237,19 @@ function AccountDashboard() {
                     void accountAction(async () => {
                       const displayName = accountName(data.get('firstName'), data.get('lastName'));
                       await updateProfile(user, { displayName });
+                      await api(
+                        '/v2/profile',
+                        {
+                          method: 'PATCH',
+                          body: JSON.stringify({
+                            firstName: String(data.get('firstName') ?? ''),
+                            lastName: String(data.get('lastName') ?? ''),
+                          }),
+                        },
+                        user.uid,
+                      );
+                      await user.reload();
+                      refreshProfile();
                     }, 'Your name has been updated.');
                   }}
                 >
@@ -231,7 +257,7 @@ function AccountDashboard() {
                     First name
                     <input
                       name="firstName"
-                      defaultValue={nameFields(user.displayName).firstName}
+                      defaultValue={profile?.firstName ?? nameFields(user.displayName).firstName}
                       required
                       maxLength={50}
                       autoComplete="given-name"
@@ -241,7 +267,7 @@ function AccountDashboard() {
                     Last name
                     <input
                       name="lastName"
-                      defaultValue={nameFields(user.displayName).lastName}
+                      defaultValue={profile?.lastName ?? nameFields(user.displayName).lastName}
                       required
                       maxLength={50}
                       autoComplete="family-name"

@@ -8,6 +8,7 @@ function firebase() {
     initializeApp({ credential: applicationDefault(), projectId: process.env.GOOGLE_CLOUD_PROJECT })
   );
 }
+export const authDirectory = () => getAuth(firebase());
 export const database = () => getFirestore(firebase());
 export const verifyToken = (token: string) =>
   authenticateToken(token, getAuth(firebase()), process.env.ADMIN_OWNER_UID);
