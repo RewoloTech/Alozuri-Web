@@ -88,3 +88,19 @@ Manual acceptance checks (Stripe test mode only):
 - Verify sign-out, unverified accounts, another customer's order ID and changed prices cannot authorize payment or retrieve another session's client secret.
 
 Automated coverage includes both hosted and embedded session creation, request idempotency, resumed sessions, webhook verification, delayed confirmation, expired-to-paid reconciliation, session/order mismatch rejection, and authenticated status routes. A real Stripe test session was created and expired successfully during implementation. Browser submission and wallet completion still need the manual checks above; browser automation was unavailable in this environment.
+
+### Wallet validation timeout recovery
+
+Express Checkout validation is bounded to 15 seconds, before Google Pay's 30-second
+callback deadline. If `elements.submit()` stalls, the wallet receives `paymentFailed`
+and Elements is recreated in card-only mode with the original client secret/order.
+The abandoned validation promise cannot subsequently call `confirmPayment`. The
+confirmation/3DS step is deliberately not timed out or automatically retried: its
+payment outcome can be unknown and authentication may legitimately take longer.
+
+The browser regression `stalled Google Pay falls back to card without confirming a
+late wallet submission` exercises a delayed SDK response, late resolution, card
+recovery, and a single backend checkout request. This is a controlled SDK mock;
+it does not verify a real mobile wallet or establish why a particular wallet stalled.
+After the manual Firebase App Hosting rollout, verify Google Pay on the affected
+phone and confirm the resulting PaymentIntent in Stripe before claiming success.

@@ -41,12 +41,16 @@ function StripePayment({
   deliveryEmail,
   totalCents,
   currency,
+  walletFallback,
+  onWalletStalled,
 }: {
   clientSecret: string;
   orderId: string;
   deliveryEmail: string;
   totalCents: number;
   currency: string;
+  walletFallback: boolean;
+  onWalletStalled: () => void;
 }) {
   const stripe = useStripe(),
     elements = useElements(),
@@ -67,7 +71,35 @@ function StripePayment({
     setProcessing(true);
     setError('');
     try {
-      const validation = await elements.submit();
+      // Bound validation only: confirmation/3DS must never be abandoned mid-payment.
+      // No confirmPayment call can run after this timeout, even if submit resolves late.
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      let stalled = false;
+      const validation = await (
+        event
+          ? Promise.race([
+              elements.submit(),
+              new Promise<never>((_, reject) => {
+                timer = setTimeout(() => {
+                  stalled = true;
+                  reject(new Error('Wallet validation timed out.'));
+                }, 15_000);
+              }),
+            ]).finally(() => clearTimeout(timer))
+          : elements.submit()
+      ).catch((cause: unknown) => {
+        if (stalled) {
+          event?.paymentFailed({
+            reason: 'fail',
+            message: 'The wallet did not respond. Please pay by card instead.',
+          });
+          // Recreate Elements with the SAME PaymentIntent; no new order or charge.
+          onWalletStalled();
+          return null;
+        }
+        throw cause;
+      });
+      if (!validation) return;
       if (validation.error)
         throw new Error(validation.error.message || 'Check your payment details.');
       const result = await stripe.confirmPayment({
@@ -98,26 +130,29 @@ function StripePayment({
   return (
     <div className="stack">
       <CheckoutPolicyNotice />
-      <div style={{ display: wallets ? 'block' : 'none' }}>
-        <ExpressCheckoutElement
-          options={{
-            // Broader supported-browser coverage; Stripe still checks eligibility.
-            paymentMethods: { applePay: 'always', googlePay: 'always' },
-            paymentMethodOrder: ['apple_pay', 'google_pay', 'link'],
-            layout: { maxColumns: 2, maxRows: 2 },
-          }}
-          onReady={(e) =>
-            setWallets(
-              Boolean(
-                e.availablePaymentMethods && Object.values(e.availablePaymentMethods).some(Boolean),
-              ),
-            )
-          }
-          onConfirm={(e) => void pay(e)}
-          onLoadError={() => setWallets(false)}
-        />
-        {wallets && <p className="payment-divider">or pay by card</p>}
-      </div>
+      {!walletFallback && (
+        <div style={{ display: wallets ? 'block' : 'none' }}>
+          <ExpressCheckoutElement
+            options={{
+              // Broader supported-browser coverage; Stripe still checks eligibility.
+              paymentMethods: { applePay: 'always', googlePay: 'always' },
+              paymentMethodOrder: ['apple_pay', 'google_pay', 'link'],
+              layout: { maxColumns: 2, maxRows: 2 },
+            }}
+            onReady={(e) =>
+              setWallets(
+                Boolean(
+                  e.availablePaymentMethods &&
+                  Object.values(e.availablePaymentMethods).some(Boolean),
+                ),
+              )
+            }
+            onConfirm={(e) => void pay(e)}
+            onLoadError={() => setWallets(false)}
+          />
+          {wallets && <p className="payment-divider">or pay by card</p>}
+        </div>
+      )}
       <PaymentElement
         onReady={() => setReady(true)}
         onLoadError={() =>
@@ -188,6 +223,7 @@ function CheckoutForIdentity() {
       deliveryEmail: string;
     } | null>(null),
     [mode, setMode] = useState<string | null>(null),
+    [walletFallback, setWalletFallback] = useState(false),
     [quoteAttempt, setQuoteAttempt] = useState(0),
     [quotedSignature, setQuotedSignature] = useState('');
   useEffect(() => {
@@ -457,7 +493,14 @@ function CheckoutForIdentity() {
               {mode === 'test' && (
                 <p className="notice">Test payment. No real money or eSIM will be issued.</p>
               )}
+              {walletFallback && (
+                <p role="alert" className="notice">
+                  The wallet did not respond. Please pay by card below. Your existing order is
+                  unchanged, and no payment was submitted by this wallet attempt.
+                </p>
+              )}
               <Elements
+                key={walletFallback ? 'card-fallback' : 'wallets'}
                 stripe={stripePromise!}
                 options={{
                   clientSecret: session.clientSecret,
@@ -472,6 +515,8 @@ function CheckoutForIdentity() {
                 }}
               >
                 <StripePayment
+                  walletFallback={walletFallback}
+                  onWalletStalled={() => setWalletFallback(true)}
                   clientSecret={session.clientSecret}
                   orderId={session.orderId}
                   deliveryEmail={session.deliveryEmail}

@@ -232,10 +232,15 @@ test('cart persists, aggregates quantities and remains usable at mobile widths',
   await expect(page.getByRole('link', { name: 'Explore destinations' })).toBeVisible();
 });
 
-async function mockStripe(page: Page, wallets: boolean | 'apple' | 'google' = true) {
+async function mockStripe(
+  page: Page,
+  wallets: boolean | 'apple' | 'google' = true,
+  stallWallet = false,
+) {
   await page.addInitScript(
-    ({ wallets }) => {
+    ({ wallets, stallWallet }) => {
       let calls = 0;
+      let submissions = 0;
       function create(
         type: string,
         options?: {
@@ -292,7 +297,10 @@ async function mockStripe(page: Page, wallets: boolean | 'apple' | 'google' = tr
                   const b = document.createElement('button');
                   b.type = 'button';
                   b.textContent = name;
-                  b.onclick = () => callbacks.get('confirm')?.({ paymentFailed: () => {} });
+                  b.onclick = () =>
+                    callbacks.get('confirm')?.({
+                      paymentFailed: () => sessionStorage.setItem('walletFailed', 'true'),
+                    });
                   target.append(b);
                 }
             } else {
@@ -312,7 +320,15 @@ async function mockStripe(page: Page, wallets: boolean | 'apple' | 'google' = tr
         createToken: () => {},
         createPaymentMethod: () => {},
         confirmCardPayment: () => {},
-        elements: () => ({ create, submit: async () => ({}) }),
+        elements: () => ({
+          create,
+          submit: async () => {
+            submissions++;
+            if (stallWallet && submissions === 1)
+              await new Promise((resolve) => setTimeout(resolve, 20_000));
+            return {};
+          },
+        }),
         confirmPayment: async (params: {
           confirmParams?: { payment_method_data?: { billing_details?: { email?: string } } };
         }) => {
@@ -322,6 +338,7 @@ async function mockStripe(page: Page, wallets: boolean | 'apple' | 'google' = tr
           )
             throw new Error('Stripe confirmation must receive the delivery email.');
           calls++;
+          sessionStorage.setItem('stripeConfirmCalls', String(calls));
           return calls === 1
             ? { error: { message: 'Your card was declined. Try another payment method.' } }
             : { paymentIntent: { status: 'succeeded' } };
@@ -329,7 +346,7 @@ async function mockStripe(page: Page, wallets: boolean | 'apple' | 'google' = tr
       };
       Object.assign(window, { Stripe: Object.assign(() => stripe, { version: 'endive' }) });
     },
-    { wallets },
+    { wallets, stallWallet },
   );
 }
 async function openCheckout(page: Page) {
@@ -391,6 +408,42 @@ for (const wallet of ['Apple Pay', 'Google Pay'])
     expect(checkouts).toBe(1);
     await expect(page.getByRole('link', { name: 'Shopping cart, 0 items' })).toBeVisible();
   });
+test('stalled Google Pay falls back to card without confirming a late wallet submission', async ({
+  page,
+}) => {
+  await mockStripe(page, 'google', true);
+  let checkouts = 0;
+  page.on('request', (request) => {
+    if (request.url().endsWith('/v2/checkout') && request.method() === 'POST') checkouts++;
+  });
+  await openCheckout(page);
+  await page.clock.install();
+  await page.getByRole('button', { name: 'Google Pay', exact: true }).click();
+  await page.clock.runFor(15_001);
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'Please pay by card below' }),
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Google Pay', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^Pay / })).toBeEnabled();
+  expect(await page.evaluate(() => sessionStorage.getItem('walletFailed'))).toBe('true');
+  for (const width of [375, 390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: '/tmp/alozuri-wallet-fallback-mobile.png', fullPage: true });
+  // The abandoned submit resolves later. It must never authorize a payment.
+  await page.clock.runFor(5_000);
+  expect(await page.evaluate(() => sessionStorage.getItem('stripeConfirmCalls'))).toBeNull();
+  await page.getByRole('textbox', { name: 'Card number' }).fill('4242424242424242');
+  await page.getByRole('button', { name: /^Pay / }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Your card was declined' })).toBeVisible();
+  await page.getByRole('button', { name: /^Pay / }).click();
+  await expect(page.getByRole('heading', { name: 'Your test order', exact: true })).toBeVisible();
+  expect(checkouts).toBe(1);
+});
 test('unsupported wallets are hidden and card checkout remains available', async ({ page }) => {
   await mockStripe(page, false);
   await openCheckout(page);
