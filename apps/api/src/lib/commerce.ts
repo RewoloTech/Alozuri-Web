@@ -10,7 +10,11 @@ import {
 import { legalSnapshot, legalSnapshotSchema } from './legal.js';
 import { ResendOrderMailer, type OrderMailer } from './order-email.js';
 import { OrderConfirmations } from './order-confirmations.js';
-import { CONFIRMATION_VERSION, orderReference } from './confirmation-order.js';
+import {
+  CONFIRMATION_VERSION,
+  confirmationVersionSchema,
+  orderReference,
+} from './confirmation-order.js';
 import { confirmationOrderSchema } from './confirmation-order.js';
 export { ResendOrderMailer, type OrderMailer } from './order-email.js';
 import { type CheckoutLegalInput } from '../../../../packages/shared/src/legal.ts';
@@ -93,7 +97,7 @@ const purchaseSchema = z
     totalCents: z.number().int().positive(),
     subtotalCents: z.number().int().nonnegative().optional(),
     taxCents: z.number().int().nonnegative().optional(),
-    confirmationVersion: z.literal(CONFIRMATION_VERSION).optional(),
+    confirmationVersion: confirmationVersionSchema.optional(),
     orderReference: z.string().optional(),
     status: z.enum([
       'pending_payment',

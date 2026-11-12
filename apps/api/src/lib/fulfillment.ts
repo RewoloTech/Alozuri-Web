@@ -1,3 +1,5 @@
+import { CONFIRMATION_VERSION } from './confirmation-order.js';
+import { legalSnapshotSchema } from './legal.js';
 import { MINIMUM_CHARGE_MINOR } from './exchange-rates.js';
 import { createHash, randomUUID } from 'node:crypto';
 import Stripe from 'stripe';
@@ -106,11 +108,19 @@ export function firestoreFulfillmentStore(): FulfillmentStore {
           t.delete(jobRef);
           return null;
         }
-        // New contracts must be confirmed on a durable medium before digital supply begins.
+        // Ready-only confirmations follow preparation; legacy orders keep their delivery gate.
         const parentId = doc.get('parentOrderId');
         if (typeof parentId === 'string') {
           const parent = await t.get(db.collection('purchases').doc(parentId));
-          // New email contracts must reach the recipient's mail server before supply.
+          const readyOnly = parent.get('confirmationVersion') === CONFIRMATION_VERSION;
+          if (
+            readyOnly &&
+            (parent.get('status') !== 'paid' ||
+              !parent.get('paidAt') ||
+              !legalSnapshotSchema.safeParse(parent.get('legal')).success)
+          )
+            return null;
+          // Legacy email contracts must reach the recipient's mail server before supply.
           // Old purchases retain their established confirmation marker.
           if (
             parent.get('confirmationVersion') === 'email-v1' &&
@@ -118,6 +128,7 @@ export function firestoreFulfillmentStore(): FulfillmentStore {
           )
             return null;
           if (
+            !readyOnly &&
             (doc.get('legalVersion') || parent.get('legal')) &&
             (!parent.exists || !parent.get('contractEmailSentAt'))
           )

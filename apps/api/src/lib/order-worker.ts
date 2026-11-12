@@ -1,3 +1,4 @@
+import { CONFIRMATION_VERSION, confirmationVersionSchema } from './confirmation-order.js';
 import { randomUUID } from 'node:crypto';
 import { FieldValue, type Firestore } from 'firebase-admin/firestore';
 import type { CommerceService } from './commerce.js';
@@ -127,6 +128,8 @@ export class OrderWorker {
       const jobs = await this.db.getAll(
         ...ids.map((id) => this.db.collection('fulfillmentJobs').doc(id)),
       );
+      if (work.kind === 'purchase') await this.commerce.notify(work.id);
+      const units = await this.db.getAll(...ids.map((id) => this.db.collection('orders').doc(id)));
       let emailPending = false;
       let emailDueAt = this.now() + 30_000;
       if (work.kind === 'purchase') {
@@ -137,8 +140,10 @@ export class OrderWorker {
         )
           return finish('attention', 'confirmation_needs_review');
         emailPending =
-          purchase.get('confirmationVersion') === 'email-v1' &&
-          purchase.get('confirmationDeliveryStatus') !== 'delivered';
+          confirmationVersionSchema.safeParse(purchase.get('confirmationVersion')).success &&
+          purchase.get('confirmationDeliveryStatus') !== 'delivered' &&
+          (purchase.get('confirmationVersion') !== CONFIRMATION_VERSION ||
+            units.every((unit) => unit.get('status') === 'ready'));
         const times: unknown[] = [
           'confirmationDueAt',
           'confirmationDeliveryDueAt',
@@ -149,7 +154,6 @@ export class OrderWorker {
         );
         if (due.length) emailDueAt = Math.min(...due);
       }
-      const units = await this.db.getAll(...ids.map((id) => this.db.collection('orders').doc(id)));
       if (
         units.some(
           (unit) => unit.get('paymentBlocked') === true && unit.get('status') !== 'refunded',

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import { FieldValue, type Firestore, type DocumentReference } from 'firebase-admin/firestore';
+import { activationSchema } from './supplier.js';
 import { confirmationOrderSchema, CONFIRMATION_VERSION } from './confirmation-order.js';
 import {
   confirmationEmail,
@@ -43,6 +44,33 @@ export class OrderConfirmations {
           current.get('confirmationDueAt') > this.now()
         )
           return null;
+        if (current.get('confirmationVersion') === CONFIRMATION_VERSION) {
+          if (current.get('status') !== 'paid') return null;
+          const order = confirmationOrderSchema.parse({ ...current.data(), id: current.id });
+          const units = await t.get(
+            this.db.collection('orders').where('parentOrderId', '==', current.id).limit(11),
+          );
+          const expected = order.items.reduce((count, item) => count + item.quantity, 0);
+          if (units.size !== expected || units.size > 10 || units.empty) return null;
+          if (
+            units.docs.some(
+              (unit) => unit.get('status') !== 'ready' || unit.get('paymentBlocked') === true,
+            )
+          )
+            return null;
+          const activations = await t.getAll(
+            ...units.docs.map((unit) => this.db.collection('orderActivations').doc(unit.id)),
+          );
+          if (
+            activations.some(
+              (activation, index) =>
+                !activation.exists ||
+                activation.get('uid') !== units.docs[index].get('uid') ||
+                !activationSchema.safeParse(activation.data()).success,
+            )
+          )
+            return null;
+        }
         const attempts = Number(current.get('confirmationAttempts') || 0) + 1;
         t.update(doc.ref, {
           confirmationLease: lease,
@@ -58,6 +86,9 @@ export class OrderConfirmations {
         const email = confirmationEmail(
           order,
           `${this.site}/checkout/success?order=${doc.id}#access=${this.token(doc.id)}`,
+          claimed.data?.confirmationVersion === CONFIRMATION_VERSION
+            ? CONFIRMATION_VERSION
+            : 'email-v1',
         );
         const payloadHash = confirmationPayloadHash(email);
         const canSend = await this.db.runTransaction(async (t) => {
@@ -186,7 +217,7 @@ export class OrderConfirmations {
         } else {
           t.update(ref, {
             ...retired,
-            confirmationVersion: CONFIRMATION_VERSION,
+            confirmationVersion: 'email-v1',
             confirmationStatus: 'pending',
             confirmationDueAt: this.now(),
           });

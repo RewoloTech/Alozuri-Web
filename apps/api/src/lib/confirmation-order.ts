@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { legalSnapshotSchema } from './legal.js';
 import { planSchema } from './validation.js';
 
-export const CONFIRMATION_VERSION = 'email-v1';
+export const CONFIRMATION_VERSION = 'email-v2-ready';
+export const confirmationVersionSchema = z.enum(['email-v1', CONFIRMATION_VERSION]);
 export const CONTRACT_PDF_FILENAME = 'Alozuri-Order-Confirmation.pdf';
 const cents = z.number().int().nonnegative().safe();
 // Deliberately select only confirmation data. No supplier credentials, access tokens,

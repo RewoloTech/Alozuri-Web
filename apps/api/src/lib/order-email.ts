@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { countryName, dataLabel } from '../../../../packages/shared/src/index.ts';
 import { BUSINESS } from '../../../../packages/shared/src/legal.ts';
 import {
+  CONFIRMATION_VERSION,
+  confirmationVersionSchema,
   confirmationHash,
   confirmationMoney,
   orderReference,
@@ -11,6 +13,7 @@ import {
 export const ORDER_EMAIL_FROM = 'Alozuri <orders@alozuri.com>';
 export type ConfirmationEmail = {
   id: string;
+  version?: z.infer<typeof confirmationVersionSchema>;
   email: string;
   url: string;
   text: string;
@@ -62,7 +65,11 @@ export function legalEmailHtml(text: string) {
     })
     .join('');
 }
-export function confirmationEmail(order: ConfirmationOrder, url: string): ConfirmationEmail {
+export function confirmationEmail(
+  order: ConfirmationOrder,
+  url: string,
+  version: z.infer<typeof confirmationVersionSchema> = 'email-v1',
+): ConfirmationEmail {
   const site = new URL(url).origin;
   const business = order.legal.business ?? BUSINESS;
   const reference = orderReference(order.id);
@@ -70,7 +77,9 @@ export function confirmationEmail(order: ConfirmationOrder, url: string): Confir
   const termsVersion = order.legal.termsVersion ?? order.legal.version;
   const refundVersion = order.legal.refundVersion ?? order.legal.version;
   const pending =
-    'Your order is processing. Your secure order page shows your order status and will display your eSIM QR code, manual installation details and activation information once provisioning is complete. Use the same link to return at any time.';
+    version === CONFIRMATION_VERSION
+      ? 'Your eSIM is ready. Open your secure order page to view your QR code and manual installation details.'
+      : 'Your order is processing. Your secure order page shows your order status and will display your eSIM QR code, manual installation details and activation information once provisioning is complete. Use the same link to return at any time.';
   const activationNote =
     'Before installing, check the actual activation rule below for each plan. Some plans begin on installation, first network connection or purchase; follow the rule recorded for your purchased plan.';
   const important =
@@ -138,7 +147,7 @@ export function confirmationEmail(order: ConfirmationOrder, url: string): Confir
         `<a href="${e(site + path)}" style="display:inline-block;padding:6px 8px 6px 0;color:#4b3dcc">${label}</a>`,
     )
     .join(' ')}</p></div></td></tr></table></td></tr></table></body></html>`;
-  return { id: order.id, email: order.email, url, text, html };
+  return { id: order.id, version, email: order.email, url, text, html };
 }
 export function confirmationPayload(input: ConfirmationEmail) {
   return {
@@ -162,7 +171,7 @@ export class ResendOrderMailer implements OrderMailer {
         headers: {
           Authorization: `Bearer ${this.key}`,
           'Content-Type': 'application/json',
-          'Idempotency-Key': `${input.id}:confirmation:email-v1`,
+          'Idempotency-Key': `${input.id}:confirmation:${input.version ?? 'email-v1'}`,
         },
         body: JSON.stringify(confirmationPayload(input)),
         signal: AbortSignal.timeout(15000),

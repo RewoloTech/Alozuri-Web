@@ -8,7 +8,7 @@ test('complete order email preserves the full accepted contract and stays readab
 }) => {
   const order = sampleConfirmation();
   const secureUrl = `https://alozuri.com/checkout/success?order=${order.id}#access=synthetic-private-test`;
-  const email = confirmationEmail(order, secureUrl);
+  const email = confirmationEmail(order, secureUrl, 'email-v2-ready');
   await page.route('https://alozuri.com/images/alozuri-email-logo.png', async (route) =>
     route.fulfill({
       contentType: 'image/png',
@@ -16,6 +16,7 @@ test('complete order email preserves the full accepted contract and stays readab
     }),
   );
   await page.setContent(email.html);
+  await expect(page.getByText('Your eSIM is ready.', { exact: false })).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'Your order is confirmed!', exact: true }),
   ).toBeVisible();

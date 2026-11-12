@@ -1,6 +1,6 @@
 # Payment-triggered order processing
 
-Status: implemented locally; not activated or deployed. The existing live scheduler remains in place until this migration is explicitly approved and validated. `ORDER_PROCESSING_MODE` defaults to `scheduler` for a safe rollout of code without changing production behaviour.
+Production activation was requested by the owner on 12 November 2026. The release switches the existing API to `ORDER_PROCESSING_MODE=queue`, uses `alozuri-orders` in `europe-west1`, and pauses the minute fulfilment scheduler. The code still defaults to `scheduler` when configuration is absent, so future deployments must preserve the production queue settings. See the activation evidence at the end of this document.
 
 ## Architecture
 
@@ -9,8 +9,9 @@ flowchart LR
   Stripe[Verified Stripe payment webhook] --> Payment[Firestore payment + dispatch intent transaction]
   Payment --> Queue[Cloud Tasks: alozuri-orders]
   Queue --> Worker[Existing alozuri-api: /internal/orders/process]
-  Worker --> Email[One confirmation email with secure status link]
   Worker --> Supplier[eSIM Access fulfilment]
+  Supplier --> Ready[All QR profiles saved]
+  Ready --> Email[One ready confirmation email with secure install link]
   Worker --> Retry[Schedule only this order's next attempt when needed]
   Retry --> Queue
 ```
@@ -19,7 +20,7 @@ The worker runs in the existing API service. No additional Cloud Run service, Cl
 
 The verified webhook commits the paid purchase, immutable per-eSIM order records, existing fulfilment records and an `orderWork/{id}` dispatch intent atomically. It then submits a named task containing only `{kind, id, generation}` and acknowledges Stripe after submission succeeds. Email and supplier calls do not run in the webhook. An enqueue failure returns HTTP 503; Stripe replays the webhook. A seen Stripe event still repairs its pending dispatch intent. No client success-page request authorises this work.
 
-The worker targets that purchase only. It sends the existing single confirmation email promptly, even when provisioning is pending; the email contains the secure order-status/install link. The existing requirement to confirm contract email delivery before supply is preserved. Delivery checks and supplier allocation waits schedule targeted future tasks at their recorded due times. They return HTTP 200 after the successor task is durably submitted, so normal waiting does not throttle the whole queue. Technical failures return HTTP 503 and use Cloud Tasks retries.
+The worker targets that purchase only. New purchases use `email-v2-ready`: supplier preparation starts after verified payment and a validated immutable legal snapshot, and the complete confirmation email is sent only after every purchased unit is ready with validated private activation details saved. The secure installation link therefore opens an already prepared order. Per the owner’s requested flow, the previous email-before-supply gate applies only to existing `email-v1` purchases; their payloads, delivery gates and send-idempotency keys are retained. Payments first confirmed after this release also upgrade previously opened checkouts to `email-v2-ready`; already-paid orders retain their recorded confirmation version. The new email uses a versioned idempotency key and includes the recorded contract. No QR credentials are included in email content. Delivery checks and supplier allocation waits schedule targeted future tasks at their recorded due times. They return HTTP 200 after the successor task is durably submitted, so normal waiting does not throttle the whole queue. Technical failures return HTTP 503 and use Cloud Tasks retries.
 
 Each successor increments the durable generation before submission. If submission fails, retrying the previous task repairs the new pending generation before acknowledging it. Old generations cannot process an order again. Named task deduplication, a worker lease, existing transactional eSIM claims, stable supplier transaction IDs and email-provider idempotency remain in force. Test payments do not create live tasks. Failed/unverified payments cannot supply an eSIM.
 
@@ -27,11 +28,11 @@ Work is bounded to 24 hours from its initial dispatch intent; the next invocatio
 
 ## Resources and cost for approval
 
-One Cloud Tasks queue in `europe-west4`, one dedicated OIDC caller service account and narrowly scoped IAM grants are proposed. Queue settings are in [order-queue.json](../infra/order-queue.json): one dispatch/second, two concurrent tasks, technical retries from 15 seconds to five minutes, capped at 300 attempts per task. These limits control throughput; they are not a monetary cap. The application's 24-hour work deadline bounds order processing when the worker is reachable. During a complete worker outage, the queue stops at its attempt limit; the durable intent remains for explicit recovery.
+One Cloud Tasks queue in `europe-west1` (Cloud Tasks does not support the API’s `europe-west4` region), one dedicated OIDC caller service account and narrowly scoped IAM grants are proposed. Queue settings are in [order-queue.json](../infra/order-queue.json): one dispatch/second, two concurrent tasks, technical retries from 15 seconds to five minutes, capped at 300 attempts per task. These limits control throughput; they are not a monetary cap. The application's 24-hour work deadline bounds order processing when the worker is reachable. During a complete worker outage, the queue stops at its attempt limit; the durable intent remains for explicit recovery.
 
 Cloud Tasks includes the first 1 million monthly operations, then US$0.40 per additional million. Creation, each delivery attempt and management API calls count as operations; large payloads are charged in 32 KiB chunks. The allowance is shared by billing account. Existing Cloud Run, Firestore, networking, build and logging charges still apply. No zero-cost guarantee is made. There are no queue calls or database scans when the queue is empty. [Cloud Tasks pricing](https://cloud.google.com/tasks/pricing), [HTTP task authentication](https://docs.cloud.google.com/tasks/docs/creating-http-target-tasks).
 
-The existing `alozuri-fulfillment` Scheduler job will be paused after cutover. Catalogue refresh schedules, if any, are unrelated and must be retained. Do not delete the old job during the initial migration; it supports rollback.
+The existing `alozuri-fulfillment` Scheduler job is retained paused after cutover. Catalogue refresh schedules, if any, are unrelated and must be retained. Do not delete the old job during the initial migration; it supports rollback.
 
 ## Production configuration
 
@@ -39,7 +40,7 @@ Keep existing secret bindings and API resource limits. Add the following only at
 
 ```yaml
 ORDER_PROCESSING_MODE: queue
-ORDER_TASK_QUEUE: projects/alozuri/locations/europe-west4/queues/alozuri-orders
+ORDER_TASK_QUEUE: projects/alozuri/locations/europe-west1/queues/alozuri-orders
 ORDER_TASK_WORKER_URL: https://alozuri-api-rnm3hsyqia-ez.a.run.app/internal/orders/process
 ORDER_TASK_AUDIENCE: https://alozuri-api-rnm3hsyqia-ez.a.run.app
 ORDER_TASK_SERVICE_ACCOUNT: alozuri-order-worker@alozuri.iam.gserviceaccount.com
@@ -101,3 +102,11 @@ Rollback: pause checkout and the queue, drain active worker requests, switch the
 `apps/api/test/order-task-queue.test.ts` checks opt-in configuration, named tasks, delayed scheduling, identity checks, spoofed headers, HTTP retry semantics and retirement of the scheduler endpoint. Firestore tests exercise actual atomic payment/outbox writes, failed enqueue repair on the same Stripe event, duplicate worker deliveries, per-purchase isolation, email retry dates, supplier allocation retries, failed successor dispatch repair, migration/redrive and legacy checkout. External queue/email/supplier interfaces use controlled mocks.
 
 Run `npm run test:unit`, `npm run test:firestore` (JDK 21), `npm run lint`, `npm run typecheck`, `npm run typecheck:tests` and `npm run build`. Checkout browser checks use the existing Playwright runner. No queue SDK dependency is added: the adapter uses the existing Google authentication library and the documented Cloud Tasks REST API.
+
+## Production activation — 12 November 2026
+
+The owner requested and authorised queue activation and ready-only confirmation emails. Cloud Build `cde2f837-9268-4d36-b406-ac6b9614c22a` succeeded. Revision `alozuri-api-00020-rim` serves 100% of API traffic with queue mode enabled and checkout open. `alozuri-orders` in `europe-west1` is running; `alozuri-fulfillment` remains paused for rollback. Daily catalogue refresh is unchanged. Temporary candidate tags were removed.
+
+An authenticated no-order Cloud Tasks probe and two migrated work items returned HTTP 200. Both migrated items reached `done`; the queue drained. No supplier fulfilment jobs were active at migration. Local checks passed: 38 shared and 131 API unit tests, 60 Firestore integration tests, one email browser test, lint, application/test TypeScript, API build and Docker build. The browser test checked 320/375/390/600/1024px layouts; the mobile preview was visually reviewed.
+
+The source includes local changes beyond the base Git commit; retain and commit these changes before a future source-based release. [Machine-readable release evidence](production-queue-release-2026-11-12.json) records the image digest, base commit, source diff hash, revision and verification limits. No new real payment or supplier purchase was performed, so an actual new production payment-to-ready-email journey remains unverified.

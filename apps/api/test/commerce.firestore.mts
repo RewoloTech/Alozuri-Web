@@ -39,6 +39,7 @@ function fixture(
   usageOptions?: { supplier: UsageSupplier; now?: () => number },
   deliveryEvent?: () => string,
   taskQueue: OrderTaskQueue | null = null,
+  legacyConfirmation = true,
 ) {
   const plans: StoredPlan[] = demoPlans.slice(0, 2).map((p) =>
     pricePackage(
@@ -165,10 +166,17 @@ function fixture(
       type,
       data: { object: intent },
     });
-    return service.webhook(
+    const response = await service.webhook(
       Buffer.from(payload),
       signer.webhooks.generateTestHeaderString({ payload, secret: 'whsec_fixture' }),
     );
+    // Existing regression scenarios model payments already committed by the old release.
+    if (legacyConfirmation && intent.metadata.alozuriPurchaseId) {
+      await db
+        .doc('purchases/' + intent.metadata.alozuriPurchaseId)
+        .update({ confirmationVersion: 'email-v1' });
+    }
+    return response;
   }
   return {
     plans,
@@ -1665,7 +1673,7 @@ test('HTTP queue flow verifies payment, acknowledges scheduled waiting, and comp
     });
     assert.equal(first.statusCode, 200);
     assert.equal(first.json().state, 'scheduled');
-    assert.equal(f.emails.length, 1);
+    assert.equal(f.emails.length, 0);
     assert.equal(supplied, 3);
     assert.equal(tasks.length, 2);
     const replay = await server.inject({
@@ -1677,7 +1685,7 @@ test('HTTP queue flow verifies payment, acknowledges scheduled waiting, and comp
     assert.equal(replay.statusCode, 200);
     assert.equal(replay.json().state, 'ignored');
     assert.equal(supplied, 3);
-    assert.equal(f.emails.length, 1);
+    assert.equal(f.emails.length, 0);
     const units = await db.collection('orders').where('parentOrderId', '==', result.orderId).get();
     for (const unit of units.docs)
       await db.doc('fulfillmentJobs/' + unit.id).update({ nextAttemptAt: Date.now() - 1 });
@@ -2002,4 +2010,102 @@ test('guest claim during in-flight fulfilment preserves the current owner when a
     (await f.service.activation(result.orderId, inFlight.id, principal, undefined)).esimTranNo,
     'claimed-in-flight',
   );
+});
+
+test('ready-only queue waits for all saved QR profiles, then sends once without repurchasing on retries', async () => {
+  const tasks: OrderWork[] = [];
+  const queue = {
+    enqueue: async (work: OrderWork) => {
+      tasks.push(work);
+    },
+  };
+  let failEmail = true;
+  const f = fixture(false, undefined, 'USD', () => failEmail, undefined, undefined, queue, false);
+  const result = await f.service.checkout(f.input, null);
+  const ref = db.doc('purchases/' + result.orderId);
+  assert.equal((await ref.get()).get('confirmationVersion'), 'email-v2-ready');
+  await ref.update({ confirmationVersion: 'email-v1' }); // Checkout opened before cutover.
+  f.intent.status = 'succeeded';
+  f.intent.amount_received = f.intent.amount;
+  await f.event();
+  assert.equal((await ref.get()).get('confirmationVersion'), 'email-v2-ready');
+  let profilesReady = false;
+  const supplierCalls: string[] = [];
+  const delivery = new FulfillmentService(f.stripe, firestoreFulfillmentStore(), {
+    order: async (tx) => {
+      supplierCalls.push(tx);
+      return 'ready-' + tx;
+    },
+    profile: async (_supplier, tx) =>
+      profilesReady
+        ? {
+            ac: 'LPA:1$example.com$' + tx,
+            iccid: '8985224528000111301',
+            esimTranNo: tx,
+          }
+        : null,
+  });
+  const worker = new OrderWorker(db, f.service, delivery, queue);
+  assert.equal((await worker.run(tasks[0])).state, 'scheduled');
+  assert.equal(supplierCalls.length, 3);
+  assert.equal(f.emails.length, 0);
+  assert.equal((await ref.get()).get('confirmationAttempts'), undefined);
+  const units = await db.collection('orders').where('parentOrderId', '==', result.orderId).get();
+  profilesReady = true;
+  for (const unit of units.docs)
+    await db.doc('fulfillmentJobs/' + unit.id).update({ nextAttemptAt: Date.now() - 1 });
+  await db.doc('orderWork/' + result.orderId).update({ runAfterAt: Date.now() - 1 });
+  assert.equal((await worker.run(tasks[tasks.length - 1])).state, 'scheduled');
+  assert.equal(f.emails.length, 0); // Provider failure keeps email retryable after preparation.
+  assert.equal((await ref.get()).get('confirmationStatus'), 'retry');
+  for (const unit of units.docs) {
+    assert.equal((await unit.ref.get()).get('status'), 'ready');
+    assert((await db.doc('orderActivations/' + unit.id).get()).exists);
+  }
+  failEmail = false;
+  await ref.update({ confirmationDueAt: Date.now() - 1 });
+  await db.doc('orderWork/' + result.orderId).update({ runAfterAt: Date.now() - 1 });
+  const last = tasks[tasks.length - 1];
+  const responses = await Promise.all([worker.run(last), worker.run(last)]);
+  assert(responses.some((r) => r.state === 'complete'));
+  assert.equal(f.emails.length, 1);
+  assert.equal(f.emails[0].version, 'email-v2-ready');
+  assert(f.emails[0].text.includes('Your eSIM is ready.'));
+  assert(!f.emails[0].text.includes('Your order is processing.'));
+  assert.equal(supplierCalls.length, 3);
+  assert.equal(new Set(supplierCalls).size, 3);
+  await worker.run(last);
+  assert.equal(f.emails.length, 1);
+});
+
+test('ready-only confirmation rejects partial units, missing credentials and blocked orders', async () => {
+  const f = fixture(false, undefined, 'USD', undefined, undefined, undefined, null, false);
+  const result = await f.service.checkout(f.input, null);
+  f.intent.status = 'succeeded';
+  f.intent.amount_received = f.intent.amount;
+  await f.event();
+  await f.service.notify(result.orderId);
+  assert.equal(f.emails.length, 0);
+  const units = await db.collection('orders').where('parentOrderId', '==', result.orderId).get();
+  for (const unit of units.docs) await unit.ref.update({ status: 'ready' });
+  await f.service.notify(result.orderId);
+  assert.equal(f.emails.length, 0);
+  for (const unit of units.docs)
+    await db.doc('orderActivations/' + unit.id).set({
+      uid: unit.get('uid'),
+      ac: 'LPA:1$example.com$ready',
+      iccid: '8985224528000111301',
+      esimTranNo: unit.id,
+    });
+  await units.docs[0].ref.update({ paymentBlocked: true });
+  await f.service.notify(result.orderId);
+  assert.equal(f.emails.length, 0);
+  await units.docs[0].ref.update({ paymentBlocked: false });
+  const saved = units.docs[0].data();
+  await units.docs[0].ref.delete();
+  await f.service.notify(result.orderId);
+  assert.equal(f.emails.length, 0);
+  await units.docs[0].ref.set({ ...saved, status: 'ready', paymentBlocked: false });
+  await Promise.all([f.service.notify(result.orderId), f.service.notify(result.orderId)]);
+  assert.equal(f.emails.length, 1);
 });

@@ -111,3 +111,22 @@ test('Resend receives one stable idempotency key and complete HTML/text, with co
     (error: unknown) => error instanceof EmailSendError && error.reason === 'idempotency_conflict',
   );
 });
+
+test('ready email promises installation only with the ready version and uses its own idempotency key', async (t) => {
+  const email = confirmationEmail(sampleConfirmation(), url, 'email-v2-ready');
+  assert(email.text.includes('Your eSIM is ready.'));
+  assert(!email.html.includes('Your order is processing.'));
+  assert(email.html.includes('View &amp; Install Your eSIM'));
+  const original = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = original;
+  });
+  globalThis.fetch = async (_url, init) => {
+    assert.equal(
+      new Headers(init?.headers).get('Idempotency-Key'),
+      email.id + ':confirmation:email-v2-ready',
+    );
+    return Response.json({ id: 'ready-provider-fixture' });
+  };
+  await new ResendOrderMailer('test-fixture').send(email);
+});

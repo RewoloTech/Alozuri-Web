@@ -1,0 +1,61 @@
+{
+  "verifiedAt": "2026-11-12T15:45:36.132404+00:00",
+  "project": "alozuri",
+  "service": "alozuri-api",
+  "apiRegion": "europe-west4",
+  "revision": "alozuri-api-00020-rim",
+  "trafficPercent": 100,
+  "checkoutPaused": false,
+  "source": {
+    "baseCommit": "a85f30dbc85598288cc94c99402173d4f277c721",
+    "includesUncommittedChanges": true,
+    "apiSourceDiffSha256": "4a1b31619e4c24c8453d6530ab8c4cca3aebf23db7a0edc75df3ba947d660155"
+  },
+  "cloudBuildId": "cde2f837-9268-4d36-b406-ac6b9614c22a",
+  "image": "europe-west4-docker.pkg.dev/alozuri/alozuri-api/api@sha256:d9a0bce72c7a4255f5173fca9ecceeed412475becc95460b5c69f956da2c1cd7",
+  "queue": {
+    "name": "projects/alozuri/locations/europe-west1/queues/alozuri-orders",
+    "state": "RUNNING",
+    "maxDispatchesPerSecond": 1,
+    "maxConcurrentDispatches": 2,
+    "idleTasks": 0
+  },
+  "scheduler": {
+    "name": "alozuri-fulfillment",
+    "state": "PAUSED",
+    "dailyCatalogueWorkflowChanged": false
+  },
+  "migration": {
+    "submittedPurchases": 2,
+    "completedWorkItems": 2,
+    "activeFulfillmentJobsAtMigration": 0
+  },
+  "checks": {
+    "sharedUnitPassed": 38,
+    "apiUnitPassed": 131,
+    "firestoreIntegrationPassed": 60,
+    "emailBrowserPassed": 1,
+    "lint": "passed",
+    "applicationTypecheck": "passed",
+    "testTypecheck": "passed",
+    "apiProductionBuild": "passed",
+    "dockerCloudBuild": "passed",
+    "formatting": "passed",
+    "publicApiSmokeChecksPassed": 7,
+    "cloudTasksRequestsObserved": 3,
+    "cloudTasksHttpStatuses": [200, 200, 200],
+    "mobileEmailVisuallyReviewed": true
+  },
+  "confirmationPolicy": {
+    "newPurchaseVersion": "email-v2-ready",
+    "requiresEveryUnitReady": true,
+    "requiresValidatedSavedActivation": true,
+    "preservesLegacyEmailHistory": true,
+    "upgradesPreviouslyOpenedUnpaidCheckouts": true
+  },
+  "notRun": [
+    "new real payment",
+    "new live supplier purchase",
+    "full live payment-to-ready-email journey"
+  ]
+}

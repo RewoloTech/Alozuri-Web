@@ -21,15 +21,15 @@ flowchart LR
 
 `npm run build` checks/builds both workspaces locally. It does not publish either service. A Git push updates source control. A manual App Hosting rollout publishes the website. The API requires its own image build and Cloud Run deployment.
 
-The existing minute scheduler invokes `/internal/fulfillment/run` on the API with its configured OIDC service identity. This is a worker endpoint in the same API application, not a third application deployment. Downloadable PDFs are generated in memory by that API on request; they introduce no new service or PDF storage.
+Before queue activation, the minute scheduler invoked `/internal/fulfillment/run` on the API with its configured OIDC service identity. This is a worker endpoint in the same API application, not a third application deployment. Downloadable PDFs are generated in memory by that API on request; they introduce no new service or PDF storage.
 
 For a coordinated production release, record the intended commit, relevant targets, configuration checks and migrations first. Publish both targets when a feature spans them, then verify the App Hosting build/traffic and API image/revision separately. Report which revision is live for each target. Never infer that an API/email change is live from a successful website rollout alone.
 
 At the inspection on 12 November 2026, GitHub `main` and website production were on `e7939d12a25717367297555e04ed697c2d907983`. App Hosting build `build-2026-11-12-001` was serving 100% of traffic. The API remained on `alozuri-api-00011-sc7`, last updated 11 November at 23:51 UTC. These are inspection results, not a deployment performed by this document.
 
-## Proposed queue migration (not activated)
+## Payment-triggered queue
 
-[Payment-triggered order processing](order-processing.md) prepares a Cloud Tasks queue to invoke a targeted worker in the existing `alozuri-api` service. It does not add another application service or Firebase Function. The minute fulfilment schedule is retired only at approved cutover; the default `ORDER_PROCESSING_MODE=scheduler` preserves current operation until then. Queue mode is an API deployment/configuration change, not part of a website-only App Hosting rollout.
+[Payment-triggered order processing](order-processing.md) uses a Cloud Tasks queue in `europe-west1` to invoke a targeted worker in the existing `alozuri-api` service in `europe-west4`. It adds no application service or Firebase Function. The production activation on 12 November 2026 sets `ORDER_PROCESSING_MODE=queue` and pauses the minute fulfilment schedule; daily catalogue refresh remains separate. New purchases receive their complete confirmation email only after every QR profile is saved. Queue mode is an API deployment/configuration change, not part of a website-only App Hosting rollout.
 
 ## Coordinated manual release workflow
 

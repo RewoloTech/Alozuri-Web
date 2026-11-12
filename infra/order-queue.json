@@ -1,5 +1,5 @@
 {
-  "name": "projects/alozuri/locations/europe-west4/queues/alozuri-orders",
+  "name": "projects/alozuri/locations/europe-west1/queues/alozuri-orders",
   "rateLimits": {
     "maxDispatchesPerSecond": 1,
     "maxConcurrentDispatches": 2
