@@ -16,6 +16,10 @@ test('complete order email preserves the full accepted contract and stays readab
     }),
   );
   await page.setContent(email.html);
+  const logo = page.getByRole('img', { name: 'Alozuri', exact: true });
+  await expect(logo).toHaveCSS('padding-left', '16px');
+  await expect(logo).toHaveCSS('padding-right', '16px');
+  await expect(logo).toHaveCSS('border-radius', '12px');
   await expect(page.getByText('Your eSIM is ready.', { exact: false })).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'Your order is confirmed!', exact: true }),
