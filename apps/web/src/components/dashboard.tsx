@@ -166,12 +166,12 @@ function AccountDashboard() {
         <div className="surface">
           <Globe2 />
           <strong>{orders.filter((o) => o.status === 'ready').length}</strong>
-          <span>Ready eSIMs</span>
+          <span>Earlier ready eSIMs</span>
         </div>
         <div className="surface">
           <Receipt />
           <strong>{orders.length}</strong>
-          <span>Orders</span>
+          <span>Earlier orders</span>
         </div>
         <div className="surface">
           <ShieldCheck />
@@ -210,11 +210,11 @@ function AccountDashboard() {
           ) : (
             <div className="empty-state">
               <Globe2 size={38} />
-              <h3>Your next connection starts here.</h3>
+              <h3>No earlier orders</h3>
               <p>
                 {error
                   ? 'Orders are temporarily unavailable.'
-                  : 'No eSIMs to show yet. When you buy a plan, its status and installation details will appear here.'}
+                  : 'View your current purchases and installation details in the Orders and My eSIMs tabs.'}
               </p>
               <Link href="/#planner" className="button primary">
                 Plan my next trip →
