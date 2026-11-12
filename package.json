@@ -32,7 +32,8 @@
     "featured:generate": "node --import tsx scripts/run-featured-bundles.mts",
     "test:e2e:ui": "playwright test --ui",
     "test:jest": "jest --runInBand",
-    "test:cart:browser": "firebase emulators:exec --only auth --project demo-alozuri --config infra/auth-emulator.json \"E2E_CART_AUTH_EMULATOR=true playwright test tests/e2e/cart-auth.spec.ts\""
+    "test:cart:browser": "firebase emulators:exec --only auth --project demo-alozuri --config infra/auth-emulator.json \"E2E_CART_AUTH_EMULATOR=true playwright test tests/e2e/cart-auth.spec.ts\"",
+    "deploy:api": "node scripts/deploy-api.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.0",

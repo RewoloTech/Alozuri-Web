@@ -38,3 +38,23 @@ At the inspection on 12 November 2026, GitHub `main` and website production were
 ## Daily catalogue trigger
 
 The daily catalogue sync is owned by Cloud Scheduler job `alozuri-catalogue-daily` at 03:17 UTC. It authenticates to the existing API using the dedicated catalogue caller. The GitHub catalogue workflow is manual-only. No separate application or server is deployed for this timer. The legacy minute fulfilment job stays paused and order fulfilment continues through Cloud Tasks. See [catalogue sync configuration](catalogue-and-filters.md#daily-sync).
+
+## Terminal backend deployment
+
+From the repository root, run `gcloud auth login` if needed (use the Google account
+with access to project `alozuri`), then `npm run deploy:api`. This builds the root
+Dockerfile in Cloud Build with a unique image tag, deploys a new revision to
+`alozuri-api` in `europe-west4` without traffic, then routes traffic to that exact
+revision. Each command must succeed before the next starts. Existing secrets,
+environment settings and service identity are preserved. The website is not
+rolled out by this command. The image is built from local files, including changes not committed
+to Git; review your working tree first.
+
+Use `npm run deploy:api -- --dry-run` to inspect the commands without cloud calls.
+The script searches PATH, common SDK installation locations and the temporary
+compatible SDK wrapper used for earlier deployments. You can also set
+`GCLOUD_BIN` to its executable path
+(for example `GCLOUD_BIN=/tmp/alozuri-gcloud npm run deploy:api` while the local
+compatible SDK wrapper exists). No login is triggered automatically. After a
+release, verify API health and a newly generated email; existing emails do not
+change.
