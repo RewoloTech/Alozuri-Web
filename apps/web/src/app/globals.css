@@ -3422,3 +3422,214 @@ h1 {
     display: none;
   }
 }
+
+/* Compact checkout review; cart and payment state logic remain shared. */
+.checkout-page {
+  padding-top: 24px;
+  padding-bottom: 32px;
+  color: #171c2e;
+}
+.checkout-page .page-intro {
+  margin: 12px 0 20px;
+}
+.checkout-page .page-intro h1 {
+  margin: 0;
+}
+.checkout-review {
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 769px) {
+  .checkout-review form {
+    display: grid;
+    grid-template-columns: minmax(0, 1.5fr) minmax(300px, 1fr);
+    column-gap: 28px;
+    align-items: start;
+  }
+  .checkout-review form > * {
+    grid-column: 1;
+  }
+  .checkout-review form > .commerce-summary {
+    grid-column: 2;
+    grid-row: 1 / span 8;
+    align-self: start;
+  }
+}
+.checkout-page .stack {
+  gap: 12px;
+}
+.checkout-page .surface {
+  padding: 20px;
+}
+.checkout-page .surface h2,
+.checkout-page .surface p {
+  margin: 0;
+}
+.checkout-page .surface p {
+  line-height: 1.5;
+}
+.checkout-page .checkout-account {
+  gap: 8px;
+}
+.checkout-page .checkout-guest-intro strong,
+.checkout-page .checkout-guest-intro span {
+  display: inline;
+  font-size: 0.875rem;
+}
+.checkout-page .checkout-guest-intro span {
+  margin-left: 5px;
+}
+.checkout-page .checkout-summary {
+  position: static;
+  padding: 14px;
+  border-color: #e5e7ef;
+  border-radius: 12px;
+}
+.checkout-page .summary-line {
+  gap: 12px;
+  padding: 10px 0;
+}
+.checkout-page .summary-line > div {
+  min-width: 0;
+}
+.checkout-page .summary-line p,
+.checkout-page .summary-line small {
+  font-size: 0.875rem;
+  color: #687084;
+}
+.checkout-page .summary-line p {
+  margin-top: 4px;
+}
+.checkout-page .checkout-plan-details {
+  margin-top: 4px;
+  font-size: 0.875rem;
+}
+.checkout-page .checkout-plan-details summary {
+  cursor: pointer;
+  min-height: 44px;
+  display: list-item;
+  align-content: center;
+  color: #4338ca;
+}
+.checkout-page .checkout-summary .spec-list {
+  margin: 8px 0 0;
+}
+.checkout-page .checkout-summary .spec-list div {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+}
+.checkout-page .commerce-total {
+  display: flex;
+  padding: 10px 0 0;
+  font-size: 18px;
+}
+.checkout-page .quote-status:empty,
+.checkout-page .checkout-next-step:empty {
+  display: none;
+}
+.checkout-page .checkout-policy-notice {
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+.checkout-page .button,
+.checkout-page .commerce-input {
+  min-height: 44px;
+}
+.checkout-page .button.primary {
+  background: #4338ca;
+}
+.checkout-page .payment-security {
+  font-size: 0.8125rem;
+  text-align: center;
+  color: #687084;
+}
+/* Keep chat in normal document flow on checkout so it cannot cover payment controls. */
+body:has(.checkout-page) .support-shortcut {
+  position: static;
+  display: flex;
+  margin: 16px 20px 24px auto;
+}
+@media (max-width: 430px) {
+  .checkout-page {
+    padding-top: 16px;
+  }
+  .checkout-page .surface {
+    padding: 16px;
+  }
+  .checkout-page .checkout-summary {
+    padding: 12px;
+  }
+  .checkout-page .page-intro {
+    margin-bottom: 16px;
+  }
+}
+
+/* Shared concise summaries and tighter cart cards. */
+.compact-summary .summary-line {
+  padding: 12px 0;
+  gap: 12px;
+}
+.compact-summary .summary-line > div {
+  min-width: 0;
+}
+.compact-summary .summary-line p {
+  margin: 4px 0 0;
+  line-height: 1.5;
+}
+.compact-summary .spec-list {
+  margin: 10px 0 0;
+}
+.compact-summary .spec-list div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+}
+.compact-summary .spec-list dd {
+  margin: 0;
+  text-align: right;
+}
+.compact-summary .commerce-total {
+  padding: 12px 0;
+  font-size: 20px;
+}
+.compact-summary .quote-status:empty {
+  display: none;
+}
+.cart-line {
+  padding: 20px;
+  gap: 16px;
+}
+.cart-line h3 {
+  margin-bottom: 6px;
+}
+.cart-line p {
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+.cart-line details {
+  margin: 8px 0;
+}
+.cart-line details summary {
+  min-height: 44px;
+  align-content: center;
+}
+.cart-line-end .text-link {
+  min-height: 44px;
+}
+body:has(.cart-line) .support-shortcut {
+  position: static;
+  display: flex;
+  margin: 16px 20px 24px auto;
+}
+@media (max-width: 430px) {
+  .commerce-layout .cart-line {
+    padding: 16px;
+    gap: 12px;
+  }
+}
+
+.cart-line .quantity-controls button {
+  width: 44px;
+  height: 44px;
+}

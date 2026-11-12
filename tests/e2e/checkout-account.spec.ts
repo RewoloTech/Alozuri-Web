@@ -20,9 +20,7 @@ test('optional account creation reuses the delivery email and keeps checkout ope
   await expect(page.locator('input[type=email]')).toHaveCount(1);
   await expect(page.getByRole('button', { name: 'Continue with Google' })).toBeVisible();
   await expect(page.getByText('Or check out as a guest', { exact: true })).toBeVisible();
-  await expect(
-    page.getByText('We’ll email your eSIM details. No account needed.', { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByText('No account needed.', { exact: true })).toBeVisible();
   await email.fill('new@example.test');
   await page.getByRole('button', { name: 'Create an account', exact: true }).click();
   await page.getByRole('button', { name: 'Create account and stay at checkout' }).click();
@@ -33,7 +31,7 @@ test('optional account creation reuses the delivery email and keeps checkout ope
   await password.fill('example-test-password');
   await password.press('Enter');
   await expect(page.getByRole('button', { name: 'Continue to payment' })).toBeDisabled();
-  await expect(page.getByText('Signed in as new@example.test.', { exact: false })).toBeVisible();
+  await expect(page.getByText('Signed in as', { exact: false })).toHaveCount(0);
   await expect(email).toHaveValue('new@example.test');
   await expect(page.getByText('Authentication attempts: 1')).toBeVisible();
   await expect(page.getByRole('link', { name: 'Verify your email' })).toBeVisible();
@@ -53,10 +51,11 @@ test('Google sign-in fills its account email and avoids duplicate attempts', asy
   );
   await expect(page.getByText('Authentication attempts: 1')).toBeVisible();
   await expect(page.getByRole('link', { name: 'Verify your email' })).toHaveCount(0);
+  await page.getByRole('textbox', { name: 'Email address' }).fill('delivery@example.test');
   await page.getByRole('button', { name: 'Continue to payment' }).click();
   await expect(
     page.getByRole('status').filter({ hasText: 'Payment continues with' }),
-  ).toContainText('Payment continues with google@example.test');
+  ).toContainText('Payment continues with delivery@example.test');
 });
 
 test('blocked Google popup and failed login leave guest checkout available', async ({ page }) => {

@@ -81,7 +81,7 @@ export function CheckoutAccount({
           </button>
           <p className="checkout-guest-intro">
             <strong>Or check out as a guest</strong>
-            <span>We’ll email your eSIM details. No account needed.</span>
+            <span>No account needed.</span>
           </p>
         </>
       )}
@@ -101,19 +101,15 @@ export function CheckoutAccount({
         />
       </label>
       {user ? (
-        <p className="fine-print" role="status">
-          Signed in as {user.email}.
-          {!user.emailVerified && (
-            <>
-              {' '}
-              You can pay now.{' '}
-              <Link href={'/verify-email?next=' + encodeURIComponent(returnTo)}>
-                Verify your email
-              </Link>{' '}
-              to access your orders in My eSIMs.
-            </>
-          )}
-        </p>
+        !user.emailVerified && (
+          <p className="fine-print" role="status">
+            You can pay now.{' '}
+            <Link href={'/verify-email?next=' + encodeURIComponent(returnTo)}>
+              Verify your email
+            </Link>{' '}
+            to access your orders in My eSIMs.
+          </p>
+        )
       ) : (
         <>
           {!configured && (

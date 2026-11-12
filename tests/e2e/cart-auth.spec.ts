@@ -246,16 +246,25 @@ async function signup(page: Page) {
   await page
     .getByRole('button', { name: 'Create account and stay at checkout', exact: true })
     .click();
-  await expect(page.getByText(`Signed in as ${email}.`, { exact: false })).toBeVisible();
-  await expect(page.locator('.commerce-total')).toContainText('$12.00');
-  const result = await page.request.get(
-    'http://127.0.0.1:9099/emulator/v1/projects/demo-alozuri/oobCodes',
+  await expect(page.getByRole('textbox', { name: 'Email address', exact: true })).toHaveValue(
+    email,
   );
-  const codes = z
-    .object({ oobCodes: z.array(z.object({ email: z.string(), oobCode: z.string() })) })
-    .parse(await result.json());
-  const code = codes.oobCodes.find((item) => item.email === email)?.oobCode;
-  expect(code).toBeTruthy();
+  await expect(page.locator('.commerce-total')).toContainText('$12.00');
+  // Delivery email is filled before signup; wait for the asynchronous verification send.
+  let code: string | undefined;
+  await expect
+    .poll(async () => {
+      const result = await page.request.get(
+        'http://127.0.0.1:9099/emulator/v1/projects/demo-alozuri/oobCodes',
+      );
+      const codes = z
+        .object({ oobCodes: z.array(z.object({ email: z.string(), oobCode: z.string() })) })
+        .parse(await result.json());
+      code = codes.oobCodes.find((item) => item.email === email)?.oobCode;
+      return Boolean(code);
+    })
+    .toBe(true);
+  if (!code) throw new Error('Emulator verification email was not available.');
   const verified = await page.request.post(
     'http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:update?key=fake-emulator-key',
     { data: { oobCode: code } },
@@ -432,13 +441,11 @@ test('Data usage shows separate eSIM readings without opening orders, and explai
             id: purchase,
             status: 'paid',
             test: false,
-            allocations: units
-              .slice(0, 3)
-              .map((id, index) => ({
-                id,
-                plan: { ...plan, name: `Travel eSIM ${index + 1}` },
-                status: index === 2 ? 'paid' : 'ready',
-              })),
+            allocations: units.slice(0, 3).map((id, index) => ({
+              id,
+              plan: { ...plan, name: `Travel eSIM ${index + 1}` },
+              status: index === 2 ? 'paid' : 'ready',
+            })),
           },
           {
             ...common,

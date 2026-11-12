@@ -33,6 +33,7 @@ export function LineDescription({ line }: { line: CartLine }) {
         {dataLabel(line.plan)} · {line.plan.days} days · {coverageLabel(line.plan)}
       </p>
       <p>Activation: {line.plan.activation}</p>
+      <p>{line.plan.fairUse}</p>
       <details>
         <summary>
           Coverage: {line.plan.countries.length}{' '}
@@ -49,15 +50,22 @@ export function OrderSummary({
   children,
   currency = lines[0]?.plan.currency ?? 'USD',
   updating = false,
+  compact = false,
+  showPlanDetails = false,
 }: {
   lines: CartLine[];
   total: number | null;
   currency?: Currency;
   updating?: boolean;
+  compact?: boolean;
+  showPlanDetails?: boolean;
   children?: React.ReactNode;
 }) {
   return (
-    <aside className="surface commerce-summary" aria-busy={updating}>
+    <aside
+      className={`surface commerce-summary${compact ? ' compact-summary' : ''}${showPlanDetails ? ' checkout-summary' : ''}`}
+      aria-busy={updating}
+    >
       <span className="eyebrow">YOUR ORDER</span>
       {lines.map((line) => (
         <div className="summary-line" key={line.plan.id}>
@@ -66,12 +74,21 @@ export function OrderSummary({
             <p>
               {dataLabel(line.plan)} · {line.plan.days} days · Qty {line.quantity}
             </p>
-            <p>Activation: {line.plan.activation}</p>
-            <p>{line.plan.fairUse}</p>
-            <small>
-              Coverage: {line.plan.countries.length}{' '}
-              {line.plan.countries.length === 1 ? 'destination' : 'destinations'}
-            </small>
+            {showPlanDetails && (
+              <>
+                <small>Data-only</small>
+                <details className="checkout-plan-details">
+                  <summary>Plan details</summary>
+                  <p>Activation: {line.plan.activation}</p>
+                  <p>{line.plan.fairUse}</p>
+                  <p>Coverage: {line.plan.countries.map(countryName).join(', ')}</p>
+                  {line.plan.networks.length > 0 && (
+                    <p>Networks: {line.plan.networks.join(', ')}</p>
+                  )}
+                  {line.plan.supplierNotes && <p>{line.plan.supplierNotes}</p>}
+                </details>
+              </>
+            )}
           </div>
           <strong>
             {line.plan.currency === currency
@@ -80,25 +97,33 @@ export function OrderSummary({
           </strong>
         </div>
       ))}
-      <dl className="spec-list">
-        <div>
-          <dt>Subtotal</dt>
-          <dd>{total === null ? '—' : money(total, currency)}</dd>
-        </div>
-      </dl>
+      {(!compact || !showPlanDetails || lines.length > 1) && (
+        <dl className="spec-list">
+          <div>
+            <dt>Subtotal</dt>
+            <dd>{total === null ? '—' : money(total, currency)}</dd>
+          </div>
+        </dl>
+      )}
       <div className="commerce-total">
         <strong>Total · {currency}</strong>
         <strong>{total === null ? '—' : money(total, currency)}</strong>
       </div>
-      <p className="fine-print">Prices are verified before payment. No additional checkout fees.</p>
+      {!compact && (
+        <p className="fine-print">
+          Prices are verified before payment. No additional checkout fees.
+        </p>
+      )}
       <p className="quote-status" role="status" aria-live="polite">
         {updating ? 'Confirming latest prices…' : ''}
       </p>
       {children}
-      <p className="fine-print payment-security">
-        <LockKeyhole size={13} aria-hidden="true" />
-        <span>Payment details are handled securely by Stripe.</span>
-      </p>
+      {!showPlanDetails && (
+        <p className="fine-print payment-security">
+          <LockKeyhole size={13} aria-hidden="true" />
+          <span>Payment details are handled securely by Stripe.</span>
+        </p>
+      )}
     </aside>
   );
 }
@@ -299,7 +324,13 @@ export function Cart() {
             </div>
           )}
         </div>
-        <OrderSummary lines={displayedItems} total={total} currency={currency} updating={pending}>
+        <OrderSummary
+          compact
+          lines={displayedItems}
+          total={total}
+          currency={currency}
+          updating={pending}
+        >
           <Link
             className="button primary full-width"
             aria-disabled={checkoutBlocked}

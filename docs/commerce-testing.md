@@ -104,3 +104,22 @@ recovery, and a single backend checkout request. This is a controlled SDK mock;
 it does not verify a real mobile wallet or establish why a particular wallet stalled.
 After the manual Firebase App Hosting rollout, verify Google Pay on the affected
 phone and confirm the resulting PaymentIntent in Stripe before claiming success.
+
+### Compact checkout review
+
+The `/checkout` review displays delivery email, the compact shared order summary,
+active device compatibility confirmation, linked legal acknowledgement, and the
+Continue to payment button in that order. Activation, fair usage, coverage,
+verified networks and supplier notes remain in native keyboard-accessible Plan
+details disclosures. A single-plan summary omits the redundant subtotal row;
+multi-plan summaries retain an aligned subtotal and total. Cart summary lines contain only name, allowance, validity, quantity and price;
+activation, fair usage and expandable coverage stay in the product cards. Desktop
+checkout review uses two columns, with the summary beside the email and
+confirmations; on mobile the summary follows email and precedes confirmations. Chat is in normal document flow on checkout to avoid
+covering payment controls. Price verification, legal acceptance payloads,
+optional authentication, wallet handling and fulfilment are unchanged.
+
+Browser coverage includes 320, 375, 390, 430px and desktop, unchecked compatibility,
+multiple plans/quantities, expandable details, guest payment retries, currency
+repricing, account signup/sign-in and editing the delivery email. SDK-mocked
+wallet tests do not establish real Apple Pay/Google Pay completion.

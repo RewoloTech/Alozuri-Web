@@ -28,10 +28,9 @@ const verificationTimeoutMs = 10_000;
 function CheckoutPolicyNotice() {
   return (
     <p className="checkout-policy-notice">
-      By placing your order, you agree to our <Link href="/terms">Terms &amp; Conditions</Link> and
-      acknowledge our <Link href="/refund-policy">Refund Policy</Link>,{' '}
-      <Link href="/privacy">Privacy Policy</Link> and{' '}
-      <Link href="/esim-compatibility">eSIM Compatibility Requirements</Link>.
+      By continuing, you agree to our <Link href="/terms">Terms &amp; Conditions</Link> and
+      acknowledge our <Link href="/refund-policy">Refund Policy</Link> and{' '}
+      <Link href="/privacy">Privacy Policy</Link>.
     </p>
   );
 }
@@ -473,18 +472,28 @@ function CheckoutForIdentity() {
               ? 'Payments are currently unavailable. Your cart is saved.'
               : !compatible
                 ? 'Confirm that your device supports eSIM above to continue.'
-                : 'Next: choose your payment method and review before paying.';
+                : '';
+  const orderSummary = (
+    <OrderSummary
+      compact
+      showPlanDetails
+      lines={session ? session.quote.items : preview.items}
+      total={
+        session ? session.quote.totalCents : quoteReady && quote ? quote.totalCents : preview.total
+      }
+      currency={session?.quote.currency ?? currency}
+      updating={!session && loading}
+    />
+  );
   return (
-    <section className="container section">
+    <section className="container section checkout-page">
       <Link className="text-link" href="/cart">
         ← Edit cart
       </Link>
       <div className="page-intro">
-        <span className="eyebrow">A LITTLE LESS ROAMING</span>
         <h1>Checkout</h1>
-        <p>No account needed. Your next connection starts here.</p>
       </div>
-      <div className="commerce-layout">
+      <div className={`commerce-layout${session ? '' : ' checkout-review'}`}>
         <div className="surface stack">
           {session ? (
             <>
@@ -527,10 +536,8 @@ function CheckoutForIdentity() {
             </>
           ) : (
             <form className="stack" onSubmit={start}>
-              <h2>Contact information</h2>
-              <p>
-                Your private installation link will be sent to this email when your eSIM is ready.
-              </p>
+              <h2>Delivery email</h2>
+              <p>We&apos;ll send your eSIM installation instructions here.</p>
               <CheckoutAccount
                 email={email}
                 onEmailChange={setEmail}
@@ -539,7 +546,6 @@ function CheckoutForIdentity() {
                 onBusyChange={setAccountBusy}
                 returnTo={buy ? '/checkout?buy=' + encodeURIComponent(buy) : '/checkout'}
               />
-              <h2>Review your order</h2>
               {cart.syncing && <p role="status">Syncing your saved cart…</p>}
               {!buy && cart.syncFailed && (
                 <p className="error-message" role="alert">
@@ -547,7 +553,7 @@ function CheckoutForIdentity() {
                   <Link href="/cart">Return to your cart to resolve this before paying.</Link>
                 </p>
               )}
-              <p>The order summary shows your plans and final total in {currency}.</p>
+              {orderSummary}
               <label className="checkbox-label">
                 <input
                   type="checkbox"
@@ -557,7 +563,7 @@ function CheckoutForIdentity() {
                 />
                 <span>
                   My device supports eSIM and is carrier unlocked.{' '}
-                  <Link href="/help#compatibility">Check compatibility</Link>
+                  <Link href="/esim-compatibility">Check compatibility</Link>
                 </span>
               </label>
               <CheckoutPolicyNotice />
@@ -591,6 +597,9 @@ function CheckoutForIdentity() {
               <p id="checkout-next-step" className="fine-print checkout-next-step" role="status">
                 {checkoutHint}
               </p>
+              <p className="fine-print payment-security">
+                Payment details are handled securely by Stripe.
+              </p>
             </form>
           )}
           {error && (
@@ -608,18 +617,7 @@ function CheckoutForIdentity() {
             </div>
           )}
         </div>
-        <OrderSummary
-          lines={session ? session.quote.items : preview.items}
-          total={
-            session
-              ? session.quote.totalCents
-              : quoteReady && quote
-                ? quote.totalCents
-                : preview.total
-          }
-          currency={session?.quote.currency ?? currency}
-          updating={!session && loading}
-        />
+        {session && orderSummary}
       </div>
     </section>
   );

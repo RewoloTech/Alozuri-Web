@@ -219,7 +219,14 @@ test('cart persists, aggregates quantities and remains usable at mobile widths',
   await page.getByRole('button', { name: 'Decrease quantity for Europe connection' }).click();
   await page.getByRole('button', { name: 'Remove France connection', exact: true }).click();
   await expect(page.getByRole('link', { name: 'Shopping cart, 2 items' })).toBeVisible();
-  for (const width of [375, 390, 768]) {
+  const summary = page.locator('.commerce-summary');
+  await expect(summary).not.toContainText('Activation:');
+  await expect(summary).not.toContainText('Coverage:');
+  const coverage = page.locator('.cart-line details').first();
+  await coverage.locator('summary').click();
+  await expect(coverage).toContainText('France, Switzerland, Italy');
+  await expect(page.locator('.cart-line').first()).toContainText(plan.activation);
+  for (const width of [320, 375, 390, 430, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await expect(page.getByRole('link', { name: 'Secure checkout' })).toBeVisible();
     expect(
@@ -366,11 +373,25 @@ async function openCheckout(page: Page) {
     await checkbox.check();
   }
   await expect(page.locator('.checkout-policy-notice')).toContainText(
-    'By placing your order, you agree to our Terms & Conditions',
+    'By continuing, you agree to our Terms & Conditions',
   );
   await expect(page.getByText('Your agreement and supply choices')).toHaveCount(0);
-  for (const width of [375, 390, 768, 1440]) {
+  for (const width of [320, 375, 390, 430, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
+    const summaryBox = await page.locator('.checkout-summary').boundingBox();
+    const emailBox = await page
+      .getByRole('textbox', { name: 'Email address', exact: true })
+      .boundingBox();
+    const buttonBox = await page.getByRole('button', { name: 'Continue to payment' }).boundingBox();
+    if (!summaryBox || !emailBox || !buttonBox)
+      throw new Error('Checkout sections must be visible');
+    if (width > 768) expect(summaryBox.x).toBeGreaterThan(emailBox.x + emailBox.width);
+    else {
+      expect(summaryBox.y).toBeGreaterThan(emailBox.y);
+      expect(summaryBox.y + summaryBox.height).toBeLessThan(buttonBox.y);
+    }
+    if (width === 1440)
+      await page.screenshot({ path: '/tmp/alozuri-refined-checkout-desktop.png', fullPage: true });
     const checkbox = await choices.boundingBox();
     const text = await page.locator('label.checkbox-label > span').boundingBox();
     if (!checkbox || !text) throw new Error('Device compatibility row must be visible');
@@ -384,6 +405,22 @@ async function openCheckout(page: Page) {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: '/tmp/alozuri-checkout-consent-mobile.png', fullPage: true });
   if (viewport) await page.setViewportSize(viewport);
+  const summary = page.locator('.checkout-summary');
+  await expect(summary).toContainText('Data-only');
+  await expect(summary.locator('details')).not.toHaveAttribute('open', '');
+  await summary.getByText('Plan details', { exact: true }).click();
+  await expect(summary).toContainText(plan.activation);
+  await summary.getByText('Plan details', { exact: true }).click();
+  const order = await page.locator('form').evaluate((form) => {
+    const summary = form.querySelector('.checkout-summary');
+    const checkbox = form.querySelector('input[type="checkbox"]');
+    return Boolean(
+      summary &&
+      checkbox &&
+      summary.compareDocumentPosition(checkbox) & Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
+  expect(order).toBe(true);
   await page.getByRole('button', { name: 'Continue to payment' }).click();
 }
 for (const wallet of ['Apple Pay', 'Google Pay'])
@@ -426,7 +463,7 @@ test('stalled Google Pay falls back to card without confirming a late wallet sub
   await expect(page.getByRole('button', { name: 'Google Pay', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /^Pay / })).toBeEnabled();
   expect(await page.evaluate(() => sessionStorage.getItem('walletFailed'))).toBe('true');
-  for (const width of [375, 390, 768, 1440]) {
+  for (const width of [320, 375, 390, 430, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
@@ -443,6 +480,51 @@ test('stalled Google Pay falls back to card without confirming a late wallet sub
   await page.getByRole('button', { name: /^Pay / }).click();
   await expect(page.getByRole('heading', { name: 'Your test order', exact: true })).toBeVisible();
   expect(checkouts).toBe(1);
+});
+test('compact checkout reviews multiple plans and quantities before confirmations', async ({
+  page,
+}) => {
+  await setup(page);
+  for (const id of [plan.id, second.id]) {
+    await page.goto('/plans/' + id);
+    await page.getByRole('button', { name: 'Add to cart', exact: true }).click();
+    if (id === plan.id) {
+      await expect(
+        page.getByRole('link', { name: 'Shopping cart, 1 item', exact: true }),
+      ).toBeVisible();
+      await page.getByRole('button', { name: 'Add to cart', exact: true }).click();
+    }
+  }
+  await expect(
+    page.getByRole('link', { name: 'Shopping cart, 3 items', exact: true }),
+  ).toBeVisible();
+  await page.goto('/checkout');
+  const summary = page.locator('.checkout-summary');
+  await expect(summary.locator('.summary-line')).toHaveCount(2);
+  await expect(summary.locator('.summary-line').filter({ hasText: plan.name })).toContainText(
+    'Qty 2',
+  );
+  await expect(summary.locator('.summary-line').filter({ hasText: second.name })).toContainText(
+    'Qty 1',
+  );
+  await expect(summary.locator('.spec-list')).toContainText('$29.00');
+  await expect(summary.locator('.commerce-total')).toContainText('$29.00');
+  await expect(page.getByRole('checkbox')).not.toBeChecked();
+  await expect(page.getByRole('button', { name: 'Continue to payment' })).toBeDisabled();
+  for (const width of [320, 375, 390, 430, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+  }
+  await summary.getByText('Plan details', { exact: true }).first().focus();
+  await page.keyboard.press('Enter');
+  await expect(summary.locator('details').first()).toHaveAttribute('open', '');
+  await expect(summary.locator('details').first()).toContainText('Verified supplier network');
+  await expect(summary.locator('details').first()).toContainText(
+    'Additional fixture plan conditions.',
+  );
+  await page.screenshot({ path: '/tmp/alozuri-checkout-review-desktop.png', fullPage: true });
 });
 test('unsupported wallets are hidden and card checkout remains available', async ({ page }) => {
   await mockStripe(page, false);
@@ -520,10 +602,10 @@ test('Buy now goes straight to a simple guest checkout with clear terms links an
   await expect(page.getByRole('button', { name: 'Pay $12.00', exact: true })).toBeEnabled();
   const notice = page.locator('.checkout-policy-notice');
   await expect(notice).toHaveCount(1);
-  for (const path of ['/terms', '/refund-policy', '/privacy', '/esim-compatibility'])
+  for (const path of ['/terms', '/refund-policy', '/privacy'])
     await expect(notice.locator(`a[href="${path}"]`)).toBeVisible();
   await expect(page.getByRole('checkbox')).toHaveCount(0);
-  for (const width of [375, 390, 768, 1440]) {
+  for (const width of [320, 375, 390, 430, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
@@ -785,7 +867,7 @@ test('the entire data allowance field opens its native picker, including the lab
   await page.goto('/?mode=country&countries=FR');
   const field = page.locator('.data-field');
   const select = page.getByRole('combobox', { name: 'Data allowance' });
-  for (const width of [375, 390, 768, 1440]) {
+  for (const width of [320, 375, 390, 430, 768, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
     await field.scrollIntoViewIfNeeded();
     for (const target of ['label', 'value', 'arrow', 'padding']) {
@@ -1195,7 +1277,7 @@ test('plan cards keep equal heights and align prices and actions despite wrapped
   const cards = page.locator('.plan-grid .plan-card');
   await page.getByRole('button', { name: 'Find my eSIM', exact: true }).click();
   await expect(cards).toHaveCount(6);
-  for (const width of [375, 390, 768, 1440]) {
+  for (const width of [320, 375, 390, 430, 768, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
     await expect
       .poll(async () =>
