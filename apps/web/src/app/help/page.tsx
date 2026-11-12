@@ -1,6 +1,6 @@
 import { publicMetadata } from '@/lib/seo';
 import Link from 'next/link';
-import { BUSINESS } from '@voyaspan/shared/legal';
+import { BUSINESS } from '@alozuri/shared/legal';
 export const metadata = publicMetadata(
   'Help and eSIM installation',
   'Get help checking device compatibility, installing your travel eSIM, understanding activation and contacting Alozuri.',

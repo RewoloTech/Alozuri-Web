@@ -1,6 +1,6 @@
 import type { MetadataRoute } from 'next';
-import { BUSINESS, LEGAL_EFFECTIVE_DATE } from '@voyaspan/shared/legal';
-import { POLICIES } from '@voyaspan/shared/policies';
+import { BUSINESS, LEGAL_EFFECTIVE_DATE } from '@alozuri/shared/legal';
+import { POLICIES } from '@alozuri/shared/policies';
 import { getPublicCountries, getSitemapPlanIds } from '@/lib/catalogue-server';
 import { INDEXABLE } from '@/lib/seo';
 export const revalidate = 3600;

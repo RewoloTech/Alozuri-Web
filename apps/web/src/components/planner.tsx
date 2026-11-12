@@ -43,8 +43,8 @@ import {
   allowanceFilter,
   DATA_ALLOWANCES,
   type DataAllowance,
-} from '@voyaspan/shared';
-import { demoPlans } from '@voyaspan/shared/demo';
+} from '@alozuri/shared';
+import { demoPlans } from '@alozuri/shared/demo';
 import { useCurrency } from './currency-provider';
 import { api, demoMode } from '@/lib/api';
 export function Planner({

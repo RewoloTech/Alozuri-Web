@@ -5,7 +5,7 @@ import {
   MAX_CART_UNITS,
   type CartItem,
   type CartLine,
-} from '@voyaspan/shared';
+} from '@alozuri/shared';
 
 export type CartMergeIntent = { uid: string; mergeId: string; items: CartItem[] };
 export function readMergeIntent(value: string | null): CartMergeIntent | null {

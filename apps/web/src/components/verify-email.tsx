@@ -1,5 +1,5 @@
 'use client';
-import { safeAccountDestination } from '@voyaspan/shared';
+import { safeAccountDestination } from '@alozuri/shared';
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { sendEmailVerification } from 'firebase/auth';

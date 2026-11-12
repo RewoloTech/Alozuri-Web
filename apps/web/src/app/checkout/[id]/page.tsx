@@ -1,4 +1,4 @@
-import { demoPlans } from '@voyaspan/shared/demo';
+import { demoPlans } from '@alozuri/shared/demo';
 import { LegacyCheckout } from '@/components/legacy-checkout';
 export const metadata = { title: 'Review your plan', robots: { index: false } };
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {

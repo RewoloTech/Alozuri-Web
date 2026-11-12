@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { dataSizeLabel } from '@voyaspan/shared';
-import type { EsimUsage } from '@voyaspan/shared/esim-usage';
+import { dataSizeLabel } from '@alozuri/shared';
+import type { EsimUsage } from '@alozuri/shared/esim-usage';
 import { api } from '@/lib/api';
 
 const labels: Record<string, string> = {

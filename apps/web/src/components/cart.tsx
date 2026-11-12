@@ -12,7 +12,7 @@ import {
   money,
   type CartLine,
   type Currency,
-} from '@voyaspan/shared';
+} from '@alozuri/shared';
 import { quantityChanged, removeFromCart, restoreCart, type RootState } from '@/lib/store';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/firebase';

@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { ArrowUpRight } from 'lucide-react';
-import { BUSINESS } from '@voyaspan/shared/legal';
-import { POLICIES } from '@voyaspan/shared/policies';
+import { BUSINESS } from '@alozuri/shared/legal';
+import { POLICIES } from '@alozuri/shared/policies';
 import { CookieSettingsButton } from './privacy-provider';
 import { Brand } from './header';
 export function Footer() {

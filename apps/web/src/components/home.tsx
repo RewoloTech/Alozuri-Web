@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { Planner } from './planner';
 import { SeasonalDestinations } from './seasonal-destinations';
-import { seasonalInspiration } from '@voyaspan/shared/destination-inspiration';
+import { seasonalInspiration } from '@alozuri/shared/destination-inspiration';
 export function Home({ featuredBundles }: { featuredBundles?: React.ReactNode }) {
   return (
     <>

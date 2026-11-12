@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { PrivacyProvider } from '@/components/privacy-provider';
-import { BUSINESS } from '@voyaspan/shared/legal';
+import { BUSINESS } from '@alozuri/shared/legal';
 import { INDEXABLE, jsonLd } from '@/lib/seo';
 import { AuthProvider } from '@/components/auth-provider';
 import { Header } from '@/components/header';

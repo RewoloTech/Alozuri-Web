@@ -7,7 +7,7 @@ import {
   uniqueDestinations,
   filterDestinations,
   type Country,
-} from '@voyaspan/shared';
+} from '@alozuri/shared';
 import { api, demoMode } from '@/lib/api';
 export function DestinationDirectory() {
   const [items, setItems] = useState<Country[]>(demoMode ? countries : []),

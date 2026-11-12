@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowUpRight } from 'lucide-react';
-import { countryFlag } from '@voyaspan/shared';
-import { seasonalInspiration } from '@voyaspan/shared/destination-inspiration';
+import { countryFlag } from '@alozuri/shared';
+import { seasonalInspiration } from '@alozuri/shared/destination-inspiration';
 
 export function SeasonalDestinations({
   initial,

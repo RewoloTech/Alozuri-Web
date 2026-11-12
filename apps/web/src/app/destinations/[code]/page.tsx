@@ -2,7 +2,7 @@ import { CountryOffers } from '@/components/country-offers';
 import { getPublicCountries, getCountryPlans } from '@/lib/catalogue-server';
 import { publicMetadata, INDEXABLE, breadcrumbs, jsonLd } from '@/lib/seo';
 import { notFound } from 'next/navigation';
-import { countries, countryName, countryFlag, isCountryCode } from '@voyaspan/shared';
+import { countries, countryName, countryFlag, isCountryCode } from '@alozuri/shared';
 import { Planner } from '@/components/planner';
 export async function generateMetadata({ params }: { params: Promise<{ code: string }> }) {
   const { code } = await params,

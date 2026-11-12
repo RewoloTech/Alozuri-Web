@@ -1,5 +1,5 @@
 import { notFound, permanentRedirect } from 'next/navigation';
-import { POLICIES } from '@voyaspan/shared/policies';
+import { POLICIES } from '@alozuri/shared/policies';
 export const metadata = { robots: { index: false, follow: true } };
 export default async function Legal({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;

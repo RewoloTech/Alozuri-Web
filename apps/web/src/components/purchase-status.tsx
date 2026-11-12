@@ -4,14 +4,14 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useDispatch, useSelector } from 'react-redux';
-import { money, dataLabel, type CartLine, type CartItem, type Plan } from '@voyaspan/shared';
+import { money, dataLabel, type CartLine, type CartItem, type Plan } from '@alozuri/shared';
 import { removeFromCart, quantityChanged, type RootState } from '@/lib/store';
 import { api } from '@/lib/api';
 import {
   CONTRACT_PDF_FILENAME,
   contractPaymentConfirmed,
   type ContractLegal,
-} from '@voyaspan/shared/contract';
+} from '@alozuri/shared/contract';
 import { useAuth } from './auth-provider';
 import { InstallationDetails } from './installation-details';
 import { EsimUsagePanel } from './esim-usage';

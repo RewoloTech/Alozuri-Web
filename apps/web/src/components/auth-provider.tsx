@@ -3,7 +3,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { onIdTokenChanged, signOut, type User } from 'firebase/auth';
 import { authClient, firebaseConfigured } from '@/lib/firebase';
 import { api, demoMode } from '@/lib/api';
-import type { UserProfile } from '@voyaspan/shared';
+import type { UserProfile } from '@alozuri/shared';
 const AuthContext = createContext<{
   user: User | null;
   loading: boolean;

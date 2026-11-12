@@ -6,7 +6,7 @@ import {
   type Plan,
   MAX_QUANTITY,
   MAX_CART_UNITS,
-} from '@voyaspan/shared';
+} from '@alozuri/shared';
 const itinerary = createSlice({
   name: 'itinerary',
   initialState: { ...searchState(), initialized: false },

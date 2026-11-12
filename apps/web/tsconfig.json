@@ -13,8 +13,8 @@
     "plugins": [{ "name": "next" }],
     "paths": {
       "@/*": ["./src/*"],
-      "@voyaspan/shared": ["../../packages/shared/src/index.ts"],
-      "@voyaspan/shared/demo": ["../../packages/shared/src/demo.ts"]
+      "@alozuri/shared": ["../../packages/shared/src/index.ts"],
+      "@alozuri/shared/demo": ["../../packages/shared/src/demo.ts"]
     }
   },
   "include": [

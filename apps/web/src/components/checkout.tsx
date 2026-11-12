@@ -1,5 +1,5 @@
 'use client';
-import { LEGAL_VERSION, CHECKOUT_LEGAL_ACCEPTANCE } from '@voyaspan/shared/legal';
+import { LEGAL_VERSION, CHECKOUT_LEGAL_ACCEPTANCE } from '@alozuri/shared/legal';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { LoaderCircle } from 'lucide-react';
@@ -14,7 +14,7 @@ import {
 } from '@stripe/react-stripe-js';
 import { loadStripe } from '@stripe/stripe-js/pure';
 import type { StripeExpressCheckoutElementConfirmEvent } from '@stripe/stripe-js';
-import { cartItems, previewCartPrices, money, type CartLine, type Plan } from '@voyaspan/shared';
+import { cartItems, previewCartPrices, money, type CartLine, type Plan } from '@alozuri/shared';
 import type { RootState } from '@/lib/store';
 import { api } from '@/lib/api';
 import { useCurrency } from './currency-provider';

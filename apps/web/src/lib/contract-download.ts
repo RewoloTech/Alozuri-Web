@@ -1,6 +1,6 @@
 import PDFDocument from 'pdfkit';
-import { drawContractPdf } from '@voyaspan/shared/contract-document';
-import { validateContractOrder, type ContractOrder } from '@voyaspan/shared/contract';
+import { drawContractPdf } from '@alozuri/shared/contract-document';
+import { validateContractOrder, type ContractOrder } from '@alozuri/shared/contract';
 let fonts: Promise<{ regular: Uint8Array; bold: Uint8Array }> | undefined;
 async function fontBytes() {
   fonts ??= Promise.all(

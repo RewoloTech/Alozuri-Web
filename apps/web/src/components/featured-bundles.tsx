@@ -2,14 +2,14 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowUpRight, Globe2 } from 'lucide-react';
-import { money } from '@voyaspan/shared';
+import { money } from '@alozuri/shared';
 import {
   parseFeaturedBundles,
   unavailableBundles,
   type FeaturedBundle,
   type FeaturedRegion,
   type BundleAllowance,
-} from '@voyaspan/shared/featured';
+} from '@alozuri/shared/featured';
 import { useCurrency } from './currency-provider';
 import { api } from '@/lib/api';
 export function FeaturedBundles({ initial }: { initial: FeaturedBundle[] | null }) {

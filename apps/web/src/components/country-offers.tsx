@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import type { Plan } from '@voyaspan/shared';
+import type { Plan } from '@alozuri/shared';
 import { PlanCard } from './planner';
 import { useCurrency } from './currency-provider';
 import { api } from '@/lib/api';

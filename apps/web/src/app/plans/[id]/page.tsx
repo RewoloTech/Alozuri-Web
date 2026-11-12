@@ -1,6 +1,6 @@
-import { demoPlans } from '@voyaspan/shared/demo';
-import { dataLabel } from '@voyaspan/shared';
-import { BUSINESS } from '@voyaspan/shared/legal';
+import { demoPlans } from '@alozuri/shared/demo';
+import { dataLabel } from '@alozuri/shared';
+import { BUSINESS } from '@alozuri/shared/legal';
 import { PlanDetails } from '@/components/plan-details';
 import { getPublicPlan } from '@/lib/catalogue-server';
 import { publicMetadata, breadcrumbs, jsonLd } from '@/lib/seo';

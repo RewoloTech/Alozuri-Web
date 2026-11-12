@@ -9,8 +9,8 @@ import {
   readPrivacyChoice,
   TAWK_CHAT_URL,
   type PrivacyChoice,
-} from '@voyaspan/shared/privacy';
-import { BUSINESS } from '@voyaspan/shared/legal';
+} from '@alozuri/shared/privacy';
+import { BUSINESS } from '@alozuri/shared/legal';
 const PrivacyContext = createContext({ openChat: () => {}, openSettings: () => {} });
 export function PrivacyProvider({ children }: { children: React.ReactNode }) {
   const [choice, setChoice] = useState<PrivacyChoice | null>(null),

@@ -1,5 +1,5 @@
 {
-  "name": "@voyaspan/web",
+  "name": "@alozuri/web",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -13,7 +13,7 @@
     "@reduxjs/toolkit": "^2.11.2",
     "@stripe/react-stripe-js": "^7.0.1",
     "@stripe/stripe-js": "^10.2.1",
-    "@voyaspan/shared": "0.1.0",
+    "@alozuri/shared": "0.1.0",
     "firebase": "12.19.0",
     "lucide-react": "1.14.0",
     "next": "16.4.6",

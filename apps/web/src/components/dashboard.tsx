@@ -5,7 +5,7 @@ import { AccountNavigation } from './account-navigation';
 import { useEffect, useState } from 'react';
 import { sendEmailVerification, updateProfile } from 'firebase/auth';
 import { Globe2, ShieldCheck, Receipt, ArrowRight } from 'lucide-react';
-import { money, nameFields, accountName, type CustomerOrder } from '@voyaspan/shared';
+import { money, nameFields, accountName, type CustomerOrder } from '@alozuri/shared';
 import { useAuth } from './auth-provider';
 import { api, demoMode } from '@/lib/api';
 export function Dashboard() {

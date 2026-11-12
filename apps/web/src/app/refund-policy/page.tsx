@@ -1,5 +1,5 @@
 import { LegalDocument } from '@/components/legal-document';
-import { POLICIES } from '@voyaspan/shared/policies';
+import { POLICIES } from '@alozuri/shared/policies';
 import { publicMetadata, breadcrumbs, jsonLd } from '@/lib/seo';
 const policy = POLICIES['refunds'];
 export const metadata = publicMetadata(policy.title, policy.description, policy.path);

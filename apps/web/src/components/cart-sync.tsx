@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef } from 'react';
 import { useDispatch, useSelector, useStore } from 'react-redux';
-import { cartItems, type CartLine } from '@voyaspan/shared';
+import { cartItems, type CartLine } from '@alozuri/shared';
 import {
   restoreCart,
   setCartVersion,

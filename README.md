@@ -4,7 +4,7 @@ Next.js storefront + independent Fastify API for an itinerary-based travel eSIM 
 
 Repository: [RewoloTech/Alozuri-Web](https://github.com/RewoloTech/Alozuri-Web).
 
-The product and Firebase project are now Alozuri (`alozuri`). Local browser configuration, the static preview build and App Hosting configuration use the new Firebase web app. Internal `@voyaspan/*` workspace names and payment metadata keys are retained for compatibility.
+The product and Firebase project are now Alozuri (`alozuri`). Local browser configuration, the static preview build and App Hosting configuration use the new Firebase web app. Internal workspace packages use `@alozuri/*`. Legacy payment metadata keys are retained for compatibility with existing Stripe sessions.
 
 Configured Hosting target: https://alozuri.web.app (Firebase project and site ID `alozuri`). Deployment to the new project has not been verified.
 

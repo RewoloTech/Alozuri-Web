@@ -1,6 +1,6 @@
 import Link from 'next/link';
-import { BUSINESS, LEGAL_EFFECTIVE_DATE, LEGAL_VERSION } from '@voyaspan/shared/legal';
-import { POLICIES, type Policy } from '@voyaspan/shared/policies';
+import { BUSINESS, LEGAL_EFFECTIVE_DATE, LEGAL_VERSION } from '@alozuri/shared/legal';
+import { POLICIES, type Policy } from '@alozuri/shared/policies';
 import { SupportChoices, CookieSettingsButton } from './privacy-provider';
 export function LegalDocument({
   policy,

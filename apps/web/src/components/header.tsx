@@ -6,7 +6,7 @@ import type { RootState } from '@/lib/store';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AccountMenu } from './account-menu';
-import { SUPPORTED_CURRENCIES } from '@voyaspan/shared';
+import { SUPPORTED_CURRENCIES } from '@alozuri/shared';
 import { useCurrency } from './currency-provider';
 import { useAuth } from './auth-provider';
 export function Brand() {

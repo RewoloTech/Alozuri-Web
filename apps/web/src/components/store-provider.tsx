@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { Provider } from 'react-redux';
-import { searchState, readSearch } from '@voyaspan/shared';
+import { searchState, readSearch } from '@alozuri/shared';
 import { CurrencyProvider } from './currency-provider';
 import { makeStore, restoreSearch } from '@/lib/store';
 export function StoreProvider({ children }: { children: React.ReactNode }) {

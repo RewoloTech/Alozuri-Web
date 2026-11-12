@@ -1,5 +1,5 @@
 import type { MetadataRoute } from 'next';
-import { BUSINESS } from '@voyaspan/shared/legal';
+import { BUSINESS } from '@alozuri/shared/legal';
 import { INDEXABLE, PRIVATE_ROUTES } from '@/lib/seo';
 export const dynamic = 'force-static';
 export default function robots(): MetadataRoute.Robots {

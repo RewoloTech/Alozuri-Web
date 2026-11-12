@@ -4,7 +4,7 @@ import { AccountGate } from './account-gate';
 import { useCallback, useEffect, useState } from 'react';
 import { StripeCheckout } from './stripe-checkout';
 import { InstallationDetails } from './installation-details';
-import type { CustomerOrder } from '@voyaspan/shared';
+import type { CustomerOrder } from '@alozuri/shared';
 import { useAuth } from './auth-provider';
 import { api, demoMode } from '@/lib/api';
 export function OrderDetails({ id }: { id: string }) {

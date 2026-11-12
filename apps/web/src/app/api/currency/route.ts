@@ -1,4 +1,4 @@
-import { currencyForCountry } from '@voyaspan/shared/currency';
+import { currencyForCountry } from '@alozuri/shared/currency';
 
 export const dynamic = 'force-dynamic';
 

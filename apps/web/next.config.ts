@@ -3,7 +3,7 @@ import path from 'node:path';
 const staticExport = process.env.VOYASPAN_STATIC_EXPORT === 'true';
 const config: NextConfig = {
   ...(staticExport ? { output: 'export' as const } : {}),
-  transpilePackages: ['@voyaspan/shared'],
+  transpilePackages: ['@alozuri/shared'],
   outputFileTracingRoot: path.resolve(__dirname, '../..'),
   poweredByHeader: false,
   ...(staticExport

@@ -1,8 +1,8 @@
 'use client';
 import { createContext, useContext, useEffect, useState } from 'react';
 import { api } from '@/lib/api';
-import { SUPPORTED_CURRENCIES, type Currency } from '@voyaspan/shared';
-import { preferredCurrency } from '@voyaspan/shared/currency';
+import { SUPPORTED_CURRENCIES, type Currency } from '@alozuri/shared';
+import { preferredCurrency } from '@alozuri/shared/currency';
 
 const CurrencyContext = createContext<{
   currency: Currency;

@@ -1,4 +1,4 @@
-import { BUSINESS } from '@voyaspan/shared/legal';
+import { BUSINESS } from '@alozuri/shared/legal';
 export const INDEXABLE =
   process.env.NODE_ENV === 'production' &&
   process.env.NEXT_PUBLIC_DEMO_MODE === 'false' &&

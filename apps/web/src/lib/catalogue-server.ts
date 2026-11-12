@@ -1,8 +1,8 @@
-import { parseFeaturedBundles } from '@voyaspan/shared/featured';
+import { parseFeaturedBundles } from '@alozuri/shared/featured';
 import { cache } from 'react';
 import { notFound } from 'next/navigation';
 const MISSING = Symbol('missing-public-resource');
-import { isCountryCode, uniqueDestinations, type Plan, type Country } from '@voyaspan/shared';
+import { isCountryCode, uniqueDestinations, type Plan, type Country } from '@alozuri/shared';
 const record = (v: unknown): v is Record<string, unknown> =>
   !!v && typeof v === 'object' && !Array.isArray(v);
 const strings = (v: unknown): v is string[] =>

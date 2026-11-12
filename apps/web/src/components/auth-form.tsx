@@ -14,7 +14,7 @@ import {
   signInWithPopup,
   updateProfile,
 } from 'firebase/auth';
-import { accountName, safeAccountDestination } from '@voyaspan/shared';
+import { accountName, safeAccountDestination } from '@alozuri/shared';
 import { authClient, firebaseConfigured } from '@/lib/firebase';
 import { api } from '@/lib/api';
 export function AuthForm({ mode }: { mode: 'login' | 'register' | 'reset' }) {

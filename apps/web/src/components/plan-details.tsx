@@ -2,8 +2,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useDispatch, useSelector } from 'react-redux';
-import { dataLabel, countryName, money, coverageLabel, type Plan } from '@voyaspan/shared';
-import { demoPlans } from '@voyaspan/shared/demo';
+import { dataLabel, countryName, money, coverageLabel, type Plan } from '@alozuri/shared';
+import { demoPlans } from '@alozuri/shared/demo';
 import { useCurrency } from './currency-provider';
 import { api, demoMode } from '@/lib/api';
 import { addToCart, type RootState } from '@/lib/store';
