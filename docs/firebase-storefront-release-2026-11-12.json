@@ -1,0 +1,52 @@
+{
+  "completedAt": "2026-11-12T00:06:39.182Z",
+  "project": "alozuri",
+  "backend": "alozuri",
+  "location": "europe-west4",
+  "site": "https://alozuri.com",
+  "sourceCommit": "2c5d32632532aef18b03bde08149ce134b1e0cec",
+  "buildId": "build-2026-11-11-009",
+  "rolloutId": "rollout-2026-11-11-009",
+  "buildState": "READY",
+  "rolloutState": "SUCCEEDED",
+  "traffic": {
+    "splits": [
+      {
+        "build": "projects/259378235356/locations/europe-west4/backends/alozuri/builds/build-2026-11-11-009",
+        "percent": 100
+      }
+    ]
+  },
+  "automaticRolloutsDisabled": true,
+  "validation": {
+    "lint": true,
+    "applicationTypecheck": true,
+    "testTypecheck": true,
+    "productionBuild": true,
+    "unit": {
+      "sharedPassed": 35,
+      "apiPassed": 111
+    },
+    "authEmulatorPassed": 2,
+    "playwright": {
+      "passed": 66,
+      "skipped": 1
+    },
+    "live": {
+      "site": "https://alozuri.com",
+      "singleEmail": true,
+      "googleOption": true,
+      "accountOptions": true,
+      "currencyTotalsConsistent": true,
+      "alignedCards": true,
+      "checkoutMobileWidths": [375, 390, 768, 1440],
+      "usDailyPricesUsd": [149, 199],
+      "paymentRequests": 0,
+      "pageErrors": []
+    }
+  },
+  "limits": [
+    "No live payment or supplier purchase was submitted.",
+    "Live Google OAuth and wallet authorisation were not exercised; controlled browser and Firebase Auth emulator checks passed."
+  ]
+}
