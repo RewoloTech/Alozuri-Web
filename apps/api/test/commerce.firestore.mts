@@ -1971,3 +1971,35 @@ test('authenticated checkout ensures a linked user profile before payment and re
     await server.close();
   }
 });
+
+test('guest claim during in-flight fulfilment preserves the current owner when activation is saved', async () => {
+  const f = fixture();
+  const email = 'in-flight-claim-' + crypto.randomUUID() + '@example.test';
+  const result = await f.service.checkout({ ...f.input, email, emailConfirmation: email }, null);
+  f.intent.status = 'succeeded';
+  f.intent.amount_received = f.intent.amount;
+  await f.event();
+  await f.service.notify();
+  const units = await db.collection('orders').where('parentOrderId', '==', result.orderId).get();
+  const store = firestoreFulfillmentStore();
+  const inFlight = await store.claim(units.docs[0].id);
+  assert.ok(inFlight);
+  assert.match(inFlight.uid, /^guest_/);
+  const source = profileDirectory('in-flight-owner-' + crypto.randomUUID(), email);
+  const principal = { uid: source.current.uid, email, verified: true, admin: false };
+  await new UserProfiles(db, source.directory).sync(principal);
+  await store.finish(
+    inFlight,
+    { status: 'ready' },
+    {
+      ac: 'LPA:1$example.com$claimed-in-flight',
+      iccid: '89852245280001113019',
+      esimTranNo: 'claimed-in-flight',
+    },
+  );
+  assert.equal((await db.doc('orderActivations/' + inFlight.id).get()).get('uid'), principal.uid);
+  assert.equal(
+    (await f.service.activation(result.orderId, inFlight.id, principal, undefined)).esimTranNo,
+    'claimed-in-flight',
+  );
+});
