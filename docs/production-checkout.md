@@ -6,6 +6,8 @@ Destination selection has one canonical state shared by the search UI, URL and s
 
 `/cart` persists guest items locally. Signed-in carts use authenticated, versioned API writes, a deduplicated guest merge, and recovery of pending changes after refresh. Unavailable cached items remain removable. Quantities are limited to five per package and ten eSIMs per purchase.
 
+The cart allows navigation to checkout while its price confirmation runs. Known unavailable items and an account-cart sync still block navigation. Checkout confirms the current total independently while the customer fills in their details; payment stays blocked until availability, total and device acknowledgement are valid. Busy controls retain their purple styling, show a spinner and explain the current step. Read-only checkout configuration and quote requests stop waiting after 10 seconds and offer a retry. Payment creation and confirmation retain their existing idempotency and recovery behaviour; this timeout does not retry or cancel money-moving requests.
+
 `/checkout` accepts guests and signed-in customers. Buy now and the cart use the same `/v2/checkout` flow. The API loads current supplier products, freezes their identifiers and prices, validates the confirmed delivery email/device acknowledgement, and creates an idempotent Stripe PaymentIntent. A changed total requires confirmation again. A card decline can retry the same intent. New creation through the former `/v1/checkout` endpoint returns 410; legacy receipt/resume and webhook handling remain for existing orders.
 
 Stripe Payment Element collects card details; Express Checkout Element offers eligible Apple Pay and Google Pay. Stripe controls eligibility, so unsupported devices retain card checkout without fake wallet buttons. The browser receives only the public key and intent client secret. Card data never passes through Alozuri's API.
@@ -15,6 +17,22 @@ Only a signed webhook, independently checked against Stripe's current intent, am
 Customers can view purchase progress at `/checkout/success` and signed-in history at `/account/esims`. A verified account with the delivery email can retrieve matching guest purchases. Guest access uses a private HMAC-derived token, stored hashed on the server. Email links carry the token in a URL fragment, which the client removes and keeps in session storage. Private responses disable caching. Firestore rules deny direct client access. Delivery email contains a private order link, not raw installation secrets.
 
 The worker independently verifies payment before issuing each unit, retries pending allocations, and requests an idempotent per-unit refund for definite supplier rejection. Unknown outcomes remain recoverable rather than triggering another chargeable purchase. Refund/dispute events restrict further issuance and activation access. Already installed profiles are not automatically revoked; customer-requested refunds and disputes require operator review.
+
+## One complete purchase confirmation
+
+Verified Stripe success queues one `email-v1` confirmation in the existing minute worker. Its sender is `Alozuri <orders@alozuri.com>`, reply-to is `support@alozuri.com`, and subject is **Your Alozuri eSIM order confirmation**. The email contains a readable order reference, the recorded payment date, full plan details, one secure status/install link, installation steps, and the complete accepted Terms and Refund Policy beneath the practical information. HTML uses inline styles, a fluid layout and the existing brand logo; plain text contains the same transaction and contract. There are no attachments, generated documents or additional services.
+
+Checkout freezes the business identity, terms/refund versions and full policy text with the existing legal acceptance timestamp. The worker reads those snapshots and plan prices/countries, never the current catalogue or website policy content. The payment timestamp comes from the signed Stripe success event, not email-generation time. Test payments do not send customer email or issue supplier profiles. Missing customer names, tax rates and expiry dates are not invented.
+
+A Firestore lease serialises workers. One fixed Resend idempotency key and persisted payload hash protect retries. Send failures back off from one minute to one hour; uncertain sends stop for review after 23 hours, before Resend's 24-hour idempotency retention ends. A changed payload, invalid snapshot or ambiguous legacy send also requires review instead of a blind resend. See [Resend idempotency](https://resend.com/changelog/idempotency-keys).
+
+The worker records provider acceptance separately from confirmed delivery, using [Resend's sent-email status](https://resend.com/docs/api-reference/emails/retrieve-email). New provisioning waits until `confirmationDeliveryStatus` is `delivered`; bounces hold supply and never trigger another routine message. `confirmationStatus`, `confirmationAttempts`, sanitised `confirmationError`, provider ID and delivery checks are stored on the private purchase. Worker logs contain counts and generic operation names, not customer data or private links. Emails are sent promptly while allocation is pending; the same order page updates when installation is ready. No second installation email is sent.
+
+Checkout no longer supplies `receipt_email` to Stripe, which otherwise forces an additional receipt even when automatic receipts are off. Disable Stripe Dashboard **Customer emails → Successful payments** at the production cutover; billing email remains available for the payment method. This is an account setting, not changed by this code. See [Stripe receipts](https://docs.stripe.com/receipts). Already-open PaymentIntents retain their existing settings.
+
+Deployment must update the API worker and publish `/images/alozuri-email-logo.png` on the storefront. Confirm the Resend domain and API-key permissions, run a controlled real mailbox test, and check Gmail, Outlook and Apple Mail before claiming live delivery. Do not overlap old and new worker revisions during the cutover. Unattempted legacy notifications can join the single-email queue; already-sent or ambiguous legacy messages are retired without an automatic resend. Review `legacy_send_review_required` records against provider history manually. Never clear an uncertain send's timestamp/hash or change its key just to retry it.
+
+The implementation preserves existing accepted legal content; it does not establish a new legal or VAT policy. Business/legal review of the underlying content and tax configuration remains applicable.
 
 ## Currency and tax limits
 
@@ -60,7 +78,7 @@ DEMO_MODE=false
 PAYMENTS_MODE=disabled
 SITE_URL=https://alozuri.com
 CORS_ORIGINS=https://alozuri.com
-ORDER_EMAIL_FROM=esim@alozuri.com
+# Fixed confirmation sender: Alozuri <orders@alozuri.com>
 FULFILLMENT_ENABLED=true
 FULFILLMENT_WORKER_AUDIENCE=https://YOUR_ALOZURI_API/internal/fulfillment/run
 FULFILLMENT_WORKER_SERVICE_ACCOUNT=alozuri-scheduler@alozuri.iam.gserviceaccount.com
@@ -68,7 +86,7 @@ CATALOGUE_SYNC_AUDIENCE=https://YOUR_ALOZURI_API/internal/catalogue/sync
 CATALOGUE_SYNC_SERVICE_ACCOUNT=alozuri-scheduler@alozuri.iam.gserviceaccount.com
 ```
 
-Verify `alozuri.com` in Resend with its required DNS records before using `esim@alozuri.com`. Live cart checkout fails closed without the signing secret, email provider, live payment configuration, supplier credentials and authenticated delivery-worker configuration. Change `PAYMENTS_MODE` to `live` only after deployment checks pass.
+Verify `alozuri.com` in Resend with its required DNS records before using `orders@alozuri.com`. The confirmation worker retrieves sent-email delivery status; its Resend key must permit retrieval as well as sending. Sending-only keys cannot perform this check. The legacy `ORDER_EMAIL_FROM` variable no longer changes the sender. Live cart checkout fails closed without the signing secret, email provider, live payment configuration, supplier credentials and authenticated delivery-worker configuration. Change `PAYMENTS_MODE` to `live` only after deployment checks pass.
 
 Deploy the root Dockerfile to Cloud Run with a dedicated runtime account, Firestore access, access to the specified secrets and a 300-second request timeout. Customer routes must be reachable publicly; private routes verify Firebase identity or the guest token. Worker/catalogue routes verify Google-signed OIDC tokens. Deploy `infra/firestore.rules` to project `alozuri`.
 

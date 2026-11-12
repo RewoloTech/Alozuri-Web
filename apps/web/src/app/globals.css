@@ -3315,3 +3315,27 @@ h1 {
     display: block;
   }
 }
+
+/* A temporary checkout check should look active while retaining disabled semantics. */
+.button.checkout-progress:disabled {
+  opacity: 1;
+  cursor: progress;
+}
+.checkout-spinner {
+  flex-shrink: 0;
+  animation: checkout-spin 1s linear infinite;
+}
+.checkout-next-step {
+  min-height: 3em;
+  margin: 0;
+}
+@keyframes checkout-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .checkout-spinner {
+    animation: none;
+  }
+}

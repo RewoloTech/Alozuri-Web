@@ -12,6 +12,8 @@ import { EsimUsagePanel } from './esim-usage';
 import { LineDescription } from './cart';
 export type Purchase = {
   id: string;
+  reference?: string;
+  confirmationNeedsSupport?: boolean;
   email: string;
   items: CartLine[];
   totalCents: number;
@@ -150,7 +152,7 @@ function PrivatePurchase({ id }: { id: string }) {
         <div className="commerce-layout">
           <div className="stack">
             <div className="surface">
-              <p>Order reference: {order.id}</p>
+              <p>Order reference: {order.reference ?? order.id}</p>
               <p>Payment: {order.status.replaceAll('_', ' ')}</p>
               <p>Delivery email: {order.email}</p>
               <p>Total: {money(order.totalCents, order.currency)}</p>
@@ -181,10 +183,17 @@ function PrivatePurchase({ id }: { id: string }) {
               )}
               {order.test ? (
                 <p className="notice">Stripe test order. No real charge or eSIM is issued.</p>
+              ) : order.confirmationNeedsSupport ? (
+                <p className="notice" role="status">
+                  Your payment is recorded. Your order needs support before we can prepare your
+                  eSIM. <a href="mailto:support@alozuri.com">Contact support@alozuri.com</a> with
+                  your order reference.
+                </p>
               ) : order.status === 'paid' && !ready ? (
                 <p role="status">
-                  Preparing your eSIM. Installation information will be sent to your email after the
-                  supplier confirms delivery. You can return to this private page at any time.
+                  Preparing your eSIM. This private page updates when installation details are
+                  ready. Your order confirmation email includes a link back here and your purchase
+                  contract.
                 </p>
               ) : null}
             </div>

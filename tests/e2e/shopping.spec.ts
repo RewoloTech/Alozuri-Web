@@ -556,7 +556,7 @@ test('trip mode persists with one or zero countries through refresh and explicit
   await expect(page.locator('.country-chip')).toHaveText(/France/);
 });
 
-test('rapid quantity updates keep the summary and checkout control mounted until the latest quote is verified', async ({
+test('rapid quantity updates keep the summary stable and checkout available while confirming prices', async ({
   page,
 }) => {
   await setup(page);
@@ -595,18 +595,128 @@ test('rapid quantity updates keep the summary and checkout control mounted until
   await expect(page.locator('.quantity-controls output')).toHaveText('3');
   await expect(summary).toHaveAttribute('data-stability-marker', 'same-summary');
   await expect(summary.locator('.commerce-total')).toContainText('$36.00');
-  await expect(checkout).toHaveAttribute('aria-disabled', 'true');
+  await expect(checkout).toHaveAttribute('aria-disabled', 'false');
   await expect(summary).toHaveAttribute('aria-busy', 'true');
-  await checkout.click({ force: true });
-  await expect(page).toHaveURL(/\/cart$/);
   const pending = await summary.boundingBox();
   expect(pending?.height).toBe(before?.height);
+  await expect(summary).toHaveAttribute('aria-busy', 'false');
   await expect(checkout).toHaveAttribute('aria-disabled', 'false');
   await expect(summary).toHaveAttribute('data-stability-marker', 'same-summary');
   expect(requests).toBe(1);
   await page.screenshot({ path: '/tmp/alozuri-stable-cart-desktop.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: '/tmp/alozuri-stable-cart-mobile.png', fullPage: true });
+});
+
+test('customers can open checkout during a slow cart check, but payment waits for the verified total', async ({
+  page,
+}) => {
+  await setup(page);
+  await mockStripe(page, false);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/plans/' + plan.id);
+  await page.getByRole('button', { name: 'Add to cart', exact: true }).click();
+  await expect(page.getByRole('link', { name: 'Shopping cart, 1 item' })).toBeVisible();
+  let release!: () => void;
+  const waitForQuote = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let quotes = 0,
+    payments = 0;
+  page.on('request', (request) => {
+    if (request.method() === 'POST' && request.url().endsWith('/v2/checkout')) payments++;
+  });
+  await page.route('http://127.0.0.1:8189/v2/quote', async (route) => {
+    quotes++;
+    await waitForQuote;
+    await route.fallback();
+  });
+  await page.goto('/cart');
+  await expect.poll(() => quotes).toBeGreaterThan(0);
+  const checkout = page.getByRole('link', { name: 'Secure checkout →', exact: true });
+  await expect(checkout).toHaveAttribute('aria-disabled', 'false');
+  await checkout.click();
+  await expect(page).toHaveURL(/\/checkout$/);
+  const checking = page.getByRole('button', { name: 'Confirming your total…' });
+  await expect(checking).toBeVisible();
+  await expect(checking).toBeDisabled();
+  await expect(checking).toHaveAttribute('aria-busy', 'true');
+  await expect(checking).toHaveCSS('opacity', '1');
+  await page.getByRole('textbox', { name: 'Email address', exact: true }).fill('guest@example.com');
+  await page.getByRole('checkbox').check();
+  await page.locator('form').evaluate((form: HTMLFormElement) => form.requestSubmit());
+  expect(payments).toBe(0);
+  await page.screenshot({ path: '/tmp/alozuri-checkout-progress-mobile.png', fullPage: true });
+  release();
+  const proceed = page.getByRole('button', { name: 'Continue to payment', exact: true });
+  await expect(proceed).toBeEnabled();
+  await expect(page.locator('.commerce-total')).toContainText('$12.00');
+  await proceed.click();
+  await expect(page.getByRole('button', { name: 'Pay $12.00', exact: true })).toBeEnabled();
+  expect(payments).toBe(1);
+});
+
+test('failed price verification provides a retry and never starts payment with an unverified total', async ({
+  page,
+}) => {
+  await setup(page);
+  await mockStripe(page, false);
+  let attempts = 0,
+    payments = 0;
+  page.on('request', (request) => {
+    if (request.method() === 'POST' && request.url().endsWith('/v2/checkout')) payments++;
+  });
+  await page.route('http://127.0.0.1:8189/v2/quote', async (route) => {
+    if (++attempts === 1)
+      await route.fulfill({ status: 503, json: { error: 'Prices temporarily unavailable.' } });
+    else await route.fallback();
+  });
+  await page.goto('/checkout?buy=' + plan.id);
+  await expect(page.getByRole('main').getByRole('alert')).toContainText(
+    'Prices temporarily unavailable.',
+  );
+  await expect(
+    page.getByRole('button', { name: 'Continue to payment', exact: true }),
+  ).toBeDisabled();
+  expect(payments).toBe(0);
+  await page.getByRole('button', { name: 'Retry checkout', exact: true }).click();
+  await expect(page.locator('#checkout-next-step')).toContainText(
+    'Confirm that your device supports eSIM',
+  );
+  await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0);
+  await page.getByRole('textbox', { name: 'Email address', exact: true }).fill('guest@example.com');
+  await page.getByRole('checkbox').check();
+  await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Pay $12.00', exact: true })).toBeEnabled();
+  expect(payments).toBe(1);
+});
+
+test('a stalled total check stops waiting and offers a safe retry', async ({ page }) => {
+  await setup(page);
+  let release!: () => void;
+  const stalled = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route('http://127.0.0.1:8189/v2/quote', async (route) => {
+    await stalled;
+    await route.fallback();
+  });
+  let payments = 0;
+  page.on('request', (request) => {
+    if (request.method() === 'POST' && request.url().endsWith('/v2/checkout')) payments++;
+  });
+  await page.goto('/checkout?buy=' + plan.id);
+  await expect(page.getByRole('button', { name: 'Confirming your total…' })).toBeDisabled();
+  await expect(page.getByRole('main').getByRole('alert')).toContainText(
+    'Confirming your total took too long.',
+    { timeout: 12000 },
+  );
+  await expect(page.getByRole('button', { name: 'Retry checkout', exact: true })).toBeEnabled();
+  await expect(
+    page.getByRole('button', { name: 'Continue to payment', exact: true }),
+  ).toBeDisabled();
+  expect(payments).toBe(0);
+  release();
 });
 
 test('the entire data allowance field opens its native picker, including the label and arrow', async ({

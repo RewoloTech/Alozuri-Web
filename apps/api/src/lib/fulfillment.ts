@@ -109,6 +109,13 @@ export function firestoreFulfillmentStore(): FulfillmentStore {
         const parentId = doc.get('parentOrderId');
         if (typeof parentId === 'string') {
           const parent = await t.get(db.collection('purchases').doc(parentId));
+          // New email contracts must reach the recipient's mail server before supply.
+          // Old purchases retain their established confirmation marker.
+          if (
+            parent.get('confirmationVersion') === 'email-v1' &&
+            parent.get('confirmationDeliveryStatus') !== 'delivered'
+          )
+            return null;
           if (
             (doc.get('legalVersion') || parent.get('legal')) &&
             (!parent.exists || !parent.get('contractEmailSentAt'))

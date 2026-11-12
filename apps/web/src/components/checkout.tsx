@@ -2,6 +2,7 @@
 import { LEGAL_VERSION, CHECKOUT_LEGAL_ACCEPTANCE } from '@voyaspan/shared/legal';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { LoaderCircle } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSelector } from 'react-redux';
 import {
@@ -23,6 +24,7 @@ import { stripeCheckoutMode } from './stripe-checkout';
 import { CheckoutAccount } from './checkout-account';
 const key = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '';
 let stripePromise: ReturnType<typeof loadStripe> | undefined;
+const verificationTimeoutMs = 10_000;
 function CheckoutPolicyNotice() {
   return (
     <p className="checkout-policy-notice">
@@ -54,6 +56,8 @@ function StripePayment({
     [wallets, setWallets] = useState(true),
     [ready, setReady] = useState(false);
   const submitted = useRef(false);
+  const loadingPayment = !stripe || !elements || !ready;
+  const paymentBusy = processing || (loadingPayment && !error);
   async function pay(event?: StripeExpressCheckoutElementConfirmEvent) {
     if (!stripe || !elements || submitted.current) {
       event?.paymentFailed({ reason: 'fail' });
@@ -133,11 +137,19 @@ function StripePayment({
         </p>
       )}
       <button
-        className="button primary full-width"
-        disabled={!stripe || !elements || !ready || processing}
+        className={`button primary full-width${paymentBusy ? ' checkout-progress' : ''}`}
+        aria-busy={paymentBusy}
+        disabled={loadingPayment || processing}
         onClick={() => void pay()}
       >
-        {processing ? 'Processing payment…' : `Pay ${money(totalCents, currency)}`}
+        {paymentBusy && <LoaderCircle size={18} className="checkout-spinner" aria-hidden="true" />}
+        {processing
+          ? 'Processing payment…'
+          : loadingPayment
+            ? error
+              ? 'Payment form unavailable'
+              : 'Loading secure payment…'
+            : `Pay ${money(totalCents, currency)}`}
       </button>
     </div>
   );
@@ -175,7 +187,7 @@ function CheckoutForIdentity() {
       quote: Quote;
       deliveryEmail: string;
     } | null>(null),
-    [mode, setMode] = useState('disabled'),
+    [mode, setMode] = useState<string | null>(null),
     [quoteAttempt, setQuoteAttempt] = useState(0),
     [quotedSignature, setQuotedSignature] = useState('');
   useEffect(() => {
@@ -188,12 +200,26 @@ function CheckoutForIdentity() {
     if (user?.email) setEmail(user.email);
   }, [user?.email]);
   useEffect(() => {
-    void api<{ cartCheckoutMode: string }>('/v1/config')
-      .then((r) => setMode(r.cartCheckoutMode))
+    let active = true;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), verificationTimeoutMs);
+    setMode(null);
+    void api<{ cartCheckoutMode: string }>('/v1/config', { signal: controller.signal })
+      .then((r) => {
+        if (active) setMode(r.cartCheckoutMode);
+      })
       .catch(() => {
-        setMode('disabled');
-        setError('We could not load payment availability. Please retry.');
-      });
+        if (active) {
+          setMode('disabled');
+          setError('We could not load payment availability. Please retry.');
+        }
+      })
+      .finally(() => clearTimeout(timeout));
+    return () => {
+      active = false;
+      clearTimeout(timeout);
+      controller.abort();
+    };
   }, [quoteAttempt]);
   useEffect(() => {
     if (!buy) return;
@@ -226,33 +252,39 @@ function CheckoutForIdentity() {
     }
     let active = true;
     const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), verificationTimeoutMs);
     setLoading(true);
     setError('');
-    const timer = setTimeout(() => {
-      void api<{ quote: Quote }>('/v2/quote', {
-        method: 'POST',
-        signal: controller.signal,
-        body: JSON.stringify({ items: JSON.parse(signature), currency }),
+    void api<{ quote: Quote }>('/v2/quote', {
+      method: 'POST',
+      signal: controller.signal,
+      body: JSON.stringify({ items: JSON.parse(signature), currency }),
+    })
+      .then((r) => {
+        if (active) {
+          setQuote(r.quote);
+          setQuotedSignature(signature);
+        }
       })
-        .then((r) => {
-          if (active) {
-            setQuote(r.quote);
-            setQuotedSignature(signature);
-          }
-        })
-        .catch((e) => {
-          if (active) {
-            setQuotedSignature('');
-            setError(e instanceof Error ? e.message : 'Could not check prices.');
-          }
-        })
-        .finally(() => {
-          if (active) setLoading(false);
-        });
-    }, 180);
+      .catch((e) => {
+        if (active) {
+          setQuotedSignature('');
+          setError(
+            controller.signal.aborted
+              ? 'Confirming your total took too long. Your cart is saved. Please retry.'
+              : e instanceof Error
+                ? e.message
+                : 'Could not check prices.',
+          );
+        }
+      })
+      .finally(() => {
+        clearTimeout(timeout);
+        if (active) setLoading(false);
+      });
     return () => {
       active = false;
-      clearTimeout(timer);
+      clearTimeout(timeout);
       controller.abort();
     };
   }, [signature, currency, refresh, session, quoteAttempt]);
@@ -264,7 +296,17 @@ function CheckoutForIdentity() {
   );
   async function start(e: React.FormEvent) {
     e.preventDefault();
-    if (submitting.current || accountBusy || cart.syncing || !quote || !compatible || !quoteReady)
+    if (
+      submitting.current ||
+      accountBusy ||
+      cart.syncing ||
+      !quote ||
+      !compatible ||
+      !quoteReady ||
+      mode === null ||
+      mode === 'disabled' ||
+      mode !== stripeCheckoutMode
+    )
       return;
     submitting.current = true;
     setStarting(true);
@@ -369,6 +411,30 @@ function CheckoutForIdentity() {
         </Link>
       </section>
     );
+  const progressLabel = starting
+    ? 'Preparing secure payment…'
+    : accountBusy
+      ? 'Finishing sign-in…'
+      : cart.syncing
+        ? 'Saving your cart…'
+        : mode === null
+          ? 'Checking payment availability…'
+          : loading || (!quoteReady && !error)
+            ? 'Confirming your total…'
+            : '';
+  const checkoutHint = starting
+    ? 'Opening your payment options. You will review payment before being charged.'
+    : accountBusy
+      ? 'Finish signing in to continue. Your order is saved.'
+      : progressLabel
+        ? 'You can enter your details while we confirm your order. You will review payment before being charged.'
+        : !quoteReady
+          ? 'We could not confirm your total. Please retry below.'
+          : mode === 'disabled' || mode !== stripeCheckoutMode
+            ? 'Payments are currently unavailable. Your cart is saved.'
+            : !compatible
+              ? 'Confirm that your device supports eSIM above to continue.'
+              : 'Next: choose your payment method and review before paying.';
   return (
     <section className="container section">
       <Link className="text-link" href="/cart">
@@ -441,13 +507,15 @@ function CheckoutForIdentity() {
                 </span>
               </label>
               <CheckoutPolicyNotice />
-              {mode === 'disabled' || mode !== stripeCheckoutMode ? (
+              {mode !== null && (mode === 'disabled' || mode !== stripeCheckoutMode) ? (
                 <p className="notice" role="status">
                   Payments are not currently configured for this storefront. Your cart is saved.
                 </p>
               ) : null}
               <button
-                className="button primary full-width"
+                className={`button primary full-width${progressLabel ? ' checkout-progress' : ''}`}
+                aria-busy={Boolean(progressLabel)}
+                aria-describedby="checkout-next-step"
                 disabled={
                   starting ||
                   accountBusy ||
@@ -455,18 +523,25 @@ function CheckoutForIdentity() {
                   loading ||
                   !quoteReady ||
                   !compatible ||
+                  mode === null ||
                   mode === 'disabled' ||
                   mode !== stripeCheckoutMode
                 }
               >
-                {starting ? 'Preparing secure payment…' : 'Continue to payment'}
+                {progressLabel && (
+                  <LoaderCircle size={18} className="checkout-spinner" aria-hidden="true" />
+                )}
+                {progressLabel || 'Continue to payment'}
               </button>
+              <p id="checkout-next-step" className="fine-print checkout-next-step" role="status">
+                {checkoutHint}
+              </p>
             </form>
           )}
           {error && (
             <div role="alert">
               <p className="error-message">{error}</p>
-              {!session && (!quote || mode === 'disabled') && (
+              {!session && (!quoteReady || mode === 'disabled') && (
                 <button
                   type="button"
                   className="button"

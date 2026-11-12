@@ -201,9 +201,22 @@ export async function createApp(
       .parse(request.body ?? {});
     z.object({}).strict().parse(request.query);
     if (!fulfillment) return reply.code(503).send({ error: 'Delivery is not configured.' });
-    await commerce?.notify();
+    const confirmationBefore = await commerce?.notify();
     const result = await fulfillment.run();
-    await commerce?.notify();
+    const confirmationAfter = await commerce?.notify();
+    const confirmationFailures =
+      (confirmationBefore?.failed ?? 0) + (confirmationAfter?.failed ?? 0);
+    const confirmationAttention =
+      (confirmationBefore?.attention ?? 0) + (confirmationAfter?.attention ?? 0);
+    if (confirmationFailures || confirmationAttention)
+      app.log.warn(
+        {
+          operation: 'order-confirmation',
+          failed: confirmationFailures,
+          attention: confirmationAttention,
+        },
+        'Order confirmations require retry or reconciliation.',
+      );
     if (result.failed) {
       app.log.error({ failed: result.failed }, 'Delivery reconciliation failed.');
       return reply.code(503).send(result);

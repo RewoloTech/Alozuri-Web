@@ -1,5 +1,9 @@
 import { legalSnapshot, legalSnapshotSchema } from './legal.js';
-import { BUSINESS, type CheckoutLegalInput } from '../../../../packages/shared/src/legal.ts';
+import { ResendOrderMailer, type OrderMailer } from './order-email.js';
+import { OrderConfirmations } from './order-confirmations.js';
+import { CONFIRMATION_VERSION, orderReference } from './confirmation-order.js';
+export { ResendOrderMailer, type OrderMailer } from './order-email.js';
+import { type CheckoutLegalInput } from '../../../../packages/shared/src/legal.ts';
 import {
   ExchangeRates,
   currencySchema,
@@ -23,7 +27,6 @@ import type { Principal, Repository } from './repository.js';
 import { planSchema } from './validation.js';
 import {
   mergeCartItems,
-  dataLabel,
   type CartItem,
   type StoredPlan,
   type Plan,
@@ -78,6 +81,10 @@ const purchaseSchema = z
     items: z.array(snapshotSchema).min(1).max(10),
     currency: currencySchema,
     totalCents: z.number().int().positive(),
+    subtotalCents: z.number().int().nonnegative().optional(),
+    taxCents: z.number().int().nonnegative().optional(),
+    confirmationVersion: z.literal(CONFIRMATION_VERSION).optional(),
+    orderReference: z.string().optional(),
     status: z.enum([
       'pending_payment',
       'payment_processing',
@@ -160,52 +167,6 @@ export async function priceCart(
       currency,
     },
   };
-}
-export interface OrderMailer {
-  send(input: {
-    id: string;
-    email: string;
-    url: string;
-    kind?: 'contract' | 'delivery';
-    text?: string;
-  }): Promise<{ providerMessageId: string } | void>;
-}
-export class ResendOrderMailer implements OrderMailer {
-  constructor(
-    private key: string,
-    private from: string,
-  ) {}
-  async send(input: {
-    id: string;
-    email: string;
-    url: string;
-    kind?: 'contract' | 'delivery';
-    text?: string;
-  }) {
-    const response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: 'Bearer ' + this.key,
-        'Content-Type': 'application/json',
-        'Idempotency-Key': input.id + ':' + (input.kind ?? 'delivery') + ':v1',
-      },
-      body: JSON.stringify({
-        from: this.from,
-        to: [input.email],
-        subject:
-          input.kind === 'contract'
-            ? 'Your Alozuri order confirmation and contract'
-            : 'Your Alozuri eSIM order',
-        text:
-          input.text ??
-          `Your Alozuri order ${input.id} is ready to view. Open this private link for your eSIM installation details and order status:\n\n${input.url}\n\nKeep this link private. Install over Wi-Fi and follow your plan’s activation rules.`,
-      }),
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!response.ok) throw new Error('Order email delivery failed.');
-    const receipt = z.object({ id: z.string().min(1).max(200) }).parse(await response.json());
-    return { providerMessageId: receipt.id };
-  }
 }
 export class CommerceService {
   constructor(
@@ -292,6 +253,10 @@ export class CommerceService {
       items: snapshots,
       currency: input.currency,
       totalCents: quote.totalCents,
+      subtotalCents: quote.subtotalCents,
+      taxCents: quote.taxCents,
+      confirmationVersion: CONFIRMATION_VERSION,
+      orderReference: orderReference(id),
       status: 'pending_payment' as const,
       test: this.mode === 'test',
       createdAt: new Date().toISOString(),
@@ -349,7 +314,7 @@ export class CommerceService {
           {
             amount: purchase.totalCents,
             currency: purchase.currency.toLowerCase(),
-            receipt_email: email,
+            // Alozuri sends the complete confirmation; do not force a second Stripe receipt.
             automatic_payment_methods: { enabled: true, allow_redirects: 'never' },
             metadata: { alozuriPurchaseId: id },
             description: 'Alozuri eSIM order ' + id,
@@ -513,6 +478,9 @@ export class CommerceService {
         intent.amount_received === p.totalCents &&
         !p.paidAt
       ) {
+        const paidAt = new Date(
+          z.number().int().positive().parse(event.created) * 1000,
+        ).toISOString();
         let index = 0;
         for (const line of p.items)
           for (let unit = 0; unit < line.quantity; unit++) {
@@ -530,7 +498,7 @@ export class CommerceService {
               status: 'paid',
               test: p.test,
               createdAt: p.createdAt,
-              paidAt: new Date().toISOString(),
+              paidAt,
               supplierCode: line.supplierCode,
               wholesaleUnits: line.wholesaleUnits,
               parentOrderId: id,
@@ -548,11 +516,15 @@ export class CommerceService {
           }
         t.update(ref, {
           status: 'paid',
-          paidAt: new Date().toISOString(),
+          paidAt,
           paymentIntentId: intent.id,
-          ...(p.test
-            ? {}
-            : { emailDueAt: Date.now(), ...(p.legal ? { contractEmailDueAt: Date.now() } : {}) }),
+          ...(!p.test && p.legal
+            ? {
+                confirmationVersion: CONFIRMATION_VERSION,
+                confirmationDueAt: Date.now(),
+                confirmationStatus: 'pending',
+              }
+            : {}),
         });
       } else if (!p.paidAt)
         t.update(ref, {
@@ -579,6 +551,11 @@ export class CommerceService {
     }));
     return {
       id,
+      reference: p.orderReference ?? orderReference(id),
+      ...(doc.get('confirmationStatus') === 'attention' ||
+      doc.get('confirmationDeliveryStatus') === 'failed'
+        ? { confirmationNeedsSupport: true }
+        : {}),
       email: p.email,
       items: p.items.map(({ plan, quantity }) => ({ plan, quantity })),
       totalCents: p.totalCents,
@@ -681,97 +658,8 @@ export class CommerceService {
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
   async notify() {
-    if (!this.mailer) return { sent: 0 };
-    let sent = 0;
-    const contracts = await this.db
-      .collection('purchases')
-      .where('contractEmailDueAt', '<=', Date.now())
-      .limit(10)
-      .get();
-    for (const doc of contracts.docs) {
-      const claimed = await this.db.runTransaction(async (t) => {
-        const d = await t.get(doc.ref);
-        if (
-          d.get('contractEmailSentAt') ||
-          d.get('contractEmailLeaseUntil') > Date.now() ||
-          d.get('test') !== false
-        )
-          return false;
-        t.update(doc.ref, { contractEmailLeaseUntil: Date.now() + 60000 });
-        return true;
-      });
-      if (!claimed) continue;
-      try {
-        const p = purchaseSchema.parse(doc.data());
-        if (!p.legal || !p.paidAt) throw new Error('Contract confirmation unavailable.');
-        const amount = (cents: number) => {
-          const n = BigInt(cents);
-          return `${n / 100n}.${String(n % 100n).padStart(2, '0')}`;
-        };
-        const text = `${BUSINESS.identity}\n${BUSINESS.address}\n${BUSINESS.email}\n\nOrder ${doc.id}\nPaid total: ${amount(p.totalCents)} ${p.currency}\n${p.items.map((i) => `${i.quantity} × ${i.plan.name}: ${amount(i.plan.priceCents)} ${p.currency} each; ${dataLabel(i.plan)}; ${i.plan.days} days; ${i.plan.countries.join(', ')}; ${i.plan.activation}; ${i.plan.fairUse}`).join('\n')}\n\nLegal acceptance recorded ${p.legal.acceptedAt} (version ${p.legal.version}).\n${p.legal.noticeText ?? ''}\n${p.legal.requestText}\n${p.legal.acknowledgementText}\n\n${p.legal.termsText}\n\n${p.legal.refundText}\n\nKeep this confirmation. Your private installation link will follow after supplier allocation. You can contact ${BUSINESS.email} to cancel or request help; do not send activation secrets.`;
-        const receipt = await this.mailer.send({
-          id: doc.id,
-          email: p.email,
-          url: this.site + '/contact',
-          kind: 'contract',
-          text,
-        });
-        await doc.ref.update({
-          ...(receipt ? { contractEmailProviderId: receipt.providerMessageId } : {}),
-          contractEmailSentAt: new Date().toISOString(),
-          contractEmailDueAt: Date.now() + 315360000000,
-          contractEmailLeaseUntil: 0,
-        });
-        sent++;
-      } catch {
-        await doc.ref.update({
-          contractEmailDueAt: Date.now() + 60000,
-          contractEmailLeaseUntil: 0,
-        });
-      }
-    }
-
-    const docs = await this.db
-      .collection('purchases')
-      .where('emailDueAt', '<=', Date.now())
-      .limit(10)
-      .get();
-    for (const doc of docs.docs) {
-      const lease = await this.db.runTransaction(async (t) => {
-        const d = await t.get(doc.ref);
-        if (d.get('emailSentAt') || d.get('emailLeaseUntil') > Date.now()) return false;
-        t.update(doc.ref, { emailLeaseUntil: Date.now() + 60000 });
-        return true;
-      });
-      if (!lease) continue;
-      try {
-        const p = purchaseSchema.parse(doc.data()),
-          units = await this.db.collection('orders').where('parentOrderId', '==', doc.id).get();
-        if (
-          !units.size ||
-          units.docs.some(
-            (u) => !(p.test ? ['paid'] : ['ready', 'refunded']).includes(u.get('status')),
-          )
-        ) {
-          await doc.ref.update({ emailDueAt: Date.now() + 60000, emailLeaseUntil: 0 });
-          continue;
-        }
-        await this.mailer.send({
-          id: doc.id,
-          email: p.email,
-          url: this.site + '/checkout/success?order=' + doc.id + '#access=' + this.token(doc.id),
-        });
-        await doc.ref.update({
-          emailSentAt: new Date().toISOString(),
-          emailDueAt: Date.now() + 315360000000,
-          emailLeaseUntil: 0,
-        });
-        sent++;
-      } catch {
-        await doc.ref.update({ emailDueAt: Date.now() + 60000, emailLeaseUntil: 0 });
-      }
-    }
-    return { sent };
+    if (!this.mailer) return { sent: 0, failed: 0, attention: 0 };
+    return new OrderConfirmations(this.db, this.mailer, this.site, (id) => this.token(id)).run();
   }
 }
 export async function checkSupplierCapacity(
@@ -813,7 +701,6 @@ export function configuredCommerce() {
       !process.env.ESIM_ACCESS_CODE ||
       !process.env.ESIM_SECRET_KEY ||
       !process.env.RESEND_API_KEY ||
-      !process.env.ORDER_EMAIL_FROM ||
       !process.env.FULFILLMENT_WORKER_AUDIENCE ||
       !process.env.FULFILLMENT_WORKER_SERVICE_ACCOUNT)
   )
@@ -826,9 +713,7 @@ export function configuredCommerce() {
     site.replace(/\/$/, ''),
     currentCheckoutPlan,
     database(),
-    process.env.RESEND_API_KEY && process.env.ORDER_EMAIL_FROM
-      ? new ResendOrderMailer(process.env.RESEND_API_KEY, process.env.ORDER_EMAIL_FROM)
-      : null,
+    process.env.RESEND_API_KEY ? new ResendOrderMailer(process.env.RESEND_API_KEY) : null,
     mode === 'live' ? checkSupplierCapacity : null,
   );
 }

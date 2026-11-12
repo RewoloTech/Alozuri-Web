@@ -28,3 +28,5 @@ Seasonal carousel additions are free photographs under the [Unsplash License](ht
 Verify the business's image usage rights under the applicable Unsplash terms: https://unsplash.com/license. No photographer identity or ownership is invented here.
 
 `og-alozuri.png` is an original text/shape brand card created for this site, containing no customer or supplier data.
+
+- `images/alozuri-email-logo.png`: captured from the existing Alozuri `Brand` component at 2× resolution for email use. Uses the project's existing wordmark and Lucide globe icon; no external image service.

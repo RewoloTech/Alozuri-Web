@@ -199,6 +199,8 @@ export function Cart() {
   );
   const displayedItems = preview.items;
   const total = priceReady ? quote.totalCents : preview.total;
+  // Checkout independently verifies the total before it can create a payment.
+  const checkoutBlocked = cart.syncing || displayedItems.some((line) => line.unavailable);
   return (
     <section className="container section">
       <div className="page-intro">
@@ -291,14 +293,21 @@ export function Cart() {
         <OrderSummary lines={displayedItems} total={total} currency={currency} updating={pending}>
           <Link
             className="button primary full-width"
-            aria-disabled={!priceReady}
+            aria-disabled={checkoutBlocked}
             href="/checkout"
             onClick={(event) => {
-              if (!priceReady) event.preventDefault();
+              if (checkoutBlocked) event.preventDefault();
             }}
           >
-            Secure checkout →
+            {cart.syncing ? 'Saving your cart…' : 'Secure checkout →'}
           </Link>
+          {checkoutBlocked && (
+            <p className="fine-print" role="status">
+              {cart.syncing
+                ? 'Your checkout will be ready when your saved cart finishes syncing.'
+                : 'Remove unavailable plans to continue to checkout.'}
+            </p>
+          )}
         </OrderSummary>
       </div>
     </section>

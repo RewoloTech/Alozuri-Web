@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  BUSINESS,
   NOTICE_LEGAL_VERSIONS,
   LEGAL_EFFECTIVE_DATE,
   CHECKOUT_NOTICE,
@@ -25,6 +26,8 @@ export const checkoutLegalSchema = z.union([noticeSchema, previousCheckoutSchema
 export const legalSnapshotSchema = z.object({
   version: z.string().max(40),
   effectiveDate: z.string(),
+  termsVersion: z.string().max(40).optional(),
+  refundVersion: z.string().max(40).optional(),
   acceptedAt: z.string(),
   termsAccepted: z.literal(true),
   immediateSupplyRequested: z.boolean(),
@@ -36,6 +39,18 @@ export const legalSnapshotSchema = z.object({
   acknowledgementText: z.string(),
   termsText: z.string(),
   refundText: z.string(),
+  business: z
+    .object({
+      brand: z.string(),
+      company: z.string(),
+      number: z.string(),
+      jurisdiction: z.string(),
+      address: z.string(),
+      email: z.email(),
+      site: z.url(),
+      identity: z.string(),
+    })
+    .optional(),
 });
 export type LegalSnapshot = z.infer<typeof legalSnapshotSchema>;
 export function legalSnapshot(
@@ -46,6 +61,9 @@ export function legalSnapshot(
   if (accepted.version === '2026-11-11.1') {
     return {
       ...accepted,
+      business: { ...BUSINESS },
+      termsVersion: accepted.version,
+      refundVersion: accepted.version,
       effectiveDate: '2026-11-11',
       acceptedAt: now,
       requestText:
@@ -58,6 +76,9 @@ export function legalSnapshot(
   }
   return {
     ...accepted,
+    business: { ...BUSINESS },
+    termsVersion: accepted.version,
+    refundVersion: accepted.version,
     effectiveDate: LEGAL_EFFECTIVE_DATE,
     acceptedAt: now,
     termsAccepted: true,

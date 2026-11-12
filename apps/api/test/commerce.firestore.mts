@@ -1,3 +1,5 @@
+import { SAFE_EMAIL_RETRY_MS } from '../src/lib/order-confirmations.ts';
+import { POLICIES } from '../../../packages/shared/src/policies.ts';
 import { CHECKOUT_LEGAL_ACCEPTANCE } from '../../../packages/shared/src/legal.ts';
 import { convertPrice, priceExchange, type FxRates } from '../src/lib/exchange-rates.ts';
 import type { Currency } from '../../../packages/shared/src/index.ts';
@@ -6,7 +8,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import Stripe from 'stripe';
 import { initializeApp, deleteApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { FieldValue, getFirestore } from 'firebase-admin/firestore';
+import type { ConfirmationEmail } from '../src/lib/order-email.ts';
 import { CommerceService } from '../src/lib/commerce.ts';
 import { EsimUsageService, USAGE_CACHE_MS, type UsageSupplier } from '../src/lib/usage.ts';
 import type { UsageSnapshot } from '../../../packages/shared/src/esim-usage.ts';
@@ -26,6 +29,7 @@ function fixture(
   currency: Currency = 'USD',
   emailFailure?: () => boolean,
   usageOptions?: { supplier: UsageSupplier; now?: () => number },
+  deliveryEvent?: () => string,
 ) {
   const plans: StoredPlan[] = demoPlans.slice(0, 2).map((p) =>
     pricePackage(
@@ -41,13 +45,7 @@ function fixture(
     ),
   );
   let creates = 0;
-  const emails: {
-    id: string;
-    email: string;
-    url: string;
-    kind?: 'contract' | 'delivery';
-    text?: string;
-  }[] = [];
+  const emails: ConfirmationEmail[] = [];
   const intent = {
     id: 'pi_fixture_' + ++serial,
     livemode: !testMode,
@@ -57,7 +55,13 @@ function fixture(
     currency: 'usd',
     metadata: {} as Record<string, string>,
     client_secret: 'pi_fixture_secret',
-    latest_charge: { id: 'ch_fixture', refunded: false, amount_refunded: 0, disputed: false },
+    latest_charge: {
+      id: 'ch_fixture',
+      refunded: false,
+      amount_refunded: 0,
+      disputed: false,
+      payment_method_details: { type: 'card', card: { wallet: null } },
+    },
   };
   const refunds: Stripe.Refund[] = [];
   const stripe = {
@@ -69,6 +73,7 @@ function fixture(
         creates++;
         assert.ok(options.idempotencyKey);
         assert.equal(params.automatic_payment_methods?.enabled, true);
+        assert.equal(params.receipt_email, undefined);
         Object.assign(intent, {
           amount: params.amount,
           currency: params.currency,
@@ -107,7 +112,9 @@ function fixture(
       send: async (input) => {
         if (emailFailure?.()) throw new Error('Temporary email-provider failure');
         emails.push(input);
+        return { providerMessageId: 'email_' + input.id };
       },
+      deliveryStatus: async () => deliveryEvent?.() ?? 'delivered',
     },
     capacity,
     { current: async () => rates },
@@ -143,6 +150,7 @@ function fixture(
     const payload = JSON.stringify({
       id: eventId,
       object: 'event',
+      created: 1794430800,
       livemode: !testMode,
       type,
       data: { object: intent },
@@ -231,10 +239,11 @@ test('guest multi-item checkout retries one intent, paid webhook allocates one e
   await db.collection('purchases').doc(first.orderId).update({ emailDueAt: Date.now() });
   await f.service.notify();
   await f.service.notify();
-  assert.equal(f.emails.filter((e) => e.id === first.orderId).length, 2);
-  assert.equal(f.emails[0].kind, 'contract');
-  assert.ok(f.emails[0].text?.includes('Rewolo Technologies Ltd'));
-  assert.ok(f.emails[1].url.includes('#access='));
+  assert.equal(f.emails.filter((e) => e.id === first.orderId).length, 1);
+  assert.ok(f.emails[0].text.includes('Rewolo Technologies Ltd'));
+  assert.ok(f.emails[0].text.includes('Your Purchase Contract'));
+  assert.ok(f.emails[0].text.includes('I wish to cancel my Alozuri order'));
+  assert.ok(f.emails[0].url.includes('#access='));
   const history = await f.service.history({
     uid: 'new-account',
     verified: true,
@@ -402,11 +411,11 @@ test('GBP and EUR contract emails retain the charged currency and total after ca
     f.plans[0].priceCents = 1;
     for (let attempt = 0; attempt < 5 && !f.emails.some((e) => e.id === result.orderId); attempt++)
       await f.service.notify();
-    const text = f.emails.find((e) => e.id === result.orderId && e.kind === 'contract')?.text;
+    const text = f.emails.find((e) => e.id === result.orderId)?.text;
     const total = BigInt(result.quote.totalCents);
     assert.ok(
       text?.includes(
-        `Paid total: ${total / 100n}.${String(total % 100n).padStart(2, '0')} ${currency}`,
+        `Total paid: ${currency} ${total / 100n}.${String(total % 100n).padStart(2, '0')}`,
       ),
     );
   }
@@ -846,11 +855,11 @@ test('new orders require consent, store immutable terms, and cannot fulfil befor
     assert.equal((await f.service.notify()).sent, 0);
     assert.equal(await store.claim(children.docs[0].id), null);
     mailBlocked = false;
-    await db.doc('purchases/' + started.orderId).update({ contractEmailDueAt: Date.now() });
+    await db.doc('purchases/' + started.orderId).update({ confirmationDueAt: Date.now() });
     await f.service.notify();
     assert.ok(
       f.emails.some(
-        (e) => e.kind === 'contract' && e.text?.includes('I wish to cancel my Alozuri order'),
+        (e) => e.id === started.orderId && e.text.includes('I wish to cancel my Alozuri order'),
       ),
     );
     assert.ok(await store.claim(children.docs[0].id));
@@ -926,5 +935,139 @@ test('single-email checkout preserves validation, legacy compatibility and verif
     assert.equal(denied.statusCode, 401);
   } finally {
     await api.close();
+  }
+});
+
+test('concurrent confirmation workers and webhook retries send one immutable complete email per purchase', async () => {
+  const f = fixture();
+  const result = await f.service.checkout(f.input, null);
+  f.intent.status = 'succeeded';
+  f.intent.amount_received = f.intent.amount;
+  await Promise.all([f.event(), f.event()]);
+  const ref = db.doc('purchases/' + result.orderId);
+  const purchase = await ref.get();
+  const accepted = purchase.get('legal');
+  const previous = POLICIES.terms.sections[0].paragraphs[0];
+  POLICIES.terms.sections[0].paragraphs[0] =
+    'MUTABLE WEBSITE CONTENT MUST NOT ENTER AN OLD CONTRACT';
+  try {
+    await Promise.all([f.service.notify(), f.service.notify(), f.service.notify()]);
+    const emails = f.emails.filter((email) => email.id === result.orderId);
+    assert.equal(emails.length, 1);
+    assert.ok(emails[0].text.includes(accepted.termsText));
+    assert.ok(emails[0].text.includes(accepted.refundText));
+    assert.ok(!emails[0].text.includes('MUTABLE WEBSITE CONTENT'));
+    assert.ok(emails[0].text.includes(new Date(1794430800 * 1000).toISOString()));
+    assert.equal((await ref.get()).get('paidAt'), new Date(1794430800 * 1000).toISOString());
+    assert.equal((await ref.get()).get('confirmationStatus'), 'sent');
+    assert.equal((await ref.get()).get('confirmationDeliveryStatus'), 'delivered');
+    assert.deepEqual((await ref.get()).get('legal'), accepted);
+    assert.equal('attachments' in emails[0], false);
+    await f.event();
+    await f.service.notify();
+    assert.equal(f.emails.filter((email) => email.id === result.orderId).length, 1);
+  } finally {
+    POLICIES.terms.sections[0].paragraphs[0] = previous;
+  }
+});
+
+test('confirmation provider failures retry with the same payload and never blindly resend past its safe window', async () => {
+  let blocked = true;
+  const f = fixture(false, undefined, 'USD', () => blocked);
+  const result = await f.service.checkout(f.input, null);
+  f.intent.status = 'succeeded';
+  f.intent.amount_received = f.intent.amount;
+  await f.event();
+  const ref = db.doc('purchases/' + result.orderId);
+  await f.service.notify();
+  const first = await ref.get();
+  assert.equal(first.get('confirmationStatus'), 'retry');
+  assert.equal(first.get('confirmationError'), 'email_failed');
+  blocked = false;
+  await ref.update({ confirmationDueAt: Date.now() });
+  await f.service.notify();
+  const sent = await ref.get();
+  assert.equal(sent.get('confirmationFirstSendAt'), first.get('confirmationFirstSendAt'));
+  assert.equal(sent.get('confirmationPayloadHash'), first.get('confirmationPayloadHash'));
+  assert.equal(f.emails.filter((email) => email.id === result.orderId).length, 1);
+
+  blocked = true;
+  f.intent.status = 'requires_payment_method';
+  const late = await f.service.checkout({ ...f.input, requestId: crypto.randomUUID() }, null);
+  f.intent.status = 'succeeded';
+  f.intent.amount_received = f.intent.amount;
+  await f.event();
+  await f.service.notify();
+  const lateRef = db.doc('purchases/' + late.orderId);
+  await lateRef.update({
+    confirmationDueAt: Date.now(),
+    confirmationFirstSendAt: Date.now() - SAFE_EMAIL_RETRY_MS - 1,
+  });
+  blocked = false;
+  await f.service.notify();
+  assert.equal((await lateRef.get()).get('confirmationStatus'), 'attention');
+  assert.equal((await lateRef.get()).get('confirmationError'), 'send_reconciliation_required');
+  assert.equal(f.emails.filter((email) => email.id === late.orderId).length, 0);
+});
+
+test('pending or bounced email delivery cannot begin supply, and delivery reconciliation sends no second email', async () => {
+  let event = 'sent';
+  const f = fixture(false, undefined, 'USD', undefined, undefined, () => event);
+  const result = await f.service.checkout(f.input, null);
+  f.intent.status = 'succeeded';
+  f.intent.amount_received = f.intent.amount;
+  await f.event();
+  await f.service.notify();
+  const ref = db.doc('purchases/' + result.orderId);
+  const units = await db.collection('orders').where('parentOrderId', '==', result.orderId).get();
+  const store = firestoreFulfillmentStore();
+  assert.equal(await store.claim(units.docs[0].id), null);
+  assert.equal((await ref.get()).get('confirmationDeliveryStatus'), 'pending');
+  event = 'delivered';
+  await ref.update({ confirmationDeliveryDueAt: Date.now() });
+  await f.service.notify();
+  assert.ok(await store.claim(units.docs[0].id));
+  assert.equal(f.emails.filter((email) => email.id === result.orderId).length, 1);
+
+  event = 'bounced';
+  f.intent.status = 'requires_payment_method';
+  const bounced = await f.service.checkout({ ...f.input, requestId: crypto.randomUUID() }, null);
+  f.intent.status = 'succeeded';
+  f.intent.amount_received = f.intent.amount;
+  await f.event();
+  await f.service.notify();
+  const failed = await db.doc('purchases/' + bounced.orderId).get();
+  assert.equal(failed.get('confirmationDeliveryStatus'), 'failed');
+  assert.equal(
+    (await f.service.order(bounced.orderId, null, bounced.accessToken)).confirmationNeedsSupport,
+    true,
+  );
+  await f.service.notify();
+  assert.equal(f.emails.filter((email) => email.id === bounced.orderId).length, 1);
+});
+
+test('legacy already-confirmed or ambiguous orders cannot receive another routine email', async () => {
+  for (const ambiguous of [false, true]) {
+    const f = fixture();
+    const result = await f.service.checkout(f.input, null);
+    f.intent.status = 'succeeded';
+    f.intent.amount_received = f.intent.amount;
+    await f.event();
+    const ref = db.doc('purchases/' + result.orderId);
+    await ref.update({
+      confirmationVersion: FieldValue.delete(),
+      confirmationDueAt: FieldValue.delete(),
+      contractEmailDueAt: Date.now(),
+      emailDueAt: Date.now(),
+      ...(ambiguous
+        ? { contractEmailLeaseUntil: 0 }
+        : { contractEmailSentAt: '2026-11-11T12:03:12.000Z' }),
+    });
+    await f.service.notify();
+    assert.equal(f.emails.filter((email) => email.id === result.orderId).length, 0);
+    const updated = await ref.get();
+    if (ambiguous) assert.equal(updated.get('confirmationError'), 'legacy_send_review_required');
+    assert.equal(updated.get('contractEmailDueAt'), undefined);
+    assert.equal(updated.get('emailDueAt'), undefined);
   }
 });
