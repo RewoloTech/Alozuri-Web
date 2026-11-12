@@ -2972,7 +2972,7 @@ h1 {
 }
 .payment-security > svg {
   flex-shrink: 0;
-  margin-top: 3px;
+  margin-top: calc((1lh - 13px) / 2);
 }
 
 .show-more-plans {
