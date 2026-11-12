@@ -33,19 +33,22 @@ export function Home({ featuredBundles }: { featuredBundles?: React.ReactNode })
               </h1>
               <p className="hero-description">
                 Your whole itinerary. One simple connection.
-                <br />
-                Find travel data that works in every country on your list.
+                <span className="hero-detail">
+                  <br />
+                  Find travel data that works in every country on your list.
+                </span>
               </p>
               <div className="hero-benefits">
                 <span>
                   <Zap size={15} />
-                  Digital delivery
+                  <span className="hero-desktop-delivery">Digital delivery</span>
+                  <span className="hero-mobile-delivery">Instant delivery</span>
                 </span>
                 <span>
                   <Wifi size={15} />
                   No roaming surprises
                 </span>
-                <span>
+                <span className="hero-number-benefit">
                   <Check size={15} />
                   Keep your number
                 </span>
@@ -105,9 +108,13 @@ export function Home({ featuredBundles }: { featuredBundles?: React.ReactNode })
               ? 'Secure Stripe checkout'
               : 'Compare travel data plans'}
           </span>
-          <span>
+          <span className="desktop-data-promise">
             <Signal />
             Data, without the detours
+          </span>
+          <span className="mobile-number-benefit">
+            <Check />
+            Keep your number
           </span>
         </div>
       </section>

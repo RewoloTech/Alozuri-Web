@@ -3100,3 +3100,218 @@ h1 {
     row-gap: 8px;
   }
 }
+
+/* Compact mobile homepage; desktop composition and type remain unchanged. */
+.hero-benefits .hero-mobile-delivery,
+.promise-strip .mobile-number-benefit {
+  display: none;
+}
+@media (max-width: 768px) {
+  .header-cart,
+  .mobile-toggle,
+  .currency-select,
+  .nav-login,
+  .site-header .brand {
+    min-height: 44px;
+  }
+  .header-cart,
+  .mobile-toggle {
+    min-width: 44px;
+  }
+  .footer-main {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas: 'brand brand' 'explore legal' 'help legal';
+    gap: 20px 24px;
+    align-items: start;
+  }
+  .footer-main > div:first-child {
+    grid-area: brand;
+  }
+  .footer-explore {
+    grid-area: explore;
+  }
+  .footer-legal {
+    grid-area: legal;
+  }
+  .footer-help {
+    grid-area: help;
+  }
+  .footer-main .footer-links {
+    min-width: 0;
+    gap: 4px;
+  }
+  .footer-main .footer-links > a,
+  .footer-links > .text-link {
+    min-height: 44px;
+    overflow-wrap: anywhere;
+  }
+  .footer-main .eyebrow {
+    margin-bottom: 4px;
+  }
+  .footer-bottom {
+    padding-bottom: max(20px, env(safe-area-inset-bottom));
+  }
+}
+@media (max-width: 600px) {
+  .nav-wrap {
+    gap: 8px;
+  }
+  .site-header .brand,
+  .nav-actions {
+    flex-shrink: 0;
+  }
+  .nav-actions {
+    gap: 4px;
+  }
+  .nav-login {
+    padding-inline: 4px;
+    font-size: 0.875rem;
+    white-space: nowrap;
+  }
+  .nav-login > svg {
+    display: none;
+  }
+  .currency-select {
+    width: 60px;
+    appearance: none;
+    padding: 4px 16px 4px 6px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath d='m2 4 3 3 3-3' fill='none' stroke='%231b2035' stroke-width='1.5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 4px center;
+  }
+  .main-nav.is-open {
+    top: 100%;
+  }
+  .hero {
+    padding-block: 22px 20px;
+  }
+  .hero-grid {
+    margin-bottom: 18px;
+  }
+  .hero h1 {
+    margin-block: 14px;
+  }
+  .hero-detail,
+  .hero-benefits .hero-desktop-delivery,
+  .hero-benefits .hero-number-benefit,
+  .promise-strip .desktop-data-promise,
+  .planner-heading p {
+    display: none;
+  }
+  .hero-benefits .hero-mobile-delivery,
+  .promise-strip .mobile-number-benefit {
+    display: flex;
+  }
+  .hero-description {
+    line-height: 1.65;
+  }
+  .hero-benefits {
+    margin-top: 16px;
+    gap: 8px 12px;
+  }
+  .planner-tabs {
+    padding-inline: 12px;
+    gap: 12px;
+  }
+  .planner-tabs > button {
+    flex: 1;
+    min-width: 0;
+    min-height: 48px;
+    padding-block: 10px;
+    justify-content: center;
+    line-height: 1.35;
+  }
+  .planner-inner {
+    padding: 16px 12px;
+  }
+  .planner-heading {
+    margin-bottom: 14px;
+  }
+  .planner-controls {
+    gap: 10px;
+  }
+  .country-field,
+  .data-field {
+    padding: 10px;
+    min-height: 88px;
+  }
+  .data-field {
+    gap: 4px;
+  }
+  .country-chip {
+    max-width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    overflow-wrap: anywhere;
+  }
+  .country-chip > span {
+    flex-shrink: 0;
+  }
+  .country-chip button {
+    min-width: 44px;
+    min-height: 44px;
+    flex-shrink: 0;
+  }
+  .add-country {
+    min-height: 44px;
+  }
+  .select-wrap {
+    height: 44px;
+  }
+  .select-wrap select {
+    padding: 34px 36px 10px 10px;
+  }
+  .search-button {
+    width: 100%;
+    min-height: 48px;
+  }
+}
+@media (max-width: 360px) {
+  .container {
+    width: calc(100% - 24px);
+  }
+  .site-header .brand {
+    font-size: 20px;
+  }
+  .site-header .brand-icon {
+    width: 26px;
+    height: 26px;
+    margin-right: 6px;
+  }
+  .nav-wrap {
+    gap: 4px;
+  }
+  .nav-actions {
+    gap: 2px;
+  }
+  .nav-login {
+    padding-inline: 2px;
+  }
+  .currency-select {
+    width: 60px;
+  }
+}
+@media (max-width: 359px) {
+  .footer-main {
+    grid-template-areas: 'brand' 'explore' 'legal' 'help';
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.account-mobile-icon {
+  display: none;
+}
+@media (max-width: 600px) {
+  .account-menu .nav-login {
+    width: 44px;
+    min-width: 44px;
+    max-width: 44px;
+    padding-inline: 0;
+    justify-content: center;
+  }
+  .account-trigger-label {
+    display: none;
+  }
+  .account-menu .nav-login > .account-mobile-icon {
+    display: block;
+  }
+}

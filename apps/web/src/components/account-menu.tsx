@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, UserRound } from 'lucide-react';
 import { useEffect, useId, useRef, useState } from 'react';
 
 export function AccountMenu({
@@ -61,12 +61,16 @@ export function AccountMenu({
       <button
         type="button"
         className="nav-login"
+        aria-label={verified ? 'My account' : 'Verify email'}
+        title={verified ? 'My account' : 'Verify email'}
         ref={trigger}
         aria-expanded={open}
         aria-controls={open ? id : undefined}
         onClick={() => setOpen((value) => !value)}
       >
-        {verified ? 'My account' : 'Verify email'} <ChevronDown size={16} aria-hidden="true" />
+        <UserRound size={20} className="account-mobile-icon" aria-hidden="true" />
+        <span className="account-trigger-label">{verified ? 'My account' : 'Verify email'}</span>
+        <ChevronDown size={16} aria-hidden="true" />
       </button>
       {open && (
         <nav className="account-menu-panel" id={id} aria-label="Account navigation">

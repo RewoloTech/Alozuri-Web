@@ -12,10 +12,10 @@ export function Footer() {
           <Brand />
           <p>
             A little less roaming.
-            <br />A lot more exploring.
+            <br /> A lot more exploring.
           </p>
         </div>
-        <nav className="footer-links" aria-labelledby="footer-explore">
+        <nav className="footer-links footer-explore" aria-labelledby="footer-explore">
           <h2 className="eyebrow" id="footer-explore">
             Explore
           </h2>
@@ -24,7 +24,7 @@ export function Footer() {
           </Link>
           <Link href="/#planner">Build your itinerary</Link>
         </nav>
-        <nav className="footer-links" aria-labelledby="footer-legal">
+        <nav className="footer-links footer-legal" aria-labelledby="footer-legal">
           <h2 className="eyebrow" id="footer-legal">
             Legal
           </h2>
@@ -35,7 +35,7 @@ export function Footer() {
           ))}
           <CookieSettingsButton />
         </nav>
-        <nav className="footer-links" aria-labelledby="footer-help">
+        <nav className="footer-links footer-help" aria-labelledby="footer-help">
           <h2 className="eyebrow" id="footer-help">
             Help &amp; Support
           </h2>

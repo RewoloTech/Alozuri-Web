@@ -85,7 +85,15 @@ export function PrivacyProvider({ children }: { children: React.ReactNode }) {
   }
   useEffect(() => {
     if (!chatOpen) {
-      chatTrigger.current?.focus();
+      const previous = chatTrigger.current;
+      if (previous) {
+        const visible = previous.getClientRects().length
+          ? previous
+          : [...document.querySelectorAll<HTMLButtonElement>('.support-shortcut')].find(
+              (button) => button.getClientRects().length > 0,
+            );
+        visible?.focus();
+      }
       return;
     }
     const panel = chatDialog.current;
