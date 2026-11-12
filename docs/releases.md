@@ -43,3 +43,5 @@ No deployment identity, IAM binding, production environment policy or cloud serv
 - A native-select keyboard check assumed ArrowDown opens the popup. Linux Chromium can change the selection without opening it. The test uses Space to open it while retaining checks that the label, value, arrow and padding all open the picker.
 
 There is no Cypress workflow or dependency in the current project. Historical run results are immutable; a green run of the fix commit is the verification. Workflows use pinned Node 24-compatible action revisions and Ubuntu 24.04 rather than a moving runner image. Browser failure traces/screenshots are retained for seven days.
+
+Clean-install follow-up: the lockfile is generated without an existing node_modules tree. Explicit Jest/test-exclude glob overrides preserve patched versions under npm 10 clean installation, and React/React DOM overrides match the web app's existing 19.2.4 pins so the test renderer and application cannot install separate React copies. Frozen clean installs, the five-low/zero-moderate-or-higher audit result and Jest were checked again after this correction.
