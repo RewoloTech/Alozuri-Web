@@ -1,3 +1,4 @@
+import { initialFinancial, financialSchema } from './financial-calculations.js';
 import {
   STRIPE_APP_INFO,
   stripeAttributionSchema,
@@ -268,6 +269,11 @@ export class CommerceService {
     await this.capacity?.(snapshots);
     if (input.expectedTotalCents !== quote.totalCents)
       throw new CommerceError('The price changed. Review the updated total before paying.', 409);
+    const reportingRates =
+      input.currency === 'GBP' ? null : await this.rates.current().catch(() => null);
+    const reportingExchange = reportingRates
+      ? { ...reportingRates.rates.GBP, source: reportingRates.source, asOf: reportingRates.asOf }
+      : null;
     const proposed = {
       uid: user?.verified ? user.uid : null,
       email,
@@ -325,8 +331,17 @@ export class CommerceService {
           throw new CommerceError('Checkout changed. Start a new checkout.', 409);
         return p;
       }
-      t.create(ref, proposed);
-      return proposed as Purchase;
+      const purchased = purchaseSchema.parse(proposed);
+      const financial = financialSchema.parse(
+        initialFinancial(
+          id,
+          'purchases',
+          proposed,
+          input.currency === 'GBP' ? (snapshots[0]?.exchange ?? null) : reportingExchange,
+        ),
+      );
+      t.create(ref, { ...purchased, financial });
+      return purchased;
     });
     if (purchase.status !== 'pending_payment' && purchase.status !== 'payment_processing')
       throw new CommerceError('This order has already been processed. Check its status.');
@@ -461,6 +476,7 @@ export class CommerceService {
               ),
           );
         t.update(ref, {
+          financialReconciliationPending: true,
           status:
             charge.disputed || (unassigned && !full)
               ? 'attention'
@@ -528,6 +544,7 @@ export class CommerceService {
               chargeTotalCents: p.totalCents,
               paymentIntentId: intent.id,
               fulfillmentMode: p.test ? 'test_no_issuance' : 'esim_access',
+              supplierAttempted: false,
             });
             if (!p.test)
               t.create(this.db.collection('fulfillmentJobs').doc(childId), {
@@ -540,6 +557,7 @@ export class CommerceService {
         if (!p.test && this.taskQueue)
           recordOrderWork(t, this.db, { kind: 'purchase', id, generation: 1 });
         t.update(ref, {
+          financialReconciliationPending: true,
           status: 'paid',
           paidAt,
           paymentIntentId: intent.id,
@@ -553,6 +571,7 @@ export class CommerceService {
         });
       } else if (!p.paidAt)
         t.update(ref, {
+          financialReconciliationPending: true,
           status:
             intent.status === 'canceled'
               ? 'cancelled'

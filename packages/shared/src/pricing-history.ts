@@ -1,0 +1,30 @@
+export type PricingHistoryRow = {
+  id: string;
+  packageId: string;
+  name: string;
+  countries: string[];
+  identitySource: 'snapshot' | 'current_catalogue' | 'unavailable';
+  recordedAt: string;
+  kind: string;
+  previousSupplierUnits: number | null;
+  currentSupplierUnits: number | null;
+  supplierCurrency: 'USD';
+  supplierScale: 10000;
+  previousSellingMinor: number | null;
+  currentSellingMinor: number | null;
+  sellingCurrency: 'USD';
+  direction: 'increased' | 'decreased' | 'unchanged' | 'baseline' | 'unavailable';
+  changeBps: number | null;
+  previousMarginBps: number | null;
+  currentMarginBps: number | null;
+  marginChangeBps: number | null;
+  active: boolean | null;
+};
+export type PricingHistoryReport = {
+  from: string;
+  to: string;
+  timezone: 'Europe/London';
+  packageId: string | null;
+  rows: PricingHistoryRow[];
+  nextCursor: string | null;
+};

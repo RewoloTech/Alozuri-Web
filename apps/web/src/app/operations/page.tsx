@@ -1,0 +1,5 @@
+import { Operations } from '@/components/admin';
+export const metadata = { title: 'Operations', robots: { index: false, follow: false } };
+export default function Page() {
+  return <Operations />;
+}

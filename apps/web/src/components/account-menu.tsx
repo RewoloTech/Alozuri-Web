@@ -5,9 +5,11 @@ import { useEffect, useId, useRef, useState } from 'react';
 
 export function AccountMenu({
   verified,
+  admin = false,
   onLogout,
 }: {
   verified: boolean;
+  admin?: boolean;
   onLogout: () => Promise<void>;
 }) {
   const [open, setOpen] = useState(false),
@@ -86,6 +88,11 @@ export function AccountMenu({
                 Orders
               </Link>
             </>
+          )}
+          {verified && admin && (
+            <Link href="/operations" onClick={() => setOpen(false)}>
+              Operations
+            </Link>
           )}
           <Link href="/dashboard#account-settings" onClick={() => setOpen(false)}>
             Account settings

@@ -530,3 +530,289 @@ test('Data usage shows separate eSIM readings without opening orders, and explai
   await expect(cards).toHaveCount(4);
   await expect(cards.first()).toContainText('4 GB');
 });
+
+test('Operations uses normal login, admin-only navigation, date reports and revoked access', async ({
+  page,
+}) => {
+  const state = await setup(page);
+  const user = await signup(page);
+  void state;
+  let financialReads = 0;
+  let pricingReads = 0;
+  const pricingQueries: URLSearchParams[] = [];
+  const { londonMonth } = await import('../../packages/shared/src/financial');
+  const period = londonMonth();
+  const saleDate = period.from.slice(0, 8) + '12';
+  const previousDate = period.from.slice(0, 8) + '11';
+  let provisional = false;
+  let currentAdmin: (uid: string) => Promise<boolean> = async () => false;
+  const queries: URLSearchParams[] = [];
+  await page.route('http://127.0.0.1:8189/v1/operations/**', async (route) => {
+    const request = route.request();
+    const headers = {
+      'Access-Control-Allow-Origin': 'http://localhost:3100',
+      'Access-Control-Allow-Headers': 'content-type,authorization',
+      'Access-Control-Allow-Methods': 'GET,OPTIONS',
+    };
+    if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
+    const token = request.headers().authorization?.slice(7).split('.')[1];
+    const claims = token ? JSON.parse(Buffer.from(token, 'base64url').toString()) : {};
+    if (claims.admin !== true || !(await currentAdmin(claims.user_id)))
+      return route.fulfill({
+        status: 403,
+        headers,
+        json: { error: 'Administrator access required.' },
+      });
+    const url = new URL(request.url());
+    if (url.pathname.endsWith('/access'))
+      return route.fulfill({ headers, json: { authorized: true } });
+    if (url.pathname.endsWith('/status'))
+      return route.fulfill({
+        headers,
+        json: {
+          mode: 'catalogue',
+          paymentsEnabled: true,
+          supplierConnected: true,
+          catalogueCount: 10,
+        },
+      });
+
+    if (url.pathname.endsWith('/pricing-history')) {
+      pricingReads++;
+      pricingQueries.push(url.searchParams);
+      const { pricingMovement } = await import('../../apps/api/src/lib/pricing-history');
+      const base = {
+        id: 'point1',
+        packageId: 'france-price',
+        name: 'France connection',
+        countries: ['FR'],
+        identitySource: 'snapshot',
+        recordedAt: `${saleDate}T12:00:00.000Z`,
+        kind: 'catalogue_sync',
+        supplierCurrency: 'USD',
+        supplierScale: 10000,
+        sellingCurrency: 'USD',
+      };
+      const rows = [
+        {
+          ...base,
+          ...pricingMovement(
+            { wholesaleUnits: 10000, priceCents: 300 },
+            { wholesaleUnits: 11000, priceCents: 300, active: true },
+          ),
+        },
+        {
+          ...base,
+          id: 'point2',
+          packageId: 'japan-price',
+          name: 'Japan connection',
+          countries: ['JP'],
+          ...pricingMovement(
+            { wholesaleUnits: 20000, priceCents: 400 },
+            { wholesaleUnits: 10000, priceCents: 300, active: false },
+          ),
+        },
+        {
+          ...base,
+          id: 'point3',
+          ...pricingMovement(
+            { wholesaleUnits: 10000, priceCents: 300 },
+            { wholesaleUnits: 10000, priceCents: 300, active: true },
+          ),
+        },
+      ].filter(
+        (row) =>
+          (!url.searchParams.get('packageId') ||
+            row.packageId === url.searchParams.get('packageId')) &&
+          saleDate >= url.searchParams.get('from')! &&
+          saleDate <= url.searchParams.get('to')!,
+      );
+      return route.fulfill({
+        headers,
+        json: {
+          from: url.searchParams.get('from'),
+          to: url.searchParams.get('to'),
+          timezone: 'Europe/London',
+          packageId: url.searchParams.get('packageId'),
+          rows,
+          nextCursor: null,
+        },
+      });
+    }
+    financialReads++;
+    queries.push(url.searchParams);
+    const { initialFinancial, calculateFinancial, summarize } =
+      await import('../../apps/api/src/lib/financial-calculations');
+    const row = initialFinancial(
+      'purchase_' + 'f'.repeat(48),
+      'purchases',
+      {
+        uid: 'synthetic-operator-order',
+        email: 'sample@example.test',
+        createdAt: `${saleDate}T12:00:00.000Z`,
+        paidAt: `${saleDate}T12:01:00.000Z`,
+        status: 'paid',
+        orderReference: 'AZ-FFFF-FFFF-FFFF-FFFF',
+        test: false,
+        currency: 'GBP',
+        totalCents: 2000,
+        items: [
+          {
+            quantity: 2,
+            wholesaleUnits: 50000,
+            plan: {
+              name: 'France connection',
+              countries: ['FR'],
+              priceCents: 1000,
+              currency: 'GBP',
+            },
+          },
+        ],
+      },
+      { source: 'fixture', asOf: saleDate, numerator: '8', denominator: '10' },
+    );
+    row.supplier.purchasedUnits = 100000;
+    row.stripe.observedAt = `${saleDate}T12:02:00.000Z`;
+    row.selling.refundedMinor = 0;
+    row.stripe.revenueGbp = 2000;
+    row.stripe.feesGbp = provisional ? null : 50;
+    const ready = calculateFinancial(row);
+    const rows =
+      url.searchParams.get('from')! <= saleDate && url.searchParams.get('to')! >= saleDate
+        ? [ready]
+        : [];
+    await route.fulfill({
+      headers,
+      json: {
+        from: url.searchParams.get('from'),
+        to: url.searchParams.get('to'),
+        timezone: 'Europe/London',
+        currency: 'GBP',
+        summary: summarize(rows),
+        rows,
+        nextCursor: null,
+      },
+    });
+  });
+  await page.goto('/operations');
+  await expect(page.locator('.operations-page').getByRole('alert')).toContainText(
+    'Administrator access is required',
+  );
+  expect(financialReads).toBe(0);
+  expect(pricingReads).toBe(0);
+  await page.getByRole('button', { name: 'My account', exact: true }).click();
+  await expect(page.getByRole('link', { name: 'Operations', exact: true })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  // Only the isolated Auth emulator is given a role; production credentials are never used.
+  const { initializeApp: initializeAdmin, deleteApp: deleteAdmin } =
+    await import('firebase-admin/app');
+  const { getAuth: getAdminAuth } = await import('firebase-admin/auth');
+  process.env.FIREBASE_AUTH_EMULATOR_HOST = '127.0.0.1:9099';
+  const app = initializeAdmin({ projectId: 'demo-alozuri' }, 'operations-browser-fixture');
+  const auth = getAdminAuth(app);
+  currentAdmin = async (uid) => {
+    const account = await auth.getUser(uid);
+    return account.emailVerified && account.customClaims?.admin === true && !account.disabled;
+  };
+  try {
+    const account = await auth.getUserByEmail(user.email);
+    await auth.setCustomUserClaims(account.uid, { admin: true });
+    await logout(page);
+    await login(page, user.email, user.password);
+    await page.getByRole('button', { name: 'My account', exact: true }).click();
+    await page.getByRole('link', { name: 'Operations', exact: true }).click();
+    await expect(page).toHaveURL(/\/operations$/);
+    await expect(page.getByRole('heading', { name: 'Total Sales', exact: true })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Financial transactions' })).toContainText(
+      'France connection',
+    );
+    for (const width of [320, 375, 390, 430, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      const fromBox = await page.getByLabel('From Date', { exact: true }).boundingBox();
+      const toBox = await page.getByLabel('To Date', { exact: true }).boundingBox();
+      if (!fromBox || !toBox) throw new Error('Date fields must be visible');
+      expect(fromBox.y + fromBox.height <= toBox.y || fromBox.x + fromBox.width <= toBox.x).toBe(
+        true,
+      );
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      if (width === 390 || width === 1440)
+        await page.screenshot({ path: `/tmp/alozuri-operations-${width}.png`, fullPage: true });
+    }
+    await page.getByLabel('From Date', { exact: true }).fill(period.from);
+    await page.getByLabel('To Date', { exact: true }).fill(saleDate);
+    await expect.poll(() => queries.at(-1)?.get('to')).toBe(saleDate);
+    await page.getByLabel('To Date', { exact: true }).fill(previousDate);
+    await expect(page.getByText('No orders in this date range.', { exact: true })).toBeVisible();
+    await expect(
+      page
+        .getByRole('heading', { name: 'Total Sales', exact: true })
+        .locator('..')
+        .locator('strong'),
+    ).toHaveText('0');
+    await page.getByLabel('To Date', { exact: true }).fill(saleDate);
+    await expect(page.getByRole('region', { name: 'Financial transactions' })).toContainText(
+      'France connection',
+    );
+    provisional = true;
+    await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+    await expect(
+      page.getByRole('heading', { name: 'Profit', exact: true }).locator('..').locator('strong'),
+    ).toHaveText('Pending');
+
+    await page.getByRole('tab', { name: 'Pricing History', exact: true }).click();
+    const pricingPanel = page.getByRole('tabpanel', { name: 'Pricing History', exact: true });
+    await expect(
+      pricingPanel.getByRole('region', { name: 'Catalogue pricing history' }),
+    ).toContainText('France connection');
+    await expect(pricingPanel.getByText('↑ Increased', { exact: true })).toBeVisible();
+    await expect(pricingPanel.getByText('↓ Decreased', { exact: true })).toBeVisible();
+    await expect(pricingPanel.getByText('— Unchanged', { exact: true })).toBeVisible();
+    for (const width of [320, 375, 390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      if (width === 390 || width === 1440)
+        await page.screenshot({
+          path: `/tmp/alozuri-pricing-history-${width}.png`,
+          fullPage: true,
+        });
+    }
+    await pricingPanel
+      .getByRole('button', { name: 'View price history for France connection', exact: true })
+      .first()
+      .click();
+    await expect(
+      pricingPanel.getByRole('region', { name: 'Package price trend' }),
+    ).not.toContainText('Japan connection');
+    expect(pricingQueries.at(-1)?.get('packageId')).toBe('france-price');
+    await pricingPanel.getByLabel('To Date', { exact: true }).fill(previousDate);
+    await expect(
+      pricingPanel.getByText('No pricing history recorded in this date range.', { exact: false }),
+    ).toBeVisible();
+    await pricingPanel.getByLabel('To Date', { exact: true }).fill(saleDate);
+    await expect(pricingPanel.getByRole('region', { name: 'Package price trend' })).toContainText(
+      'France connection',
+    );
+    await pricingPanel.getByRole('button', { name: 'All packages', exact: true }).click();
+    await expect(
+      pricingPanel.getByRole('region', { name: 'Catalogue pricing history' }),
+    ).toContainText('Japan connection');
+    await page.getByRole('tab', { name: 'Pricing History', exact: true }).focus();
+    await page.keyboard.press('ArrowLeft');
+    await expect(
+      page.getByRole('tab', { name: 'Financial Overview', exact: true }),
+    ).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('heading', { name: 'Total Sales', exact: true })).toBeVisible();
+    await auth.setCustomUserClaims(account.uid, {});
+    await page.reload();
+    await expect(page.locator('.operations-page').getByRole('alert')).toContainText(
+      'Administrator access is required',
+    );
+    await expect(page.getByRole('heading', { name: 'Total Sales', exact: true })).toHaveCount(0);
+  } finally {
+    await deleteAdmin(app);
+  }
+});

@@ -1,3 +1,6 @@
+import { PricingHistoryReports } from './lib/pricing-history.js';
+import { OperationsReports, OperationsError, registerOperations } from './lib/operations.js';
+import { configuredFinancialLedger, type FinancialLedger } from './lib/financial-ledger.js';
 import { UserProfiles, ProfileError } from './lib/user-profiles.js';
 import { registerProfileRoutes } from './lib/profile-routes.js';
 import { OrderWorker } from './lib/order-worker.js';
@@ -76,6 +79,9 @@ const idSchema = documentId;
 export async function createApp(
   options: {
     repository?: Repository;
+    operations?: Pick<OperationsReports, 'report'> | null;
+    pricingHistory?: Pick<PricingHistoryReports, 'report'> | null;
+    financial?: Pick<FinancialLedger, 'webhook'> | null;
     profiles?: UserProfiles | null;
     featured?: (currency: Currency) => Promise<FeaturedBundle[]>;
     exchangeRates?: Pick<ExchangeRates, 'current'>;
@@ -153,6 +159,8 @@ export async function createApp(
     reply.header('Cache-Control', 'no-store');
   });
   app.setErrorHandler((error, _request, reply) => {
+    if (error instanceof OperationsError)
+      return reply.code(error.statusCode).send({ error: error.message });
     if (error instanceof ProfileError)
       return reply.code(error.statusCode).send({ error: error.message });
     if (error instanceof SearchError)
@@ -188,7 +196,27 @@ export async function createApp(
     }
   }
   registerEsimWebhook(app, options.esimWebhook);
-  await registerStripeWebhook(app, payments, commerce);
+  const financial =
+    options.financial === undefined
+      ? demo
+        ? null
+        : configuredFinancialLedger()
+      : options.financial;
+  await registerStripeWebhook(app, payments, commerce, financial);
+  registerOperations(
+    app,
+    verify,
+    options.operations === undefined
+      ? demo
+        ? null
+        : { report: (input) => new OperationsReports().report(input) }
+      : options.operations,
+    options.pricingHistory === undefined
+      ? demo
+        ? null
+        : { report: (input) => new PricingHistoryReports().report(input) }
+      : options.pricingHistory,
+  );
   const profiles =
     options.profiles === undefined ? (demo ? null : new UserProfiles()) : options.profiles;
   registerCommerceRoutes(app, commerce, repository, verify, profiles);
@@ -436,18 +464,19 @@ export async function createApp(
       return payments.resume(user, id);
     },
   );
-  app.get('/v1/admin/status', async (request, reply) => {
-    const user = await identity(request.headers.authorization, reply);
-    if (!user) return;
-    if (user.admin !== true)
-      return reply.code(403).send({ error: 'Administrator access required.' });
-    return {
-      mode: demo ? 'preview' : 'catalogue',
-      paymentsEnabled: Boolean(payments),
-      paymentMode: payments?.mode ?? 'disabled',
-      supplierConnected: !demo,
-      catalogueCount: (await repository.plans()).length,
-    };
-  });
+  for (const path of ['/v1/admin/status', '/v1/operations/status'])
+    app.get(path, async (request, reply) => {
+      const user = await identity(request.headers.authorization, reply);
+      if (!user) return;
+      if (user.admin !== true)
+        return reply.code(403).send({ error: 'Administrator access required.' });
+      return {
+        mode: demo ? 'preview' : 'catalogue',
+        paymentsEnabled: Boolean(payments),
+        paymentMode: payments?.mode ?? 'disabled',
+        supplierConnected: Boolean(process.env.ESIM_ACCESS_CODE && process.env.ESIM_SECRET_KEY),
+        catalogueCount: (await repository.plans()).length,
+      };
+    });
   return app;
 }

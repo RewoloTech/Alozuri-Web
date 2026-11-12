@@ -349,7 +349,7 @@ export class FulfillmentService {
     }
     const transactionId = 'az_' + createHash('sha256').update(order.id).digest('hex').slice(0, 40);
     if (!order.supplierOrderNo) {
-      await this.store.update(order, { status: 'fulfilling' });
+      await this.store.update(order, { status: 'fulfilling', supplierAttempted: true });
       let orderNo: string;
       try {
         orderNo = await this.supplier.order(
@@ -363,6 +363,7 @@ export class FulfillmentService {
           await this.store.update(order, {
             status: 'refund_pending',
             deliveryError: 'Supplier rejected this package.',
+            supplierRejected: true,
           });
           await this.refund(order);
           return;

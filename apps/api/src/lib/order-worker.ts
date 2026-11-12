@@ -1,3 +1,4 @@
+import { refreshSupplierFinancial } from './financial-ledger.js';
 import { CONFIRMATION_VERSION, confirmationVersionSchema } from './confirmation-order.js';
 import { randomUUID } from 'node:crypto';
 import { FieldValue, type Firestore } from 'firebase-admin/firestore';
@@ -129,6 +130,12 @@ export class OrderWorker {
         ...ids.map((id) => this.db.collection('fulfillmentJobs').doc(id)),
       );
       if (work.kind === 'purchase') await this.commerce.notify(work.id);
+      // Bookkeeping retries reuse this durable task, after supplier writes/email.
+      // A failed financial refresh must never rerun a completed supplier purchase.
+      await refreshSupplierFinancial(
+        this.db,
+        this.db.collection(work.kind === 'purchase' ? 'purchases' : 'orders').doc(work.id),
+      );
       const units = await this.db.getAll(...ids.map((id) => this.db.collection('orders').doc(id)));
       let emailPending = false;
       let emailDueAt = this.now() + 30_000;

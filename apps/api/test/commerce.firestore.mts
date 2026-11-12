@@ -2262,3 +2262,16 @@ test('other brands sharing the Stripe account cannot authorise Alozuri fulfilmen
   assert.equal(tasks.length, 0);
   assert.equal(f.emails.length, 0);
 });
+
+test('private financial snapshots never appear in customer order responses', async () => {
+  const f = fixture(true);
+  const checkout = await f.service.checkout(f.input, null);
+  const stored = await db.collection('purchases').doc(checkout.orderId).get();
+  assert.ok(stored.get('financial'));
+  assert.equal(typeof stored.get('financial.supplier.quotedUnits'), 'number');
+  await f.event();
+  const visible = await f.service.order(checkout.orderId, null, checkout.accessToken);
+  assert.equal(Object.hasOwn(visible, 'financial'), false);
+  assert.equal(JSON.stringify(visible).includes('quotedUnits'), false);
+  assert.equal(JSON.stringify(visible).includes('financialReconciliationPending'), false);
+});

@@ -3,11 +3,17 @@
   "compilerOptions": {
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "types": ["node"],
+    "types": [
+      "node"
+    ],
     "jsx": "react-jsx",
     "noEmit": true,
     "allowImportingTsExtensions": true,
-    "paths": { "@/*": ["../apps/web/src/*"] }
+    "paths": {
+      "@/*": [
+        "../apps/web/src/*"
+      ]
+    }
   },
   "include": [
     "**/*.ts",
@@ -18,6 +24,8 @@
     "../scripts/release-production.mts",
     "../scripts/release-plan.ts",
     "../apps/api/test/**/*.ts",
-    "../apps/api/test/**/*.mts"
+    "../apps/api/test/**/*.mts",
+    "../scripts/operations-admin.mts",
+    "../scripts/backfill-financials.mts"
   ]
 }

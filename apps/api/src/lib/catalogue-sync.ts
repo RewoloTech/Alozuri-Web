@@ -1,3 +1,4 @@
+import { pricingHistoryMetadata } from './pricing-history.js';
 import { randomUUID } from 'node:crypto';
 import { OAuth2Client } from 'google-auth-library';
 import { database } from './firebase.js';
@@ -133,10 +134,23 @@ export async function syncCatalogue(
           if (!samePackage(previous, data)) {
             t.set(w.ref, 'id' in data ? packageWrite(data) : data, { merge: true });
             if (decisionHash(before) !== decisionHash(after)) {
-              const historyId = decisionHash({ before, after, date: syncedAt.slice(0, 10) });
+              const historyId = decisionHash({
+                before,
+                after,
+                date: syncedAt.slice(0, 10),
+                fromVersion: docs[i].updateTime
+                  ? [docs[i].updateTime!.seconds, docs[i].updateTime!.nanoseconds]
+                  : null,
+              });
               t.set(w.ref.collection('pricingHistory').doc(historyId), {
                 before,
                 after,
+                ...pricingHistoryMetadata(
+                  calculated ?? { ...previous, id: w.ref.id },
+                  before,
+                  after,
+                ),
+                kind: 'catalogue_sync',
                 runId,
                 recordedAt: Timestamp.now(),
               });

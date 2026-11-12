@@ -7,6 +7,7 @@ import type { UserProfile } from '@alozuri/shared';
 const AuthContext = createContext<{
   user: User | null;
   loading: boolean;
+  admin: boolean;
   logout: () => Promise<void>;
   profile: UserProfile | null;
   profileError: string;
@@ -15,6 +16,7 @@ const AuthContext = createContext<{
 }>({
   user: null,
   loading: true,
+  admin: false,
   logout: async () => {},
   profile: null,
   profileError: '',
@@ -22,9 +24,14 @@ const AuthContext = createContext<{
   refreshProfile: () => {},
 });
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [{ user, loading }, setSession] = useState<{ user: User | null; loading: boolean }>({
+  const [{ user, loading, admin }, setSession] = useState<{
+    user: User | null;
+    loading: boolean;
+    admin: boolean;
+  }>({
     user: null,
     loading: firebaseConfigured,
+    admin: false,
   });
   const [profileState, setProfileState] = useState<{
     uid: string | null;
@@ -71,17 +78,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [uid, verified, profileAttempt]);
   useEffect(() => {
     if (!firebaseConfigured) return;
-    return onIdTokenChanged(authClient(), (u) => {
+    let generation = 0;
+    const stop = onIdTokenChanged(authClient(), (u) => {
+      const current = ++generation;
       // Firebase can mutate and re-emit the same User after token refresh.
       // Publish a fresh session so email verification updates every consumer.
-      setSession({ user: u, loading: false });
+      setSession({ user: u, loading: false, admin: false });
+      if (u?.emailVerified)
+        void u
+          .getIdTokenResult()
+          .then((token) => {
+            if (current === generation && authClient().currentUser?.uid === u.uid)
+              setSession({ user: u, loading: false, admin: token.claims.admin === true });
+          })
+          .catch(() => {});
     });
+    return () => {
+      generation++;
+      stop();
+    };
   }, []);
   return (
     <AuthContext.Provider
       value={{
         user,
         loading,
+        admin,
         logout: () => signOut(authClient()),
         profile: profileState.uid === uid ? profileState.profile : null,
         profileError: profileState.uid === uid ? profileState.error : '',

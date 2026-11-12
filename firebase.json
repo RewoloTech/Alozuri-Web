@@ -1,6 +1,7 @@
 {
   "firestore": {
-    "rules": "infra/firestore.rules"
+    "rules": "infra/firestore.rules",
+    "indexes": "infra/firestore.indexes.json"
   },
   "hosting": {
     "site": "alozuri",

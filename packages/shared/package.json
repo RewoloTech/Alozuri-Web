@@ -14,7 +14,9 @@
     "./destination-inspiration": "./src/destination-inspiration.ts",
     "./esim-usage": "./src/esim-usage.ts",
     "./contract": "./src/contract.ts",
-    "./contract-document": "./src/contract-document.ts"
+    "./contract-document": "./src/contract-document.ts",
+    "./financial": "./src/financial.ts",
+    "./pricing-history": "./src/pricing-history.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

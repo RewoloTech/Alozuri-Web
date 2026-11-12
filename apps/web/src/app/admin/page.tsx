@@ -1,5 +1,5 @@
-import { Admin } from '@/components/admin';
-export const metadata = { title: 'Operations', robots: { index: false } };
+import { redirect } from 'next/navigation';
+export const metadata = { title: 'Operations', robots: { index: false, follow: false } };
 export default function Page() {
-  return <Admin />;
+  redirect('/operations');
 }

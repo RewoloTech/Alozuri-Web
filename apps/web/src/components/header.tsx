@@ -20,7 +20,7 @@ export function Brand() {
   );
 }
 export function Header() {
-  const { user, logout } = useAuth();
+  const { user, logout, admin } = useAuth();
   const router = useRouter();
   const { currency, ready, setCurrency, available, locked } = useCurrency();
   const quantity = useSelector((s: RootState) => s.cart.items.reduce((n, i) => n + i.quantity, 0));
@@ -75,6 +75,7 @@ export function Header() {
             <AccountMenu
               key={user.uid}
               verified={user.emailVerified}
+              admin={admin}
               onLogout={async () => {
                 await logout();
                 setOpen(false);

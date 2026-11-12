@@ -1,3 +1,5 @@
+import { pricingHistoryMetadata } from './pricing-history.js';
+import { initialFinancial } from './financial-calculations.js';
 import { STRIPE_APP_INFO } from './stripe-attribution.js';
 import {
   orderTaskConfig,
@@ -106,6 +108,7 @@ export function firestorePaymentStore(
           throw new CheckoutError('Payment adjustment mismatch.');
         if (!charge.disputed && !charge.amount_refunded && !failedRefund) return;
         t.update(ref, {
+          financialReconciliationPending: true,
           paymentBlocked: true,
           status:
             failedRefund || charge.disputed
@@ -157,9 +160,11 @@ export function firestorePaymentStore(
           wholesaleUnits: plan.wholesaleUnits,
           fulfillmentMode: mode === 'test' ? 'test_no_issuance' : 'esim_access',
           verifiedEmailAtCheckout: true,
+          supplierAttempted: false,
         };
         orderSchema.parse(data);
-        t.create(ref, data);
+        const financial = initialFinancial(id, 'orders', data);
+        t.create(ref, { ...data, financial });
         return paymentOrder(id, data, mode);
       });
     },
@@ -173,6 +178,7 @@ export function firestorePaymentStore(
         if (o.sessionId && o.sessionId !== sessionId)
           throw new CheckoutError('Checkout session mismatch.');
         t.update(ref, {
+          financialReconciliationPending: true,
           sessionId,
           ...(o.status === 'created' ? { status: 'checkout_pending' } : {}),
         });
@@ -222,6 +228,7 @@ export function firestorePaymentStore(
           });
         }
         t.update(ref, {
+          financialReconciliationPending: true,
           status,
           sessionId: session.id,
           ...(firstPayment
@@ -298,11 +305,21 @@ export async function currentCheckoutPlan(
         t.set(
           ref
             .collection('pricingHistory')
-            .doc(decisionHash({ before, after, date: priced.catalogueDate })),
+            .doc(
+              decisionHash({
+                before,
+                after,
+                date: priced.catalogueDate,
+                fromVersion: current.updateTime
+                  ? [current.updateTime.seconds, current.updateTime.nanoseconds]
+                  : null,
+              }),
+            ),
           {
             before,
             after,
             kind: 'checkout_revalidation',
+            ...pricingHistoryMetadata(priced, before, after),
             recordedAt: Timestamp.now(),
           },
         );
@@ -584,6 +601,7 @@ export async function registerStripeWebhook(
   app: FastifyInstance,
   payments: PaymentService | null,
   commerce: { webhook(body: Buffer, signature: string): Promise<void> } | null = null,
+  financial: { webhook(body: Buffer, signature: string): Promise<void> } | null = null,
 ) {
   await app.register(async (instance) => {
     instance.removeContentTypeParser('application/json');
@@ -601,6 +619,7 @@ export async function registerStripeWebhook(
           return reply.code(400).send({ error: 'Invalid webhook body.' });
         if (payments) await payments.webhook(request.body, signature);
         if (commerce) await commerce.webhook(request.body, signature);
+        if (financial) await financial.webhook(request.body, signature);
         return { received: true };
       },
     );

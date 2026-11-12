@@ -3633,3 +3633,191 @@ body:has(.cart-line) .support-shortcut {
   width: 44px;
   height: 44px;
 }
+
+.operations-dates {
+  display: flex;
+  gap: 16px;
+  align-items: end;
+  flex-wrap: wrap;
+}
+.operations-dates label {
+  display: grid;
+  gap: 6px;
+  min-width: 160px;
+}
+.operations-dates input {
+  min-height: 44px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.operations-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin: 20px 0;
+}
+.operations-metrics h2 {
+  font-size: 15px;
+  margin-bottom: 10px;
+}
+.operations-metrics strong {
+  font-size: 28px;
+  overflow-wrap: anywhere;
+}
+.operations-page small {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 6px;
+}
+.operations-table-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+.operations-table-scroll:focus-visible {
+  outline: 3px solid var(--blue);
+  outline-offset: 3px;
+}
+.operations-transactions table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  text-align: left;
+}
+.operations-transactions th,
+.operations-transactions td {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+  min-width: 110px;
+  max-width: 260px;
+  overflow-wrap: anywhere;
+}
+.operations-transactions summary {
+  min-height: 44px;
+  cursor: pointer;
+}
+.operations-pagination {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+}
+.operations-service {
+  margin-top: 20px;
+}
+.operations-service > summary {
+  cursor: pointer;
+  min-height: 44px;
+  align-content: center;
+  font-weight: 600;
+}
+body:has(.operations-page) .support-shortcut {
+  position: static;
+  display: flex;
+  margin: 16px 20px 24px auto;
+}
+@media (max-width: 600px) {
+  .operations-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .operations-metrics .surface {
+    padding: 16px;
+  }
+  .operations-dates label {
+    flex: 1;
+    min-width: 0;
+  }
+  .operations-dates {
+    padding: 16px;
+  }
+  .operations-page .surface {
+    min-width: 0;
+  }
+}
+
+.operations-dates input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.operations-table-hint {
+  display: none;
+}
+@media (max-width: 600px) {
+  .operations-dates {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .operations-dates .button {
+    grid-column: 1 / -1;
+  }
+  .operations-table-hint {
+    display: block;
+  }
+}
+@media (max-width: 430px) {
+  .operations-dates {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.operations-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 20px;
+  border-bottom: 1px solid var(--border);
+}
+.operations-tabs button {
+  min-height: 44px;
+  padding: 12px 16px;
+  font-weight: 600;
+  border-bottom: 3px solid transparent;
+  color: var(--muted);
+}
+.operations-tabs button[aria-selected='true'] {
+  border-bottom-color: #4338ca;
+  color: #4338ca;
+}
+.pricing-selection {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 16px 0;
+}
+.pricing-history-table {
+  margin-top: 20px;
+}
+.pricing-history-table .text-link {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+.price-direction {
+  font-weight: 600;
+}
+.price-direction-increased {
+  color: #a12626;
+}
+.price-direction-decreased {
+  color: #12623d;
+}
+@media (max-width: 430px) {
+  .operations-tabs button {
+    flex: 1;
+    padding: 12px 8px;
+  }
+}
+.pricing-history-table .operations-pagination {
+  flex-wrap: wrap;
+}
+.pricing-history-table .operations-pagination .button {
+  flex: 1 1 120px;
+  min-width: 0;
+  min-height: 44px;
+  white-space: normal;
+}

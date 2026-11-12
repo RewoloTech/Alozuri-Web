@@ -96,6 +96,59 @@ test('real Firebase role removal blocks a stale admin token and an owner UID nev
     await reload(user);
     const token = await user.getIdToken(true);
     assert.equal((await authenticateToken(token, adminAuth, user.uid)).admin, true);
+    const { createApp } = await import('../../apps/api/src/app.ts');
+    const server = await createApp({
+      demo: true,
+      payments: null,
+      commerce: null,
+      fulfillment: null,
+      profiles: null,
+      financial: null,
+      verify: (value) => authenticateToken(value, adminAuth),
+    });
+    try {
+      assert.equal(
+        (
+          await server.inject({
+            url: '/v1/operations/access',
+            headers: { authorization: 'Bearer ' + token },
+          })
+        ).statusCode,
+        200,
+      );
+      await adminAuth.setCustomUserClaims(user.uid, {});
+      assert.equal(
+        (
+          await server.inject({
+            url: '/v1/operations/access',
+            headers: { authorization: 'Bearer ' + token },
+          })
+        ).statusCode,
+        403,
+      );
+      assert.equal(
+        (
+          await server.inject({
+            url: '/v1/operations/financials?from=2026-11-01&to=2026-11-30',
+            headers: { authorization: 'Bearer ' + token },
+          })
+        ).statusCode,
+        403,
+      );
+      assert.equal(
+        (
+          await server.inject({
+            url: '/v1/operations/pricing-history?from=2026-11-01&to=2026-11-30',
+            headers: { authorization: 'Bearer ' + token },
+          })
+        ).statusCode,
+        403,
+      );
+      await adminAuth.setCustomUserClaims(user.uid, { admin: true });
+    } finally {
+      await server.close();
+    }
+
     assert.equal((await authenticateToken(token, adminAuth, 'different-owner')).admin, false);
     await adminAuth.setCustomUserClaims(user.uid, {});
     // The SDK still decodes the original token's old claim; our current-role check denies it.
@@ -107,5 +160,51 @@ test('real Firebase role removal blocks a stale admin token and an owner UID nev
     await signOut(auth);
     await deleteApp(clientApp);
     await deleteAdminApp(adminApp);
+  }
+});
+
+test('trusted Operations CLI grants and revokes a verified emulator account without replacing other claims', async () => {
+  assert.equal(process.env.FIREBASE_AUTH_EMULATOR_HOST, '127.0.0.1:9099');
+  const { initializeApp: initializeAdmin, deleteApp: deleteAdmin } =
+    await import('firebase-admin/app');
+  const { getAuth: getAdminAuth } = await import('firebase-admin/auth');
+  const { spawnSync } = await import('node:child_process');
+  const app = initializeAdmin({ projectId: 'demo-alozuri' }, 'operations-cli-test'),
+    admin = getAdminAuth(app);
+  try {
+    const account = await admin.createUser({
+      email: `operator-${crypto.randomUUID()}@example.test`,
+      emailVerified: true,
+    });
+    await admin.setCustomUserClaims(account.uid, { existingFeature: true });
+    const run = (action: string, confirmation = account.uid) =>
+      spawnSync(
+        process.execPath,
+        [
+          '--import',
+          'tsx',
+          'scripts/operations-admin.mts',
+          '--project',
+          'demo-alozuri',
+          '--uid',
+          account.uid,
+          '--confirm-uid',
+          confirmation,
+          action,
+        ],
+        { env: process.env, encoding: 'utf8' },
+      );
+    assert.notEqual(run('--grant', 'incorrect-confirmation').status, 0);
+    assert.equal((await admin.getUser(account.uid)).customClaims?.admin, undefined);
+    const grant = run('--grant');
+    assert.equal(grant.status, 0, grant.stderr);
+    assert.equal((await admin.getUser(account.uid)).customClaims?.admin, true);
+    assert.equal((await admin.getUser(account.uid)).customClaims?.existingFeature, true);
+    const revoke = run('--revoke');
+    assert.equal(revoke.status, 0, revoke.stderr);
+    assert.equal((await admin.getUser(account.uid)).customClaims?.admin, undefined);
+    assert.equal((await admin.getUser(account.uid)).customClaims?.existingFeature, true);
+  } finally {
+    await deleteAdmin(app);
   }
 });
