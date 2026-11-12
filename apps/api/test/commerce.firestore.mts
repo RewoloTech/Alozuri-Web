@@ -1,3 +1,10 @@
+import { pendingOrderWork, prepareOrderWork } from '../src/lib/order-work-recovery.ts';
+import { OrderWorker } from '../src/lib/order-worker.ts';
+import {
+  dispatchOrderWork,
+  type OrderTaskQueue,
+  type OrderWork,
+} from '../src/lib/order-task-queue.ts';
 import { SAFE_EMAIL_RETRY_MS } from '../src/lib/order-confirmations.ts';
 import { POLICIES } from '../../../packages/shared/src/policies.ts';
 import { CHECKOUT_LEGAL_ACCEPTANCE } from '../../../packages/shared/src/legal.ts';
@@ -30,6 +37,7 @@ function fixture(
   emailFailure?: () => boolean,
   usageOptions?: { supplier: UsageSupplier; now?: () => number },
   deliveryEvent?: () => string,
+  taskQueue: OrderTaskQueue | null = null,
 ) {
   const plans: StoredPlan[] = demoPlans.slice(0, 2).map((p) =>
     pricePackage(
@@ -127,6 +135,7 @@ function fixture(
       },
       usageOptions?.now,
     ),
+    taskQueue,
   );
   const input = {
     items: [
@@ -1069,5 +1078,629 @@ test('legacy already-confirmed or ambiguous orders cannot receive another routin
     if (ambiguous) assert.equal(updated.get('confirmationError'), 'legacy_send_review_required');
     assert.equal(updated.get('contractEmailDueAt'), undefined);
     assert.equal(updated.get('emailDueAt'), undefined);
+  }
+});
+
+test('contract PDF download checks ownership and verified payment, streams privately and never stores or emails a PDF', async () => {
+  const f = fixture();
+  const order = await f.service.checkout(f.input, null);
+  const server = await createApp({
+    repository: { plans: async () => [], orders: async () => [], order: async () => null },
+    commerce: f.service,
+    payments: null,
+    fulfillment: null,
+    verify: async (token) => ({
+      uid: token,
+      email: token === 'owner' ? f.input.email : 'other@example.test',
+      verified: true,
+      admin: token === 'admin',
+    }),
+  });
+  const url = '/v2/orders/' + order.orderId + '/contract.pdf';
+  try {
+    const unpaid = await server.inject({
+      method: 'GET',
+      url,
+      headers: { 'x-order-access': order.accessToken },
+    });
+    assert.equal(unpaid.statusCode, 409);
+    f.intent.status = 'succeeded';
+    f.intent.amount_received = f.intent.amount;
+    await f.event();
+    const before = (await db.doc('purchases/' + order.orderId).get()).data();
+    for (const headers of [
+      {},
+      { 'x-order-access': 'wrong' },
+      { authorization: 'Bearer other' },
+      { authorization: 'Bearer admin' },
+    ]) {
+      assert.equal((await server.inject({ method: 'GET', url, headers })).statusCode, 404);
+    }
+    for (const headers of [
+      { 'x-order-access': order.accessToken },
+      { authorization: 'Bearer owner' },
+    ]) {
+      const response = await server.inject({ method: 'GET', url, headers });
+      assert.equal(response.statusCode, 200);
+      assert.match(String(response.headers['content-type']), /application\/pdf/);
+      assert.match(
+        String(response.headers['content-disposition']),
+        /attachment; filename="Alozuri-Order-Confirmation.pdf"/,
+      );
+      assert.match(String(response.headers['cache-control']), /no-store/);
+      assert.equal(response.rawPayload.subarray(0, 5).toString(), '%PDF-');
+      assert.ok(response.rawPayload.length < 200000);
+    }
+    assert.deepEqual((await db.doc('purchases/' + order.orderId).get()).data(), before);
+    assert.equal(f.emails.length, 0);
+    assert.equal(
+      (await f.service.order(order.orderId, null, order.accessToken)).contractDownloadAvailable,
+      true,
+    );
+  } finally {
+    await server.close();
+  }
+});
+
+test('concurrent guest-cart merge retries add one item once and create a PaymentIntent for the exact single-item total', async () => {
+  const f = fixture();
+  const server = await createApp({
+    repository: { plans: async () => f.plans, orders: async () => [], order: async () => null },
+    commerce: f.service,
+    payments: null,
+    fulfillment: null,
+    verify: async () => ({
+      uid: 'cart-concurrency-buyer',
+      email: f.input.email,
+      verified: true,
+      admin: false,
+    }),
+  });
+  try {
+    const headers = { authorization: 'Bearer controlled-buyer' },
+      items = [{ planId: f.plans[0].id, quantity: 1 }],
+      mergeId = crypto.randomUUID();
+    const responses = await Promise.all(
+      Array.from({ length: 4 }, () =>
+        server.inject({
+          method: 'POST',
+          url: '/v2/cart/merge',
+          headers,
+          payload: { items, mergeId },
+        }),
+      ),
+    );
+    for (const response of responses) {
+      assert.equal(response.statusCode, 200);
+      assert.equal(response.json().items[0].quantity, 1);
+    }
+    const saved = await db.doc('carts/cart-concurrency-buyer').get();
+    assert.deepEqual(saved.get('items'), items);
+    assert.equal(saved.get('version'), 1);
+    const quoted = await server.inject({
+      method: 'POST',
+      url: '/v2/quote',
+      payload: { items, currency: 'USD' },
+    });
+    const total = quoted.json().quote.totalCents;
+    assert.equal(total, f.plans[0].priceCents);
+    const result = await server.inject({
+      method: 'POST',
+      url: '/v2/checkout',
+      headers,
+      payload: { ...f.input, items, expectedTotalCents: total },
+    });
+    assert.equal(result.statusCode, 200);
+    assert.equal(f.intent.amount, total);
+    assert.equal(f.getCreates(), 1);
+    assert.equal(result.json().quote.items[0].quantity, 1);
+    const stored = await db.doc('purchases/' + result.json().orderId).get();
+    assert.equal(stored.get('totalCents'), total);
+    assert.equal(stored.get('items')[0].quantity, 1);
+  } finally {
+    await server.close();
+  }
+});
+
+test('payment commits a durable dispatch intent; an identical Stripe replay repairs a failed enqueue without allocating twice', async () => {
+  const tasks: OrderWork[] = [];
+  let fail = true;
+  const f = fixture(false, undefined, 'USD', undefined, undefined, undefined, {
+    enqueue: async (work) => {
+      if (fail) throw new Error('Queue unavailable');
+      tasks.push(work);
+    },
+  });
+  const result = await f.service.checkout(f.input, null);
+  f.intent.status = 'processing';
+  await f.event('payment_intent.processing');
+  assert.equal((await db.doc('orderWork/' + result.orderId).get()).exists, false);
+  f.intent.status = 'succeeded';
+  f.intent.amount_received = f.intent.amount;
+  const eventId = 'evt_queue_' + crypto.randomUUID().replaceAll('-', '');
+  await assert.rejects(f.event('payment_intent.succeeded', eventId), /dispatch unavailable/);
+  const pending = await db.doc('orderWork/' + result.orderId).get();
+  assert.equal(pending.get('status'), 'pending');
+  assert.ok((await db.doc('purchases/' + result.orderId).get()).get('paidAt'));
+  fail = false;
+  await f.event('payment_intent.succeeded', eventId);
+  await f.event('payment_intent.succeeded', eventId);
+  assert.deepEqual(tasks, [{ kind: 'purchase', id: result.orderId, generation: 1 }]);
+  assert.equal(
+    (await db.collection('orders').where('parentOrderId', '==', result.orderId).get()).size,
+    3,
+  );
+  assert.equal((await db.doc('orderWork/' + result.orderId).get()).get('status'), 'queued');
+  assert.equal(f.emails.length, 0); // Webhook only queues, never performs supplier/email work.
+});
+
+test('targeted queue worker sends one email and provisions only that purchase under duplicate concurrent deliveries', async () => {
+  const tasks: OrderWork[] = [];
+  const queue = {
+    enqueue: async (work: OrderWork) => {
+      tasks.push(work);
+    },
+  };
+  const f = fixture(false, undefined, 'USD', undefined, undefined, undefined, queue);
+  const other = fixture(false, undefined, 'USD', undefined, undefined, undefined, queue);
+  const result = await f.service.checkout(f.input, null),
+    otherResult = await other.service.checkout(other.input, null);
+  for (const candidate of [f, other]) {
+    candidate.intent.status = 'succeeded';
+    candidate.intent.amount_received = candidate.intent.amount;
+    await candidate.event();
+  }
+  const work = tasks.find((task) => task.id === result.orderId)!;
+  const calls: string[] = [];
+  let allocation = 0;
+  const delivery = new FulfillmentService(f.stripe, firestoreFulfillmentStore(), {
+    order: async (tx) => {
+      calls.push(tx);
+      return 'supplier-' + tx;
+    },
+    profile: async () => ({
+      ac: 'LPA:1$example.com$queued-' + ++allocation,
+      iccid: '89852245280001113' + String(allocation).padStart(2, '0'),
+      esimTranNo: 'queued-' + allocation,
+    }),
+  });
+  const worker = new OrderWorker(db, f.service, delivery, queue);
+  const responses = await Promise.all([worker.run(work), worker.run(work)]);
+  assert.ok(responses.some((response) => response.state === 'complete'));
+  assert.equal((await worker.run(work)).state, 'ignored');
+  assert.equal(calls.length, 3);
+  assert.equal(new Set(calls).size, 3);
+  assert.equal(f.emails.length, 1);
+  assert.equal(other.emails.length, 0);
+  assert.ok(
+    (await f.service.order(result.orderId, null, result.accessToken)).allocations.every(
+      (unit) => unit.status === 'ready',
+    ),
+  );
+  assert.ok(
+    (
+      await other.service.order(otherResult.orderId, null, otherResult.accessToken)
+    ).allocations.every((unit) => unit.status === 'paid'),
+  );
+  assert.equal((await db.doc('orderWork/' + result.orderId).get()).get('status'), 'done');
+});
+
+test('queued email failures retain work, respect retry dates and block supply until confirmation delivery', async () => {
+  let fail = true;
+  let event = 'sent';
+  const tasks: OrderWork[] = [];
+  const queue = {
+    enqueue: async (work: OrderWork) => {
+      tasks.push(work);
+    },
+  };
+  const f = fixture(
+    false,
+    undefined,
+    'USD',
+    () => fail,
+    undefined,
+    () => event,
+    queue,
+  );
+  const result = await f.service.checkout(f.input, null);
+  f.intent.status = 'succeeded';
+  f.intent.amount_received = f.intent.amount;
+  await f.event();
+  let supplied = 0;
+  const delivery = new FulfillmentService(f.stripe, firestoreFulfillmentStore(), {
+    order: async () => {
+      supplied++;
+      return 'queued-supplier';
+    },
+    profile: async () => null,
+  });
+  const worker = new OrderWorker(db, f.service, delivery, queue),
+    ref = db.doc('purchases/' + result.orderId);
+  async function consume() {
+    await db.doc('orderWork/' + result.orderId).update({ runAfterAt: Date.now() - 1 });
+    return worker.run(tasks[tasks.length - 1]);
+  }
+  assert.equal((await consume()).state, 'scheduled');
+  assert.equal(supplied, 0);
+  assert.equal(f.emails.length, 0);
+  const attempts = (await ref.get()).get('confirmationAttempts');
+  fail = false;
+  assert.equal((await consume()).state, 'scheduled');
+  assert.equal((await ref.get()).get('confirmationAttempts'), attempts);
+  await ref.update({ confirmationDueAt: Date.now() - 1 });
+  await consume();
+  assert.equal(f.emails.length, 1);
+  assert.equal(supplied, 0);
+  event = 'delivered';
+  await ref.update({ confirmationDeliveryDueAt: Date.now() - 1 });
+  assert.equal((await consume()).state, 'scheduled'); // Supplier allocation is still pending.
+  assert.equal(supplied, 3);
+  assert.equal(f.emails.length, 1);
+  assert.equal((await db.doc('orderWork/' + result.orderId).get()).get('status'), 'queued');
+});
+
+test('queue work is bounded, ignores stale generations, and never processes test or unpaid orders', async () => {
+  const work: OrderWork = { kind: 'purchase', id: 'purchase_' + 'f'.repeat(48), generation: 1 };
+  const ref = db.doc('orderWork/' + work.id);
+  let calls = 0;
+  const worker = new OrderWorker(
+    db,
+    {
+      notify: async () => {
+        calls++;
+        return { sent: 0, failed: 0, attention: 0 };
+      },
+    },
+    {
+      run: async () => {
+        calls++;
+        return { processed: 0, failed: 0 };
+      },
+    },
+    {
+      enqueue: async () => {
+        throw new Error('Unexpected dispatch');
+      },
+    },
+  );
+  assert.equal((await worker.run(work)).state, 'ignored');
+  await ref.set({ ...work, status: 'queued', deadlineAt: Date.now() + 60000 });
+  assert.equal((await worker.run({ ...work, generation: 2 })).state, 'ignored');
+  assert.equal((await worker.run(work)).state, 'attention'); // No paid purchase.
+  assert.equal(calls, 0);
+  await ref.update({ status: 'queued', deadlineAt: Date.now() - 1 });
+  assert.equal((await worker.run(work)).state, 'attention');
+  assert.equal((await ref.get()).get('reason'), 'processing_deadline_exceeded');
+  const tasks: OrderWork[] = [];
+  const f = fixture(true, undefined, 'USD', undefined, undefined, undefined, {
+    enqueue: async (task) => {
+      tasks.push(task);
+    },
+  });
+  const result = await f.service.checkout(f.input, null);
+  f.intent.status = 'succeeded';
+  f.intent.amount_received = f.intent.amount;
+  await f.event();
+  assert.deepEqual(tasks, []);
+  assert.equal((await db.doc('orderWork/' + result.orderId).get()).exists, false);
+});
+
+test('a failed delayed-task submission is repaired by replaying the previous task without resending email', async () => {
+  const tasks: OrderWork[] = [];
+  let fail = false;
+  const queue = {
+    enqueue: async (work: OrderWork) => {
+      if (fail) throw new Error('Queue unavailable');
+      tasks.push(work);
+    },
+  };
+  const f = fixture(false, undefined, 'USD', undefined, undefined, () => 'sent', queue);
+  const result = await f.service.checkout(f.input, null);
+  f.intent.status = 'succeeded';
+  f.intent.amount_received = f.intent.amount;
+  await f.event();
+  const original = tasks[0];
+  let supplied = 0;
+  const delivery = new FulfillmentService(f.stripe, firestoreFulfillmentStore(), {
+    order: async () => {
+      supplied++;
+      return 'unexpected';
+    },
+    profile: async () => null,
+  });
+  const worker = new OrderWorker(db, f.service, delivery, queue);
+  fail = true;
+  await assert.rejects(worker.run(original), /dispatch unavailable/);
+  const pending = await db.doc('orderWork/' + result.orderId).get();
+  assert.equal(pending.get('status'), 'pending');
+  assert.equal(pending.get('generation'), 2);
+  assert.equal(f.emails.length, 1);
+  assert.equal(supplied, 0);
+  fail = false;
+  assert.equal((await worker.run(original)).state, 'scheduled');
+  assert.equal(tasks[1].generation, 2);
+  assert.equal((await worker.run(original)).state, 'ignored');
+  assert.equal((await worker.run(tasks[1])).state, 'pending'); // Too early: no send or supply.
+  assert.equal(f.emails.length, 1);
+  assert.equal(supplied, 0);
+});
+
+test('migration inventories existing work, seeds it once and redrives attention work without clearing provider state', async () => {
+  const f = fixture();
+  const result = await f.service.checkout(f.input, null);
+  f.intent.status = 'succeeded';
+  f.intent.amount_received = f.intent.amount;
+  await f.event();
+  const candidates = await pendingOrderWork(db);
+  assert.equal(candidates.filter((work) => work.id === result.orderId).length, 1);
+  const prepared = await prepareOrderWork(db, { kind: 'purchase', id: result.orderId });
+  assert.deepEqual(prepared, { kind: 'purchase', id: result.orderId, generation: 1 });
+  assert.deepEqual(await prepareOrderWork(db, { kind: 'purchase', id: result.orderId }), prepared);
+  const before = (await db.doc('purchases/' + result.orderId).get()).data();
+  await assert.rejects(
+    prepareOrderWork(db, { kind: 'purchase', id: result.orderId }, true),
+    /Active work/,
+  );
+  await db.doc('orderWork/' + result.orderId).update({ status: 'attention', leaseUntil: 0 });
+  const redriven = await prepareOrderWork(db, { kind: 'purchase', id: result.orderId }, true);
+  assert.equal(redriven?.generation, 2);
+  assert.deepEqual((await db.doc('purchases/' + result.orderId).get()).data(), before);
+  const queued: OrderWork[] = [];
+  await dispatchOrderWork(
+    db,
+    {
+      enqueue: async (work) => {
+        queued.push(work);
+      },
+    },
+    result.orderId,
+  );
+  assert.deepEqual(queued, [redriven]);
+});
+
+test('queued supplier allocation retries keep the same supplier order without buying again', async () => {
+  const tasks: OrderWork[] = [];
+  const queue = {
+    enqueue: async (work: OrderWork) => {
+      tasks.push(work);
+    },
+  };
+  const f = fixture(false, undefined, 'USD', undefined, undefined, undefined, queue);
+  const singleInput = {
+    ...f.input,
+    items: [{ planId: f.plans[0].id, quantity: 1 }],
+    expectedTotalCents: f.plans[0].priceCents,
+  };
+  const result = await f.service.checkout(singleInput, null);
+  f.intent.status = 'succeeded';
+  f.intent.amount_received = f.intent.amount;
+  await f.event();
+  let purchases = 0,
+    ready = false;
+  const delivery = new FulfillmentService(f.stripe, firestoreFulfillmentStore(), {
+    order: async () => {
+      purchases++;
+      return 'supplier-queued-existing';
+    },
+    profile: async (orderNo) => {
+      assert.equal(orderNo, 'supplier-queued-existing');
+      return ready
+        ? {
+            ac: 'LPA:1$example.com$queued-retry',
+            iccid: '89852245280001113019',
+            esimTranNo: 'queued-retry',
+          }
+        : null;
+    },
+  });
+  const worker = new OrderWorker(db, f.service, delivery, queue);
+  assert.equal((await worker.run(tasks[0])).state, 'scheduled');
+  assert.equal(purchases, 1);
+  const units = await db.collection('orders').where('parentOrderId', '==', result.orderId).get();
+  await db.doc('fulfillmentJobs/' + units.docs[0].id).update({ nextAttemptAt: Date.now() - 1 });
+  await db.doc('orderWork/' + result.orderId).update({ runAfterAt: Date.now() - 1 });
+  ready = true;
+  assert.equal((await worker.run(tasks[1])).state, 'complete');
+  assert.equal(purchases, 1);
+  assert.equal(f.emails.length, 1);
+});
+
+test('ten eSIMs drain in bounded batches without starving later units or sending extra emails', async () => {
+  const tasks: OrderWork[] = [];
+  const queue = {
+    enqueue: async (work: OrderWork) => {
+      tasks.push(work);
+    },
+  };
+  const f = fixture(false, undefined, 'USD', undefined, undefined, undefined, queue);
+  const input = {
+    ...f.input,
+    items: f.plans.map((plan) => ({ planId: plan.id, quantity: 5 })),
+    expectedTotalCents: f.plans.reduce((total, plan) => total + plan.priceCents * 5, 0),
+  };
+  const result = await f.service.checkout(input, null);
+  f.intent.status = 'succeeded';
+  f.intent.amount_received = f.intent.amount;
+  await f.event();
+  const transactions = new Set<string>();
+  const delivery = new FulfillmentService(f.stripe, firestoreFulfillmentStore(), {
+    order: async (tx) => {
+      assert.equal(transactions.has(tx), false);
+      transactions.add(tx);
+      return 'supplier-' + tx;
+    },
+    profile: async (orderNo) => ({
+      ac: 'LPA:1$example.com$' + orderNo,
+      iccid: '89852245280001113019',
+      esimTranNo: orderNo,
+    }),
+  });
+  const worker = new OrderWorker(db, f.service, delivery, queue);
+  for (let batch = 0; batch < 4; batch++) {
+    await db.doc('orderWork/' + result.orderId).update({ runAfterAt: Date.now() - 1 });
+    const response = await worker.run(tasks[tasks.length - 1]);
+    assert.equal(response.state, batch < 3 ? 'scheduled' : 'complete');
+    assert.equal(transactions.size, Math.min(10, (batch + 1) * 3));
+  }
+  assert.equal(f.emails.length, 1);
+  assert.ok(
+    (await f.service.order(result.orderId, null, result.accessToken)).allocations.every(
+      (unit) => unit.status === 'ready',
+    ),
+  );
+});
+
+test('a paid eSIM with a missing fulfilment record is marked for support, never silently completed', async () => {
+  const tasks: OrderWork[] = [];
+  const queue = {
+    enqueue: async (work: OrderWork) => {
+      tasks.push(work);
+    },
+  };
+  const f = fixture(false, undefined, 'USD', undefined, undefined, undefined, queue);
+  const result = await f.service.checkout(f.input, null);
+  f.intent.status = 'succeeded';
+  f.intent.amount_received = f.intent.amount;
+  await f.event();
+  const units = await db.collection('orders').where('parentOrderId', '==', result.orderId).get();
+  for (const unit of units.docs) await db.doc('fulfillmentJobs/' + unit.id).delete();
+  const worker = new OrderWorker(
+    db,
+    f.service,
+    { run: async () => ({ processed: 0, failed: 0 }) },
+    queue,
+  );
+  assert.equal((await worker.run(tasks[0])).state, 'attention');
+  assert.equal(
+    (await db.doc('orderWork/' + result.orderId).get()).get('reason'),
+    'missing_fulfillment_work',
+  );
+  assert.ok(
+    (await f.service.order(result.orderId, null, result.accessToken)).allocations.every(
+      (unit) => unit.status === 'paid',
+    ),
+  );
+});
+
+test('HTTP queue flow verifies payment, acknowledges scheduled waiting, and completes one purchase without a polling scan', async () => {
+  const tasks: OrderWork[] = [];
+  const queue = {
+    enqueue: async (work: OrderWork) => {
+      tasks.push(work);
+    },
+  };
+  const f = fixture(false, undefined, 'USD', undefined, undefined, undefined, queue);
+  let supplied = 0,
+    ready = false;
+  const delivery = new FulfillmentService(f.stripe, firestoreFulfillmentStore(), {
+    order: async (tx) => {
+      supplied++;
+      return 'http-supplier-' + tx;
+    },
+    profile: async (orderNo) =>
+      ready
+        ? { ac: 'LPA:1$example.com$' + orderNo, iccid: '89852245280001113019', esimTranNo: orderNo }
+        : null,
+  });
+  const server = await createApp({
+    payments: null,
+    commerce: f.service,
+    fulfillment: delivery,
+    repository: { plans: async () => f.plans, orders: async () => [], order: async () => null },
+    orderWorker: new OrderWorker(db, f.service, delivery, queue),
+    verifyOrderTask: async (header) => header === 'Bearer controlled-service-identity',
+  });
+  try {
+    const checkout = await server.inject({ method: 'POST', url: '/v2/checkout', payload: f.input });
+    assert.equal(checkout.statusCode, 200);
+    const result = checkout.json();
+    f.intent.status = 'succeeded';
+    f.intent.amount_received = f.intent.amount;
+    const payload = JSON.stringify({
+      id: 'evt_http_queue_' + crypto.randomUUID().replaceAll('-', ''),
+      object: 'event',
+      created: 1794430800,
+      livemode: true,
+      type: 'payment_intent.succeeded',
+      data: { object: f.intent },
+    });
+    assert.equal(
+      (
+        await server.inject({
+          method: 'POST',
+          url: '/v1/webhooks/stripe',
+          headers: { 'content-type': 'application/json', 'stripe-signature': 'invalid' },
+          payload,
+        })
+      ).statusCode,
+      400,
+    );
+    assert.equal(tasks.length, 0);
+    const payment = await server.inject({
+      method: 'POST',
+      url: '/v1/webhooks/stripe',
+      headers: {
+        'content-type': 'application/json',
+        'stripe-signature': signer.webhooks.generateTestHeaderString({
+          payload,
+          secret: 'whsec_fixture',
+        }),
+      },
+      payload,
+    });
+    assert.equal(payment.statusCode, 200);
+    assert.equal(tasks.length, 1);
+    assert.equal(f.emails.length, 0);
+    assert.equal(supplied, 0);
+    const firstTask = tasks[0],
+      taskHeaders = { authorization: 'Bearer controlled-service-identity' };
+    const first = await server.inject({
+      method: 'POST',
+      url: '/internal/orders/process',
+      headers: taskHeaders,
+      payload: firstTask,
+    });
+    assert.equal(first.statusCode, 200);
+    assert.equal(first.json().state, 'scheduled');
+    assert.equal(f.emails.length, 1);
+    assert.equal(supplied, 3);
+    assert.equal(tasks.length, 2);
+    const replay = await server.inject({
+      method: 'POST',
+      url: '/internal/orders/process',
+      headers: taskHeaders,
+      payload: firstTask,
+    });
+    assert.equal(replay.statusCode, 200);
+    assert.equal(replay.json().state, 'ignored');
+    assert.equal(supplied, 3);
+    assert.equal(f.emails.length, 1);
+    const units = await db.collection('orders').where('parentOrderId', '==', result.orderId).get();
+    for (const unit of units.docs)
+      await db.doc('fulfillmentJobs/' + unit.id).update({ nextAttemptAt: Date.now() - 1 });
+    await db.doc('orderWork/' + result.orderId).update({ runAfterAt: Date.now() - 1 });
+    ready = true;
+    const last = await server.inject({
+      method: 'POST',
+      url: '/internal/orders/process',
+      headers: taskHeaders,
+      payload: tasks[1],
+    });
+    assert.equal(last.statusCode, 200);
+    assert.equal(last.json().state, 'complete');
+    const receipt = await server.inject({
+      method: 'GET',
+      url: '/v2/orders/' + result.orderId,
+      headers: { 'x-order-access': result.accessToken },
+    });
+    assert.equal(receipt.statusCode, 200);
+    assert.ok(
+      receipt.json().allocations.every((unit: { status: string }) => unit.status === 'ready'),
+    );
+    assert.equal(supplied, 3);
+    assert.equal(f.emails.length, 1);
+  } finally {
+    await server.close();
   }
 });

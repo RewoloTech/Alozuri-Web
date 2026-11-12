@@ -14,6 +14,9 @@
     "**/*.tsx",
     "**/*.mts",
     "../playwright.config.ts",
+    "../scripts/order-queue.mts",
+    "../scripts/release-production.mts",
+    "../scripts/release-plan.ts",
     "../apps/api/test/**/*.ts",
     "../apps/api/test/**/*.mts"
   ]

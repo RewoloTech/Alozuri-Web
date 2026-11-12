@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { useDispatch, useSelector } from 'react-redux';
 import { money, type CartLine, type CartItem, type Plan } from '@voyaspan/shared';
 import { removeFromCart, quantityChanged, type RootState } from '@/lib/store';
-import { api } from '@/lib/api';
+import { api, apiBlob } from '@/lib/api';
 import { useAuth } from './auth-provider';
 import { InstallationDetails } from './installation-details';
 import { EsimUsagePanel } from './esim-usage';
@@ -14,6 +14,7 @@ export type Purchase = {
   id: string;
   reference?: string;
   confirmationNeedsSupport?: boolean;
+  contractDownloadAvailable?: boolean;
   email: string;
   items: CartLine[];
   totalCents: number;
@@ -45,7 +46,9 @@ function PrivatePurchase({ id }: { id: string }) {
   const [order, setOrder] = useState<Purchase | null>(null),
     [access, setAccess] = useState(''),
     [error, setError] = useState(''),
-    [refresh, setRefresh] = useState(0);
+    [refresh, setRefresh] = useState(0),
+    [downloadingContract, setDownloadingContract] = useState(false),
+    [contractError, setContractError] = useState('');
   useEffect(() => {
     const token = new URLSearchParams(window.location.hash.slice(1)).get('access');
     if (token) {
@@ -164,21 +167,41 @@ function PrivatePurchase({ id }: { id: string }) {
                   </p>
                   <button
                     className="button"
-                    onClick={() => {
-                      if (!order.legal) return;
-                      const text = `Order ${order.id}\nTotal ${money(order.totalCents, order.currency)}\nAccepted ${order.legal.acceptedAt}\n${order.legal.noticeText ?? ''}\n${order.legal.requestText}\n${order.legal.acknowledgementText}\n\n${order.legal.termsText}\n\n${order.legal.refundText}`;
-                      const url = URL.createObjectURL(
-                        new Blob([text], { type: 'text/plain;charset=utf-8' }),
-                      );
-                      const link = document.createElement('a');
-                      link.href = url;
-                      link.download = 'Alozuri-contract-' + order.id + '.txt';
-                      link.click();
-                      setTimeout(() => URL.revokeObjectURL(url), 1000);
+                    disabled={!order.contractDownloadAvailable || downloadingContract}
+                    onClick={async () => {
+                      setDownloadingContract(true);
+                      setContractError('');
+                      try {
+                        const pdf = await apiBlob(
+                          '/v2/orders/' + encodeURIComponent(id) + '/contract.pdf',
+                          { headers: access ? { 'x-order-access': access } : {} },
+                          Boolean(user?.emailVerified),
+                        );
+                        const url = URL.createObjectURL(pdf);
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = 'Alozuri-Order-Confirmation.pdf';
+                        document.body.appendChild(link);
+                        link.click();
+                        link.remove();
+                        setTimeout(() => URL.revokeObjectURL(url), 1000);
+                      } catch (error) {
+                        setContractError(
+                          error instanceof Error
+                            ? error.message
+                            : 'Your contract could not be downloaded. Please retry.',
+                        );
+                      } finally {
+                        setDownloadingContract(false);
+                      }
                     }}
                   >
-                    Download your contract
+                    {downloadingContract ? 'Preparing PDF…' : 'Download your contract PDF'}
                   </button>
+                  {!order.contractDownloadAvailable && (
+                    <p role="status">The PDF becomes available after payment is confirmed.</p>
+                  )}
+                  {contractError && <p role="alert">{contractError}</p>}
                 </details>
               )}
               {order.test ? (

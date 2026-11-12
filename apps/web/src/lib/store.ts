@@ -76,10 +76,21 @@ const itinerary = createSlice({
 });
 const cart = createSlice({
   name: 'cart',
-  initialState: { items: [] as CartLine[], ready: false, syncing: false, error: '', version: 0 },
+  initialState: {
+    items: [] as CartLine[],
+    ready: false,
+    syncing: false,
+    syncFailed: false,
+    error: '',
+    version: 0,
+  },
   reducers: {
     cartSyncing(state, action: PayloadAction<boolean>) {
       state.syncing = action.payload;
+    },
+    cartSyncFailure(state, action: PayloadAction<string>) {
+      state.syncFailed = Boolean(action.payload);
+      state.error = action.payload;
     },
     restoreCart(state, action: PayloadAction<CartLine[]>) {
       state.items = action.payload;
@@ -139,6 +150,7 @@ export const { setCountries, restoreSearch, switchSearch, chooseCountry, removeC
   itinerary.actions;
 export const {
   cartSyncing,
+  cartSyncFailure,
   restoreCart,
   setCartVersion,
   cartError,

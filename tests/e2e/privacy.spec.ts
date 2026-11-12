@@ -514,6 +514,7 @@ test('an API error is shown without an automatic replay and prices can be retrie
     'aria-disabled',
     'false',
   );
-  expect(quotes).toBe(2);
+  await expect.poll(() => quotes).toBe(2);
+  await expect(page.locator('.quote-status')).toHaveText('');
   expect(proxies).toBe(0);
 });

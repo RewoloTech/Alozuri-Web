@@ -196,10 +196,10 @@ export class FulfillmentService {
     private store: FulfillmentStore,
     private supplier: DeliverySupplier,
   ) {}
-  async run() {
+  async run(ids?: string[]) {
     let processed = 0,
       failed = 0;
-    for (const id of (await this.store.due()).slice(0, 3)) {
+    for (const id of (ids ?? (await this.store.due())).slice(0, 3)) {
       const order = await this.store.claim(id);
       if (!order) continue;
       try {

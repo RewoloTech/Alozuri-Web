@@ -99,6 +99,7 @@ const timer = setInterval(async () => {
       const payload = JSON.stringify({
         id: 'evt_e2e_' + id,
         object: 'event',
+        created: Math.floor(Date.now() / 1000),
         livemode: false,
         type: 'payment_intent.succeeded',
         data: { object: intent },

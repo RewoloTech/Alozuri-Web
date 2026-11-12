@@ -1,11 +1,21 @@
 name: CI
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+permissions:
+  contents: read
+concurrency:
+  group: checks-${{ github.workflow }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 22
           cache: npm
@@ -14,23 +24,63 @@ jobs:
       - run: npm run typecheck
       - run: npm run typecheck:tests
       - run: npm run test:unit
+      - run: npm run test:jest
       - run: npm run build
+      - name: Build and smoke-test the production API container
+        run: |
+          docker build --tag alozuri-api:ci .
+          docker run --rm --network none --env DEMO_MODE=true --entrypoint node alozuri-api:ci --input-type=module -e '
+            import assert from "node:assert/strict";
+            import { createApp } from "./dist/apps/api/src/app.js";
+            const app = await createApp();
+            const response = await app.inject({ method: "GET", url: "/health" });
+            assert.equal(response.statusCode, 200);
+            await app.close();
+          '
 
   playwright:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 22
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         if: failure()
         with:
           name: playwright-failures
           path: test-results
           if-no-files-found: ignore
+          retention-days: 7
+
+  emulators:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - run: npm install --global firebase-tools@15.34.2
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:firestore
+      - run: npm run test:auth
+      - run: npm run test:cart:browser
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        if: failure()
+        with:
+          name: emulator-browser-failures
+          path: test-results
+          if-no-files-found: ignore
+          retention-days: 7

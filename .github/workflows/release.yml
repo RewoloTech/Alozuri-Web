@@ -1,0 +1,59 @@
+name: Release production
+on:
+  workflow_dispatch:
+    inputs:
+      force_all:
+        description: Redeploy both services even if their live code has not changed
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: alozuri-production-release
+  cancel-in-progress: false
+jobs:
+  checks:
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/ci.yml
+  release:
+    needs: checks
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      GOOGLE_CLOUD_PROJECT: alozuri
+      DEPLOY_WIF_PROVIDER: ${{ vars.GCP_DEPLOY_WORKLOAD_IDENTITY_PROVIDER }}
+      DEPLOY_SERVICE_ACCOUNT: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      FORCE_ALL: ${{ inputs.force_all }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check approved deployment identity configuration
+        run: |
+          test -n "$DEPLOY_WIF_PROVIDER" || { echo 'Set GCP_DEPLOY_WORKLOAD_IDENTITY_PROVIDER after approving deployment IAM.'; exit 1; }
+          test -n "$DEPLOY_SERVICE_ACCOUNT" || { echo 'Set GCP_DEPLOY_SERVICE_ACCOUNT after approving deployment IAM.'; exit 1; }
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm install --global firebase-tools@15.34.2
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          project_id: alozuri
+          workload_identity_provider: ${{ env.DEPLOY_WIF_PROVIDER }}
+          service_account: ${{ env.DEPLOY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+        with:
+          project_id: alozuri
+      - name: Release changed services from the exact checked commit
+        run: |
+          force_args=()
+          if [ "$FORCE_ALL" = true ]; then force_args+=(--force); fi
+          node --import tsx scripts/release-production.mts --apply "${force_args[@]}"

@@ -4,9 +4,10 @@ import { legalSnapshotSchema } from './legal.js';
 import { planSchema } from './validation.js';
 
 export const CONFIRMATION_VERSION = 'email-v1';
+export const CONTRACT_PDF_FILENAME = 'Alozuri-Order-Confirmation.pdf';
 const cents = z.number().int().nonnegative().safe();
 // Deliberately select only confirmation data. No supplier credentials, access tokens,
-// Stripe identifiers, or eSIM activation fields can reach the email template.
+// Stripe identifiers, or eSIM activation fields can reach the email or PDF templates.
 export const confirmationOrderSchema = z
   .object({
     id: z.string().regex(/^purchase_[a-f0-9]{48}$/),

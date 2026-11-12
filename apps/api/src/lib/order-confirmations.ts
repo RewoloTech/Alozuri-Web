@@ -23,17 +23,13 @@ export class OrderConfirmations {
     private token: (id: string) => string,
     private now: () => number = Date.now,
   ) {}
-  async run() {
+  async run(purchaseId?: string) {
     let sent = 0,
       failed = 0,
       attention = 0;
-    await this.adoptUnsentLegacyOrders();
-    const docs = await this.db
-      .collection('purchases')
-      .where('confirmationDueAt', '<=', this.now())
-      .limit(10)
-      .get();
-    for (const doc of docs.docs) {
+    await this.adoptUnsentLegacyOrders(purchaseId);
+    const docs = await this.due('confirmationDueAt', purchaseId);
+    for (const doc of docs) {
       const lease = randomUUID();
       const claimed = await this.db.runTransaction(async (t) => {
         const current = await t.get(doc.ref);
@@ -42,7 +38,9 @@ export class OrderConfirmations {
           !current.get('paidAt') ||
           current.get('confirmationSentAt') ||
           current.get('confirmationStatus') === 'attention' ||
-          current.get('confirmationLeaseUntil') > this.now()
+          current.get('confirmationLeaseUntil') > this.now() ||
+          typeof current.get('confirmationDueAt') !== 'number' ||
+          current.get('confirmationDueAt') > this.now()
         )
           return null;
         const attempts = Number(current.get('confirmationAttempts') || 0) + 1;
@@ -136,18 +134,23 @@ export class OrderConfirmations {
         });
       }
     }
-    failed += await this.reconcileDelivery();
+    failed += await this.reconcileDelivery(purchaseId);
     return { sent, failed, attention };
   }
-  private async adoptUnsentLegacyOrders() {
+  private async due(field: string, purchaseId?: string) {
+    if (purchaseId) {
+      const doc = await this.db.collection('purchases').doc(purchaseId).get();
+      const due: unknown = doc.get(field);
+      return doc.exists && typeof due === 'number' && due <= this.now() ? [doc] : [];
+    }
+    return (await this.db.collection('purchases').where(field, '<=', this.now()).limit(10).get())
+      .docs;
+  }
+  private async adoptUnsentLegacyOrders(purchaseId?: string) {
     const queues = await Promise.all(
-      ['contractEmailDueAt', 'emailDueAt'].map((field) =>
-        this.db.collection('purchases').where(field, '<=', this.now()).limit(10).get(),
-      ),
+      ['contractEmailDueAt', 'emailDueAt'].map((field) => this.due(field, purchaseId)),
     );
-    const refs = new Map(
-      queues.flatMap((queue) => queue.docs.map((doc) => [doc.id, doc.ref] as const)),
-    );
+    const refs = new Map(queues.flatMap((queue) => queue.map((doc) => [doc.id, doc.ref] as const)));
     for (const ref of refs.values())
       await this.db.runTransaction(async (t) => {
         const doc = await t.get(ref);
@@ -201,14 +204,10 @@ export class OrderConfirmations {
       t.update(ref, fields);
     });
   }
-  private async reconcileDelivery() {
+  private async reconcileDelivery(purchaseId?: string) {
     let failures = 0;
-    const docs = await this.db
-      .collection('purchases')
-      .where('confirmationDeliveryDueAt', '<=', this.now())
-      .limit(10)
-      .get();
-    for (const doc of docs.docs) {
+    const docs = await this.due('confirmationDeliveryDueAt', purchaseId);
+    for (const doc of docs) {
       const id: unknown = doc.get('confirmationProviderId');
       if (typeof id !== 'string' || doc.get('test') !== false) continue;
       const attempts = Number(doc.get('confirmationDeliveryAttempts') || 0) + 1;
