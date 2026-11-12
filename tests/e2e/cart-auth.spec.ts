@@ -29,6 +29,22 @@ async function setup(page: Page, delayed = false, interrupted = false) {
   ]);
   await page.addInitScript(() => localStorage.setItem('alozuri-currency', 'USD'));
   const accounts = new Map<string, AccountCart>();
+  const profiles = new Map<
+    string,
+    {
+      uid: string;
+      email: string;
+      emailVerified: boolean;
+      displayName: string | null;
+      firstName: string;
+      lastName: string;
+      providerIds: string[];
+      createdAt: string;
+      lastSignInAt: string;
+      updatedAt: string;
+    }
+  >();
+  const profileWrites: unknown[] = [];
   const merges: { uid: string; items: CartItem[]; mergeId: string }[] = [];
   const checkouts: { items: CartItem[]; expectedTotalCents: number; currency: string }[] = [];
   let release!: () => void;
@@ -43,7 +59,7 @@ async function setup(page: Page, delayed = false, interrupted = false) {
     const headers = {
       'Access-Control-Allow-Origin': 'http://localhost:3100',
       'Access-Control-Allow-Headers': 'content-type,authorization,x-order-access',
-      'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS',
+      'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,OPTIONS',
     };
     if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
     let data: unknown;
@@ -51,6 +67,83 @@ async function setup(page: Page, delayed = false, interrupted = false) {
       data = { supportedCurrencies: ['USD'], paymentMode: 'test', cartCheckoutMode: 'test' };
     else if (url.pathname === '/v1/packages/' + plan.id) data = { plan };
     else if (url.pathname === '/v1/countries') data = { countries: [] };
+    else if (
+      url.pathname === '/v2/profile' ||
+      url.pathname === '/v2/orders' ||
+      url.pathname.endsWith('/usage')
+    ) {
+      const jwt = request.headers().authorization?.slice(7).split('.')[1];
+      if (!jwt) throw new Error('Profile and account reads require a real emulator user');
+      const identity = z
+        .object({ user_id: z.string(), email: z.string(), email_verified: z.boolean() })
+        .parse(JSON.parse(Buffer.from(jwt, 'base64url').toString()));
+      const uid = identity.user_id;
+      if (url.pathname === '/v2/profile') {
+        const timestamp = new Date().toISOString();
+        const profile = profiles.get(uid) ?? {
+          uid,
+          email: identity.email,
+          emailVerified: identity.email_verified,
+          displayName: null,
+          firstName: '',
+          lastName: '',
+          providerIds: ['password'],
+          createdAt: timestamp,
+          lastSignInAt: timestamp,
+          updatedAt: timestamp,
+        };
+        profile.emailVerified = identity.email_verified;
+        if (request.method() === 'PATCH') {
+          const fields = z
+            .object({ firstName: z.string(), lastName: z.string() })
+            .strict()
+            .parse(request.postDataJSON());
+          profileWrites.push(fields);
+          Object.assign(profile, fields, {
+            displayName: fields.firstName + ' ' + fields.lastName,
+            updatedAt: timestamp,
+          });
+        }
+        profiles.set(uid, profile);
+        data = { profile };
+      } else {
+        expect(identity.email_verified).toBe(true);
+        const purchaseId = 'purchase_' + 'a'.repeat(48),
+          unitId = 'order_' + 'b'.repeat(48),
+          gb = 1073741824;
+        data = url.pathname.endsWith('/usage')
+          ? {
+              usage: {
+                state: 'available',
+                stale: false,
+                snapshot: {
+                  kind: 'fixed',
+                  usedBytes: gb,
+                  totalBytes: 5 * gb,
+                  remainingBytes: 4 * gb,
+                  profileStatus: 'IN_USE',
+                  expiresAt: null,
+                  checkedAt: new Date().toISOString(),
+                },
+              },
+            }
+          : {
+              orders: [
+                {
+                  id: purchaseId,
+                  email: identity.email,
+                  items: [{ plan, quantity: 1 }],
+                  totalCents: 1200,
+                  currency: 'USD',
+                  status: 'paid',
+                  test: false,
+                  createdAt: new Date().toISOString(),
+                  allocations: [{ id: unitId, plan, status: 'ready' }],
+                },
+              ],
+            };
+      }
+    } else if (url.pathname === '/v1/orders') data = { orders: [] };
     else if (url.pathname === '/v2/quote' || url.pathname === '/v2/checkout') {
       const input = z
         .object({
@@ -136,7 +229,7 @@ async function setup(page: Page, delayed = false, interrupted = false) {
     } else data = { bundles: [] };
     await route.fulfill({ headers, json: data });
   });
-  return { accounts, merges, checkouts, release };
+  return { accounts, merges, checkouts, release, profiles, profileWrites };
 }
 async function signup(page: Page) {
   const email = `cart-${crypto.randomUUID()}@example.test`,
@@ -256,4 +349,59 @@ test('choosing the saved account cart after an interrupted guest merge does not 
   await page.getByRole('button', { name: 'Decrease quantity for ' + plan.name }).click();
   await expect.poll(() => [...state.accounts.values()][0].items[0].quantity).toBe(1);
   await checkout(page, state.checkouts);
+});
+
+test('verified customers can navigate usage, orders and profile, update names and never retain private usage after logout', async ({
+  page,
+}) => {
+  const state = await setup(page);
+  await signup(page);
+  await page.getByRole('button', { name: 'My account', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Account navigation' })
+    .getByRole('link', { name: 'Data usage', exact: true })
+    .click();
+  await expect(page.getByRole('heading', { name: 'Data usage', level: 1 })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Data usage', exact: true })).toContainText('4 GB');
+  const navigation = page.getByRole('navigation', { name: 'Account sections' });
+  await expect(navigation.getByRole('link', { name: 'Data usage' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  for (const width of [320, 390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    const links = await navigation.getByRole('link').all();
+    for (const link of links) expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    await navigation.screenshot({ path: `/tmp/alozuri-account-sections-${width}.png` });
+  }
+  await navigation.getByRole('link', { name: 'Orders', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Orders', level: 1 })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Data usage', exact: true })).toHaveCount(0);
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page
+    .getByRole('navigation', { name: 'Account sections' })
+    .getByRole('link', { name: 'Profile', exact: true })
+    .click();
+  await page.getByRole('textbox', { name: 'First name', exact: true }).fill('Mary Jane');
+  await page.getByRole('textbox', { name: 'Last name', exact: true }).fill('Smith');
+  await page.getByRole('button', { name: 'Save name', exact: true }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Your name has been updated.' }),
+  ).toBeVisible();
+  expect(state.profileWrites.at(-1)).toEqual({ firstName: 'Mary Jane', lastName: 'Smith' });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: '/tmp/alozuri-user-profile-390.png', fullPage: true });
+  await expect.poll(() => [...state.profiles.values()][0].firstName).toBe('Mary Jane');
+  await page
+    .getByRole('navigation', { name: 'Account sections' })
+    .getByRole('link', { name: 'Data usage', exact: true })
+    .click();
+  await expect(page.getByRole('region', { name: 'Data usage', exact: true })).toContainText('4 GB');
+  await logout(page);
+  await page.goto('/account/usage');
+  await expect(page.getByRole('link', { name: 'Sign in', exact: true })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Data usage', exact: true })).toHaveCount(0);
 });

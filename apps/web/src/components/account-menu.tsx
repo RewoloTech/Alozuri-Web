@@ -77,6 +77,16 @@ export function AccountMenu({
           <Link href={verified ? '/account/esims' : '/verify-email'} onClick={() => setOpen(false)}>
             {verified ? 'My eSIMs' : 'Verify email'}
           </Link>
+          {verified && (
+            <>
+              <Link href="/account/usage" onClick={() => setOpen(false)}>
+                Data usage
+              </Link>
+              <Link href="/account/orders" onClick={() => setOpen(false)}>
+                Orders
+              </Link>
+            </>
+          )}
           <Link href="/dashboard#account-settings" onClick={() => setOpen(false)}>
             Account settings
           </Link>

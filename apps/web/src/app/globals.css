@@ -3166,7 +3166,10 @@ h1 {
     overflow-wrap: anywhere;
   }
   .footer-main .eyebrow {
-    margin-bottom: 4px;
+    color: var(--ink);
+    font-size: 0.9375rem;
+    letter-spacing: 0.08em;
+    margin-bottom: 8px;
   }
   .footer-bottom {
     padding-bottom: max(20px, env(safe-area-inset-bottom));
@@ -3357,5 +3360,33 @@ h1 {
 @media (prefers-reduced-motion: reduce) {
   .checkout-spinner {
     animation: none;
+  }
+}
+
+.account-sections {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+.account-sections a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-weight: 600;
+}
+.account-sections a[aria-current='page'] {
+  color: var(--blue);
+  background: var(--soft);
+  border-color: var(--blue);
+}
+@media (max-width: 600px) {
+  .account-sections {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

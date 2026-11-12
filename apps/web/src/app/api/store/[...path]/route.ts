@@ -114,4 +114,4 @@ async function relay(request: Request, context: { params: Promise<{ path: string
     );
   }
 }
-export { relay as GET, relay as POST, relay as PUT };
+export { relay as GET, relay as POST, relay as PUT, relay as PATCH };

@@ -68,7 +68,8 @@ export function firestoreFulfillmentStore(): FulfillmentStore {
       t.update(ref, fields);
       if (activation)
         t.set(db.collection('orderActivations').doc(order.id), {
-          uid: order.uid,
+          // Guest ownership can change while the supplier request is in flight.
+          uid: orderSchema.shape.uid.parse(doc.get('uid')),
           ...activationSchema.parse(activation),
         });
       if (done) t.delete(jobRef);

@@ -16,6 +16,7 @@ import {
 } from 'firebase/auth';
 import { accountName, safeAccountDestination } from '@voyaspan/shared';
 import { authClient, firebaseConfigured } from '@/lib/firebase';
+import { api } from '@/lib/api';
 export function AuthForm({ mode }: { mode: 'login' | 'register' | 'reset' }) {
   const router = useRouter();
   const search = useSearchParams();
@@ -58,6 +59,17 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' | 'reset' }) {
 
         try {
           await updateProfile(credential.user, { displayName });
+          await api(
+            '/v2/profile',
+            {
+              method: 'PATCH',
+              body: JSON.stringify({
+                firstName: String(data.get('firstName') ?? ''),
+                lastName: String(data.get('lastName') ?? ''),
+              }),
+            },
+            credential.user.uid,
+          );
         } catch {
           /* Account details can be completed after verification. */
         }
