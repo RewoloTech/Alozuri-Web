@@ -346,3 +346,5 @@ export function safeAccountDestination(input: unknown): string {
     return fallback;
   }
 }
+
+export type { UserProfile } from './user-profile.ts';

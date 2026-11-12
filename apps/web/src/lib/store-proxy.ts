@@ -6,12 +6,14 @@ export function allowedStoreRequest(method: string, path: string): boolean {
     '^/v1/(config|countries|featured-bundles|packages|packages/match)$',
     `^/v1/packages/${id}$`,
     '^/v2/search/plans$',
-    '^/v2/(cart|orders)$',
+    '^/v2/(cart|orders|profile)$',
     `^/v2/orders/${id}(/contract\\.pdf|/units/${id}/(activation|usage))?$`,
     `^/v1/orders(/${id}(/activation|/payment-status)?)?$`,
   ];
   if (method === 'GET') return reads.some((pattern) => new RegExp(pattern).test(path));
-  if (method === 'POST') return ['/v2/quote', '/v2/checkout', '/v2/cart/merge'].includes(path);
+  if (method === 'POST')
+    return ['/v2/quote', '/v2/checkout', '/v2/cart/merge', '/v2/profile'].includes(path);
+  if (method === 'PATCH') return path === '/v2/profile';
   return method === 'PUT' && path === '/v2/cart';
 }
 

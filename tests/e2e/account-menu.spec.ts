@@ -31,6 +31,14 @@ test('account navigation supports keyboard dismissal, mobile layouts and working
     'href',
     '/account/esims',
   );
+  await expect(nav.getByRole('link', { name: 'Data usage', exact: true })).toHaveAttribute(
+    'href',
+    '/account/usage',
+  );
+  await expect(nav.getByRole('link', { name: 'Orders', exact: true })).toHaveAttribute(
+    'href',
+    '/account/orders',
+  );
   await expect(nav.getByRole('link', { name: 'Account settings' })).toHaveAttribute(
     'href',
     '/dashboard#account-settings',
