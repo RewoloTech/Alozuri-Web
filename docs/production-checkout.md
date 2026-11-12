@@ -110,6 +110,14 @@ node scripts/configure-catalogue-scheduler.mjs \
 
 The script configures only daily catalogue sync at 03:17 UTC and pauses an existing legacy minute fulfilment job. The former script filename remains a compatibility entry point with the same catalogue-only behaviour. It does not grant IAM or enable services. GitHub catalogue sync is manual-only; order processing uses Cloud Tasks. Confirm OIDC invocation and sync a fresh supplier catalogue before enabling checkout. Monitor delivery queue age, delayed allocations, failed refunds, email retries, supplier balance and disputes.
 
+## Brand attribution on a shared Stripe account
+
+New Alozuri cart purchases freeze a `stripeAttribution` snapshot before creating payment. Their PaymentIntents include `metadata.app=alozuri`, `metadata.brand=Alozuri`, the recorded company (`Rewolo Technologies Ltd`), website, human-readable `order_reference` and existing full `alozuriPurchaseId`. The description is `Alozuri eSIM order AZ-…`, matching the customer's order reference. These fields identify this brand alongside other apps using the same company/Stripe account. See [Stripe metadata](https://docs.stripe.com/metadata).
+
+Each child eSIM retains that frozen attribution for any refund: the refund includes the same brand/parent reference plus its existing `alozuriOrderId`. Payment and refund retry keys remain unchanged across deployments; brand attribution does not select a new key or authorise a second payment/refund. Existing purchases and refund records without attribution retain their original metadata, descriptions and retry keys, including uncertain creation retries. Do not switch an older request to a new key or payload: Stripe may have already accepted it. Historical Stripe payments are not automatically rewritten. Legacy Checkout Session payloads keep their existing compatibility fields; all production Stripe clients additionally identify the SDK integration as Alozuri through `appInfo`.
+
+Attribution is identification only. Payment verification still checks signed Stripe state, the bound intent, immutable amount/currency and existing purchase ID; the brand label does not authorise fulfilment. There is no account-wide business-profile, bank-statement descriptor, gateway or pricing change. SDK/mocked payment/refund and emulator tests validate the request fields and retries; no real charge is required for those checks.
+
 ## Stripe webhooks and wallets
 
 Register the matching-mode endpoint `https://YOUR_ALOZURI_API/v1/webhooks/stripe` and subscribe to:

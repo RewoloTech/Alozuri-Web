@@ -1,3 +1,9 @@
+import {
+  STRIPE_APP_INFO,
+  stripeAttributionSchema,
+  newStripeAttribution,
+  stripePaymentReference,
+} from './stripe-attribution.js';
 import { ownsPurchase, purchaseOwnerUid } from './purchase-ownership.js';
 import { activationSchema } from './supplier.js';
 import {
@@ -98,6 +104,7 @@ const purchaseSchema = z
     subtotalCents: z.number().int().nonnegative().optional(),
     taxCents: z.number().int().nonnegative().optional(),
     confirmationVersion: confirmationVersionSchema.optional(),
+    stripeAttribution: stripeAttributionSchema.optional(),
     orderReference: z.string().optional(),
     status: z.enum([
       'pending_payment',
@@ -271,6 +278,7 @@ export class CommerceService {
       taxCents: quote.taxCents,
       confirmationVersion: CONFIRMATION_VERSION,
       orderReference: orderReference(id),
+      stripeAttribution: newStripeAttribution(id),
       status: 'pending_payment' as const,
       test: this.mode === 'test',
       createdAt: new Date().toISOString(),
@@ -322,6 +330,7 @@ export class CommerceService {
     });
     if (purchase.status !== 'pending_payment' && purchase.status !== 'payment_processing')
       throw new CommerceError('This order has already been processed. Check its status.');
+    const stripeReference = stripePaymentReference(id, purchase.stripeAttribution);
     const intent = purchase.paymentIntentId
       ? await this.stripe.paymentIntents.retrieve(purchase.paymentIntentId)
       : await this.stripe.paymentIntents.create(
@@ -330,8 +339,7 @@ export class CommerceService {
             currency: purchase.currency.toLowerCase(),
             // Alozuri sends the complete confirmation; do not force a second Stripe receipt.
             automatic_payment_methods: { enabled: true, allow_redirects: 'never' },
-            metadata: { alozuriPurchaseId: id },
-            description: 'Alozuri eSIM order ' + id,
+            ...stripeReference,
           },
           { idempotencyKey: id + ':payment:v1' },
         );
@@ -516,6 +524,7 @@ export class CommerceService {
               supplierCode: line.supplierCode,
               wholesaleUnits: line.wholesaleUnits,
               parentOrderId: id,
+              ...(p.stripeAttribution ? { stripeAttribution: p.stripeAttribution } : {}),
               chargeTotalCents: p.totalCents,
               paymentIntentId: intent.id,
               fulfillmentMode: p.test ? 'test_no_issuance' : 'esim_access',
@@ -754,7 +763,7 @@ export function configuredCommerce() {
   )
     return null;
   return new CommerceService(
-    new Stripe(key, { maxNetworkRetries: 2, timeout: 15000 }),
+    new Stripe(key, { maxNetworkRetries: 2, timeout: 15000, appInfo: STRIPE_APP_INFO }),
     mode,
     secret,
     access,

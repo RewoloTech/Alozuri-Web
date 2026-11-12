@@ -1,3 +1,4 @@
+import { newStripeAttribution } from '../src/lib/stripe-attribution.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import Stripe from 'stripe';
@@ -38,6 +39,7 @@ function fixture() {
     refunds = 0,
     profiles = 0;
   const submitted: string[] = [];
+  const refundRequests: { params: Stripe.RefundCreateParams; key: string }[] = [];
   const session = {
     id: order.sessionId,
     mode: 'payment',
@@ -71,7 +73,8 @@ function fixture() {
     paymentIntents: { retrieve: async () => intent },
     refunds: {
       list: async () => ({ data: [] }),
-      create: async () => {
+      create: async (params: Stripe.RefundCreateParams, options: { idempotencyKey: string }) => {
+        refundRequests.push({ params: structuredClone(params), key: options.idempotencyKey });
         refunds++;
         return refund;
       },
@@ -119,6 +122,7 @@ function fixture() {
     stripe,
     service,
     submitted,
+    refundRequests,
     getSaved: () => saved,
     getRefunds: () => refunds,
     getProfiles: () => profiles,
@@ -356,3 +360,28 @@ for (const currency of ['GBP', 'EUR'] as const)
       assert.equal(f.getRefunds(), rejected ? 1 : 0);
       assert.equal(f.order.currency, currency);
     });
+
+test('new Alozuri refunds retain the original brand reference and retry key without another supplier order', async () => {
+  const f = fixture();
+  f.order.parentOrderId = 'purchase_' + 'c'.repeat(48);
+  f.order.chargeTotalCents = f.order.amountCents;
+  f.order.stripeAttribution = newStripeAttribution(f.order.parentOrderId);
+  delete f.order.sessionId;
+  Object.assign(f.intent, { metadata: { alozuriPurchaseId: f.order.parentOrderId } });
+  f.supplier.order = async () => {
+    throw new SupplierError('200011', true);
+  };
+  await f.service.run();
+  assert.equal(f.order.status, 'refunded');
+  assert.equal(f.refundRequests.length, 1);
+  const request = f.refundRequests[0];
+  assert.deepEqual(request.params.metadata, {
+    ...f.order.stripeAttribution.metadata,
+    alozuriOrderId: f.order.id,
+  });
+  assert.equal(request.params.payment_intent, f.order.paymentIntentId);
+  assert.equal(request.params.amount, f.order.amountCents);
+  assert.equal(request.key, `${f.order.id}:unfulfilled-refund:v1`);
+  await f.service.run();
+  assert.equal(f.refundRequests.length, 1);
+});

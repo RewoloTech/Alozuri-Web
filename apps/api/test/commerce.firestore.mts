@@ -61,6 +61,7 @@ function fixture(
   );
   let creates = 0;
   const emails: ConfirmationEmail[] = [];
+  const paymentRequests: { params: Stripe.PaymentIntentCreateParams; key: string }[] = [];
   const intent = {
     id: 'pi_fixture_' + ++serial,
     livemode: !testMode,
@@ -86,6 +87,7 @@ function fixture(
         options: { idempotencyKey: string },
       ) => {
         creates++;
+        paymentRequests.push({ params: structuredClone(params), key: options.idempotencyKey });
         assert.ok(options.idempotencyKey);
         assert.equal(params.automatic_payment_methods?.enabled, true);
         assert.equal(params.receipt_email, undefined);
@@ -191,6 +193,7 @@ function fixture(
     input,
     event,
     emails,
+    paymentRequests,
     refunds,
     getCreates: () => creates,
   };
@@ -2186,4 +2189,76 @@ test('changed private installation data after an attempted send requires review 
   assert.equal((await ref.get()).get('confirmationStatus'), 'attention');
   assert.equal((await ref.get()).get('confirmationError'), 'send_reconciliation_required');
   assert.equal((await ref.get()).get('confirmationPayloadHash'), firstHash);
+});
+
+test('new payment requests identify Alozuri and retain frozen attribution for retries and per-eSIM refunds', async () => {
+  const f = fixture(false, undefined, 'GBP');
+  const result = await f.service.checkout(f.input, null);
+  const ref = db.doc('purchases/' + result.orderId);
+  const frozen = (await ref.get()).get('stripeAttribution');
+  const request = f.paymentRequests[0];
+  assert.equal(request.params.metadata?.brand, 'Alozuri');
+  assert.equal(request.params.metadata?.app, 'alozuri');
+  assert.equal(request.params.metadata?.company, 'Rewolo Technologies Ltd');
+  assert.equal(request.params.metadata?.website, 'https://alozuri.com');
+  assert.equal(request.params.metadata?.alozuriPurchaseId, result.orderId);
+  assert.equal(request.params.metadata?.order_reference, (await ref.get()).get('orderReference'));
+  assert.equal(
+    request.params.description,
+    'Alozuri eSIM order ' + (await ref.get()).get('orderReference'),
+  );
+  assert.equal(request.params.amount, f.input.expectedTotalCents);
+  assert.equal(request.params.currency, 'gbp');
+  assert.equal(request.key, `${result.orderId}:payment:v1`);
+  assert.equal(request.params.statement_descriptor, undefined);
+  assert.equal(request.params.statement_descriptor_suffix, undefined);
+  // Simulate Stripe accepting creation before the Firestore binding was acknowledged.
+  await ref.update({ paymentIntentId: FieldValue.delete() });
+  await f.service.checkout(f.input, null);
+  assert.deepEqual(f.paymentRequests[1], request);
+  f.intent.status = 'succeeded';
+  f.intent.amount_received = f.intent.amount;
+  await Promise.all([f.event(), f.event()]);
+  const children = await db.collection('orders').where('parentOrderId', '==', result.orderId).get();
+  assert.equal(children.size, 3);
+  for (const child of children.docs) assert.deepEqual(child.get('stripeAttribution'), frozen);
+});
+
+test('a pre-attribution unbound payment retry preserves the old Stripe body and idempotency key', async () => {
+  const f = fixture();
+  const result = await f.service.checkout(f.input, null);
+  await db
+    .doc('purchases/' + result.orderId)
+    .update({ stripeAttribution: FieldValue.delete(), paymentIntentId: FieldValue.delete() });
+  await f.service.checkout(f.input, null);
+  const request = f.paymentRequests[1];
+  assert.deepEqual(request.params.metadata, { alozuriPurchaseId: result.orderId });
+  assert.equal(request.params.description, 'Alozuri eSIM order ' + result.orderId);
+  assert.equal(request.key, result.orderId + ':payment:v1');
+  assert.equal(request.params.amount, f.input.expectedTotalCents);
+});
+
+test('other brands sharing the Stripe account cannot authorise Alozuri fulfilment through brand metadata', async () => {
+  const tasks: OrderWork[] = [];
+  const f = fixture(false, undefined, 'USD', undefined, undefined, undefined, {
+    enqueue: async (work) => {
+      tasks.push(work);
+    },
+  });
+  const result = await f.service.checkout(f.input, null);
+  f.intent.status = 'succeeded';
+  f.intent.amount_received = f.intent.amount;
+  f.intent.metadata = {
+    brand: 'Other brand',
+    app: 'another-app',
+    order_reference: 'another-order',
+  };
+  await f.event();
+  assert.equal((await db.doc('purchases/' + result.orderId).get()).get('paidAt'), undefined);
+  assert.equal(
+    (await db.collection('orders').where('parentOrderId', '==', result.orderId).get()).size,
+    0,
+  );
+  assert.equal(tasks.length, 0);
+  assert.equal(f.emails.length, 0);
 });

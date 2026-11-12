@@ -1,3 +1,8 @@
+import {
+  STRIPE_APP_INFO,
+  stripeAttributionSchema,
+  stripeRefundMetadata,
+} from './stripe-attribution.js';
 import { CONFIRMATION_VERSION } from './confirmation-order.js';
 import { legalSnapshotSchema } from './legal.js';
 import { MINIMUM_CHARGE_MINOR } from './exchange-rates.js';
@@ -24,6 +29,7 @@ const liveOrderSchema = orderSchema
     paymentIntentId: z.string().startsWith('pi_'),
     supplierOrderNo: z.string().min(1).max(200).optional(),
     refundId: z.string().optional(),
+    stripeAttribution: stripeAttributionSchema.optional(),
   })
   .refine(
     (o) =>
@@ -246,7 +252,7 @@ export class FulfillmentService {
         {
           payment_intent: order.paymentIntentId,
           amount: order.amountCents,
-          metadata: { alozuriOrderId: order.id },
+          metadata: stripeRefundMetadata(order.id, order.parentOrderId, order.stripeAttribution),
         },
         { idempotencyKey: order.id + ':unfulfilled-refund:v1' },
       );
@@ -393,7 +399,7 @@ export function configuredFulfillment(): FulfillmentService | null {
   )
     return null;
   return new FulfillmentService(
-    new Stripe(key, { maxNetworkRetries: 1, timeout: 10000 }),
+    new Stripe(key, { maxNetworkRetries: 1, timeout: 10000, appInfo: STRIPE_APP_INFO }),
     firestoreFulfillmentStore(),
     new SupplierClient(),
   );

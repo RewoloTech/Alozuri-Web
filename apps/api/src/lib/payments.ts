@@ -1,3 +1,4 @@
+import { STRIPE_APP_INFO } from './stripe-attribution.js';
 import {
   orderTaskConfig,
   configuredOrderTaskQueue,
@@ -571,7 +572,7 @@ export function configuredPayments(): PaymentService | null {
   )
     return null;
   return new PaymentService(
-    new Stripe(key, { maxNetworkRetries: 2 }),
+    new Stripe(key, { maxNetworkRetries: 2, appInfo: STRIPE_APP_INFO }),
     firestorePaymentStore(mode),
     currentCheckoutPlan,
     secret,
