@@ -255,11 +255,13 @@ export function PrivacyProvider({ children }: { children: React.ReactNode }) {
       <button
         type="button"
         className="support-shortcut"
+        aria-label="Chat"
         onClick={openChat}
         aria-haspopup="dialog"
         aria-expanded={chatOpen}
       >
-        <MessageCircle size={20} aria-hidden="true" /> Chat
+        <MessageCircle size={20} aria-hidden="true" />
+        <span className="support-shortcut-label">Chat</span>
       </button>
     </PrivacyContext.Provider>
   );
