@@ -116,3 +116,17 @@ export const getPublicFeaturedBundles = cache(async () => {
   const body = await publicJson('/v1/featured-bundles?currency=USD');
   return record(body) ? parseFeaturedBundles(body.bundles, 'USD') : null;
 });
+
+export const getItineraryPlans = cache(async (codes: string[]): Promise<Plan[]> => {
+  if (!codes.length || !codes.every(isCountryCode)) return [];
+  const body = await publicJson(
+    '/v1/packages/match?' + new URLSearchParams({ countries: codes.join(','), coverage: 'all' }),
+  );
+  if (!record(body) || !Array.isArray(body.plans)) return [];
+  return body.plans
+    .flatMap((p: unknown) => {
+      const parsed = record(p) && typeof p.id === 'string' ? parsePublicPlan(p, p.id) : null;
+      return parsed && codes.every((code) => parsed.countries.includes(code)) ? [parsed] : [];
+    })
+    .slice(0, 6);
+});

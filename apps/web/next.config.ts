@@ -6,6 +6,10 @@ const config: NextConfig = {
   transpilePackages: ['@alozuri/shared'],
   outputFileTracingRoot: path.resolve(__dirname, '../..'),
   poweredByHeader: false,
+  // Preserve Next's HTML-limited crawlers and deliver blocking metadata/statuses
+  // to Google and OpenAI search instead of streamed late head tags.
+  htmlLimitedBots:
+    /[\w-]+-Google|Google-[\w-]+|Chrome-Lighthouse|Slurp|DuckDuckBot|baiduspider|yandex|sogou|bitlybot|tumblr|vkShare|quora link preview|redditbot|ia_archiver|Bingbot|BingPreview|applebot|facebookexternalhit|facebookcatalog|Twitterbot|LinkedInBot|Slackbot|Discordbot|WhatsApp|SkypeUriPreview|Yeti|googleweblight|Googlebot|OAI-SearchBot|ChatGPT-User/i,
   ...(staticExport
     ? {}
     : {
@@ -37,6 +41,8 @@ const config: NextConfig = {
               '/account/:path*',
               '/dashboard/:path*',
               '/admin/:path*',
+              '/operations/:path*',
+              '/api/:path*',
               '/login',
               '/register',
               '/forgot-password',

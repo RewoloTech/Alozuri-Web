@@ -62,10 +62,14 @@ export default function Help() {
           supported.
         </p>
         <p>
-          Live usage reporting is not provided by this storefront; do not assume an unverified
-          balance or update interval.
+          Where the supplier provides usage readings, your account can show the reported balance and
+          its check time. Readings can be delayed and are not a real-time guarantee.
         </p>
       </div>
+      <p>
+        For more preparation advice, read our <Link href="/guides">travel eSIM guides</Link>,
+        including <Link href="/guides/holiday-data-budget">a 7-day or 14-day data budget</Link>.
+      </p>
       <div className="notice">
         <strong>Need more help?</strong> Email{' '}
         <a href={'mailto:' + BUSINESS.email}>{BUSINESS.email}</a> or visit our contact page.{' '}

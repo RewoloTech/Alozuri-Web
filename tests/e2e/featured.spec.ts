@@ -194,7 +194,7 @@ test('allowance updates the actual variant, price, validity and coverage while c
   }
   await page.getByRole('combobox', { name: 'Currency', exact: true }).selectOption('GBP');
   await expect(europe.locator('.featured-price')).toContainText('£20.00');
-  await europe.getByRole('link', { name: 'View Europe 20 GB plan' }).click();
+  await europe.getByRole('link', { name: 'View plan: Europe 20 GB' }).click();
   await expect(page).toHaveURL(/\/plans\/featured-europe-20$/);
   await page.getByRole('button', { name: 'Add to cart', exact: true }).click();
   await expect(page.getByRole('link', { name: 'Shopping cart, 1 item' })).toBeVisible();

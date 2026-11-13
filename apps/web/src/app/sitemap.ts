@@ -1,3 +1,4 @@
+import { guides } from '@/lib/guides';
 import type { MetadataRoute } from 'next';
 import { BUSINESS, LEGAL_EFFECTIVE_DATE } from '@alozuri/shared/legal';
 import { POLICIES } from '@alozuri/shared/policies';
@@ -10,6 +11,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     '',
     '/destinations',
     '/help',
+    '/destinations/europe',
+    '/guides',
+    ...guides.map((g) => '/guides/' + g.slug),
     ...Object.values(POLICIES).map((p) => p.path),
     ...(await getPublicCountries()).map((c) => '/destinations/' + c.code.toLowerCase()),
     ...(await getSitemapPlanIds()).map((id) => '/plans/' + id),

@@ -1,3 +1,4 @@
+import { getPublicCountries } from '@/lib/catalogue-server';
 import { publicMetadata } from '@/lib/seo';
 import Link from 'next/link';
 import { DestinationDirectory } from '@/components/destination-directory';
@@ -6,7 +7,8 @@ export const metadata = publicMetadata(
   'Find travel eSIM coverage by country or compare one plan for a multi-country itinerary.',
   '/destinations',
 );
-export default function Destinations() {
+export default async function Destinations() {
+  const initial = await getPublicCountries();
   return (
     <section className="container section">
       <div className="page-intro">
@@ -17,7 +19,7 @@ export default function Destinations() {
           Build my itinerary →
         </Link>
       </div>
-      <DestinationDirectory />
+      <DestinationDirectory initial={initial} />
     </section>
   );
 }

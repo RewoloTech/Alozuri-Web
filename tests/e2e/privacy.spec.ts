@@ -443,7 +443,7 @@ test('blocked cross-origin requests recover through the same-site store for add,
   await compatibility.check();
   await expect(page.getByRole('button', { name: 'Continue to payment' })).toBeEnabled();
   await expect(page.locator('main [role="alert"]')).toHaveCount(0);
-  await expect(page.locator('.checkout-policy-notice')).toContainText('By placing your order');
+  await expect(page.locator('.checkout-policy-notice')).toContainText('By continuing, you agree');
   const result = await page.request.post('/api/store/v2/checkout', {
     data: {
       items: [{ planId: 'seo-plan', quantity: 1 }],

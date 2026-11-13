@@ -663,11 +663,11 @@ export function PlanCard({ plan, highlight = false }: { plan: PlanSummary; highl
       <div className="plan-bottom">
         <div>
           <strong>
-            {ready && plan.currency === currency ? money(plan.priceCents, plan.currency) : '—'}
+            {!ready || plan.currency === currency ? money(plan.priceCents, plan.currency) : '—'}
           </strong>
           <span>
             {' '}
-            {ready ? currency : ''}
+            {ready ? currency : plan.currency}
             {plan.demo ? ' · sample price' : ''}
           </span>
         </div>

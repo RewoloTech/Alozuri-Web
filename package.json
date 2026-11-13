@@ -36,7 +36,8 @@
     "deploy:api": "node scripts/deploy-api.mjs",
     "operations:admin": "node --import tsx scripts/operations-admin.mts",
     "operations:backfill": "node --import tsx scripts/backfill-financials.mts",
-    "operations:supplier-cost": "node --import tsx scripts/reconcile-supplier-cost.mts"
+    "operations:supplier-cost": "node --import tsx scripts/reconcile-supplier-cost.mts",
+    "test:seo": "node --import tsx --test tests/unit/seo.test.ts && node --import tsx tests/seo-production.mts && playwright test tests/e2e/seo.spec.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.0",

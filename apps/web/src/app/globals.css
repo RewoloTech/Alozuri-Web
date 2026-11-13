@@ -24,7 +24,7 @@
   --ink: #171c2e;
   --soft: #f7f8fc;
   --lime: #d9fa83;
-  --muted: #687084;
+  --muted: #5e6678;
   --border: #e5e7ef;
 }
 * {
@@ -511,7 +511,7 @@ h1 {
   font-size: 0.875rem;
   letter-spacing: 0.1em;
   font-weight: 700;
-  color: #72798a;
+  color: #626b7d;
   margin-bottom: 7px;
 }
 .country-chips {
@@ -601,7 +601,7 @@ h1 {
   justify-content: space-between;
   gap: 12px;
   margin-top: 15px;
-  color: #72798a;
+  color: #626b7d;
   font-size: 0.875rem;
 }
 .planner-note > span {
@@ -962,7 +962,7 @@ h1 {
   font-family: 'Manrope', Arial, sans-serif;
   font-size: 28px;
   font-weight: 600;
-  color: #a3a9b9;
+  color: #626b7d;
 }
 .step h3 {
   font-size: 16px;
@@ -1033,7 +1033,7 @@ h1 {
   font-size: 0.875rem;
 }
 .last-call .eyebrow {
-  color: #7169a9;
+  color: #625996;
 }
 .site-footer {
   background: white;
@@ -1077,7 +1077,7 @@ h1 {
   gap: 20px;
   padding-block: 20px;
   font-size: 0.875rem;
-  color: #737b8d;
+  color: #626b7d;
 }
 .footer-bottom > div {
   display: flex;
@@ -1145,7 +1145,7 @@ h1 {
   text-align: center;
   margin: 22px 0;
   font-size: 0.875rem;
-  color: #737b8d;
+  color: #626b7d;
 }
 .divider:before {
   content: '';
@@ -1246,7 +1246,7 @@ h1 {
   align-items: center;
   justify-content: center;
   gap: 7px;
-  color: #737b8d;
+  color: #626b7d;
   font-size: 0.875rem;
   margin-top: 25px;
 }
@@ -4106,4 +4106,41 @@ body:has(.operations-page) .support-shortcut {
 }
 .operations-supplier-credit:not([open]) > :not(summary) {
   display: none;
+}
+
+.destination-advice {
+  max-width: 850px;
+}
+.destination-advice li {
+  margin: 10px 0;
+}
+.destination-advice ul {
+  padding-left: 22px;
+  list-style: disc;
+}
+.destination-advice h2 {
+  margin: 24px 0 12px;
+}
+.country-plan-conditions {
+  margin: 12px 0 20px;
+  overflow-wrap: anywhere;
+}
+.country-plan-conditions p {
+  margin: 10px 0;
+}
+.travel-guide {
+  max-width: 850px;
+}
+.travel-guide > section {
+  margin: 28px 0;
+}
+.travel-guide p {
+  margin: 14px 0;
+  line-height: 1.75;
+}
+.destination-advice a,
+.travel-guide p > a:not(.button),
+.country-plan-conditions a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }

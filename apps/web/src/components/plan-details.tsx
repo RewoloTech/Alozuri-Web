@@ -1,4 +1,6 @@
 'use client';
+import { productStructuredData } from '@/lib/product-seo';
+import { jsonLd } from '@/lib/seo';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useDispatch, useSelector } from 'react-redux';
@@ -90,6 +92,12 @@ export function PlanDetails({
     (cart.items.find((i) => i.plan.id === id)?.quantity ?? 0) >= 5;
   return (
     <section className="container section">
+      {!plan.demo && (!ready || plan.currency === currency) && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: jsonLd(productStructuredData(plan)) }}
+        />
+      )}
       <Link className="text-link" href="/destinations">
         ← Explore destinations
       </Link>
@@ -156,8 +164,8 @@ export function PlanDetails({
         <aside className="surface purchase-summary">
           <span className="eyebrow">{plan.demo ? 'SAMPLE PLAN' : 'PLAN SUMMARY'}</span>
           <h2>
-            {ready && plan.currency === currency ? money(plan.priceCents, plan.currency) : '—'}{' '}
-            <small>{ready ? currency : ''}</small>
+            {!ready || plan.currency === currency ? money(plan.priceCents, plan.currency) : '—'}{' '}
+            <small>{ready ? currency : plan.currency}</small>
           </h2>
           <p>
             {dataLabel(plan)} · {plan.days} days

@@ -106,7 +106,7 @@ export function FeaturedBundles({ initial }: { initial: FeaturedBundle[] | null 
                   </fieldset>
                   <Link
                     className="button primary"
-                    aria-label={'View ' + bundle.regionName + ' ' + selected.dataGb + ' GB plan'}
+                    aria-label={'View plan: ' + bundle.regionName + ' ' + selected.dataGb + ' GB'}
                     aria-disabled={!current || loading}
                     href={'/plans/' + encodeURIComponent(selected.productId)}
                     onClick={(event) => {

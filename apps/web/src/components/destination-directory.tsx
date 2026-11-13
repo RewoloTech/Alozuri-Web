@@ -9,8 +9,10 @@ import {
   type Country,
 } from '@alozuri/shared';
 import { api, demoMode } from '@/lib/api';
-export function DestinationDirectory() {
-  const [items, setItems] = useState<Country[]>(demoMode ? countries : []),
+export function DestinationDirectory({ initial = [] }: { initial?: Country[] }) {
+  const [items, setItems] = useState<Country[]>(
+      initial.length ? uniqueDestinations(initial) : demoMode ? countries : [],
+    ),
     [query, setQuery] = useState(''),
     [error, setError] = useState('');
   useEffect(() => {

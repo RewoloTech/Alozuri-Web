@@ -1,0 +1,69 @@
+{
+  "date": "2026-11-13",
+  "site": "https://alozuri.com",
+  "deployment": "Not deployed; live results describe the pre-change site",
+  "liveSitemap": {
+    "urls": 3399,
+    "unique": 3399,
+    "plans": 3185,
+    "destinations": 204
+  },
+  "liveLighthouse": {
+    "version": "13.6.0",
+    "fetchTime": "2026-11-13T04:34:12.062Z",
+    "formFactor": "mobile",
+    "throttlingMethod": "simulate",
+    "scores": {
+      "performance": 1,
+      "accessibility": 0.96,
+      "seo": 1
+    },
+    "metrics": {
+      "first-contentful-paint": {
+        "value": 956.7873599999999,
+        "display": "1.0\u00a0s"
+      },
+      "largest-contentful-paint": {
+        "value": 956.7873599999999,
+        "display": "1.0\u00a0s"
+      },
+      "total-blocking-time": {
+        "value": 46.5,
+        "display": "50\u00a0ms"
+      },
+      "cumulative-layout-shift": {
+        "value": 0.02386593314350599,
+        "display": "0.024"
+      },
+      "server-response-time": {
+        "value": 55,
+        "display": "Root document took 60\u00a0ms"
+      }
+    }
+  },
+  "localProductionLighthouse": {
+    "syntheticCatalogue": true,
+    "scores": {
+      "accessibility": 1,
+      "seo": 1
+    }
+  },
+  "fieldCoreWebVitals": "Not measured; lab TBT is not INP. Search Console/CrUX verification required.",
+  "indexing": "Not verified in Google Search Console or Bing Webmaster Tools",
+  "schemaOrgValidator": {
+    "sample": "New Product/Offer JSON-LD built from a real current public catalogue plan",
+    "errors": 0,
+    "warnings": 0
+  },
+  "privacy": "No Meta Pixel or advertising events added; current consent is support/chat only.",
+  "googleRichResultsTest": {
+    "status": "Attempted; no completed result",
+    "reason": "Tool displayed Something went wrong / Log in and try again after code submission",
+    "requiredNextStep": "Run in an authorized browser after deployment"
+  },
+  "localVerification": {
+    "testSeo": "Passed: 6 unit tests, isolated production build/HTTP assertions and 4 SEO browser tests",
+    "broaderBrowser": "63 distinct tests passed across broad runs and focused reruns: shopping, currency, privacy, SEO and featured plans",
+    "staticChecks": "TypeScript, test TypeScript, ESLint, Prettier, git diff check passed"
+  }
+}

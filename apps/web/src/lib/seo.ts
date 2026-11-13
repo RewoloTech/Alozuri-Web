@@ -38,6 +38,7 @@ export const PRIVATE_ROUTES = [
   '/account',
   '/dashboard',
   '/admin',
+  '/operations',
   '/checkout',
   '/cart',
   '/login',

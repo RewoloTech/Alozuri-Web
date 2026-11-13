@@ -59,6 +59,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   name: BUSINESS.brand,
                   legalName: BUSINESS.company,
                   url: BUSINESS.site,
+                  logo: BUSINESS.site + '/images/alozuri-email-logo.png',
                   email: BUSINESS.email,
                   identifier: {
                     '@type': 'PropertyValue',
