@@ -208,6 +208,22 @@ test('Operations API authorizes every request before invoking financial queries'
         assert.equal(response.headers['cache-control'], 'no-store');
       }
     }
+    for (const token of [null, 'customer', 'unverified', 'invalid']) {
+      for (const [method, url] of [
+        ['GET', '/v1/operations/promotions'],
+        ['POST', '/v1/operations/promotions'],
+        ['PUT', '/v1/operations/promotions'],
+        ['GET', '/v1/operations/promotions/packages'],
+        ['POST', '/v1/operations/promotions/preview'],
+      ] as const) {
+        const response = await app.inject({
+          method,
+          url,
+          headers: token ? { authorization: 'Bearer ' + token } : {},
+        });
+        assert.equal(response.statusCode, token === null || token === 'invalid' ? 401 : 403);
+      }
+    }
     assert.equal(reads, 1);
     assert.equal(supportReads, 1);
     for (const url of [

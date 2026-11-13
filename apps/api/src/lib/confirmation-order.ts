@@ -1,3 +1,4 @@
+import { promotionSnapshot } from './promotions.js';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { legalSnapshotSchema } from './legal.js';
@@ -20,6 +21,9 @@ export const confirmationOrderSchema = z
     subtotalCents: cents.optional(),
     taxCents: cents.optional(),
     totalCents: cents.positive(),
+    originalRetailCents: cents.optional(),
+    discountCents: cents.optional(),
+    promotion: promotionSnapshot.optional(),
     items: z
       .array(z.object({ plan: planSchema, quantity: z.number().int().min(1).max(5) }))
       .min(1)
@@ -33,6 +37,10 @@ export const confirmationOrderSchema = z
       0n,
     );
     if (
+      (order.promotion &&
+        (order.originalRetailCents === undefined ||
+          order.discountCents === undefined ||
+          order.originalRetailCents !== order.totalCents + order.discountCents)) ||
       order.items.some((item) => item.plan.currency !== order.currency) ||
       subtotal + BigInt(order.taxCents ?? 0) !== BigInt(order.totalCents) ||
       (order.subtotalCents !== undefined && subtotal !== BigInt(order.subtotalCents))

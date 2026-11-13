@@ -276,6 +276,8 @@ function CheckoutForIdentity() {
     () => (buy ? (buyPlan ? [{ plan: buyPlan, quantity: 1 }] : []) : cart.items),
     [buy, buyPlan, cart.items],
   );
+  const [promotionInput, setPromotionInput] = useState('');
+  const [promotionCode, setPromotionCode] = useState('');
   const signature = JSON.stringify(cartItems(lines));
   useEffect(() => {
     if (session) return;
@@ -293,7 +295,11 @@ function CheckoutForIdentity() {
     void api<{ quote: Quote }>('/v2/quote', {
       method: 'POST',
       signal: controller.signal,
-      body: JSON.stringify({ items: JSON.parse(signature), currency }),
+      body: JSON.stringify({
+        items: JSON.parse(signature),
+        currency,
+        ...(promotionCode ? { promotionCode } : {}),
+      }),
     })
       .then((r) => {
         if (active) {
@@ -322,8 +328,12 @@ function CheckoutForIdentity() {
       clearTimeout(timeout);
       controller.abort();
     };
-  }, [signature, currency, refresh, session, quoteAttempt]);
-  const quoteReady = quote?.currency === currency && quotedSignature === signature && !loading;
+  }, [signature, currency, refresh, session, quoteAttempt, promotionCode]);
+  const quoteReady =
+    quote?.currency === currency &&
+    quotedSignature === signature &&
+    (quote.promotion?.code ?? '') === promotionCode &&
+    !loading;
   const preview = previewCartPrices(
     lines,
     quote?.currency === currency ? quote.items : [],
@@ -354,6 +364,7 @@ function CheckoutForIdentity() {
         items: JSON.parse(signature),
         email: email.trim().toLowerCase(),
         total: quote.totalCents,
+        promotion: quote.promotion ?? null,
         owner: user?.uid ?? 'guest',
       });
       try {
@@ -387,6 +398,7 @@ function CheckoutForIdentity() {
             legal: CHECKOUT_LEGAL_ACCEPTANCE,
             requestId: request.current,
             expectedTotalCents: quote.totalCents,
+            ...(promotionCode ? { promotionCode } : {}),
           }),
         },
         Boolean(user?.emailVerified),
@@ -415,11 +427,21 @@ function CheckoutForIdentity() {
       setSession({ ...result, deliveryEmail: email.trim().toLowerCase() });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Checkout could not start.');
+      if (e instanceof Error && /reservation expired|payment is closed/i.test(e.message)) {
+        request.current = crypto.randomUUID();
+        try {
+          sessionStorage.removeItem('alozuri-checkout-attempt');
+        } catch {}
+      }
       if (e instanceof Error && /price changed|Checkout changed/i.test(e.message)) {
         request.current = crypto.randomUUID();
         const fresh = await api<{ quote: Quote }>('/v2/quote', {
           method: 'POST',
-          body: JSON.stringify({ items: JSON.parse(signature), currency }),
+          body: JSON.stringify({
+            items: JSON.parse(signature),
+            currency,
+            ...(promotionCode ? { promotionCode } : {}),
+          }),
         }).catch(() => null);
         if (fresh) {
           setQuote(fresh.quote);
@@ -477,7 +499,7 @@ function CheckoutForIdentity() {
     <OrderSummary
       compact
       showPlanDetails
-      lines={session ? session.quote.items : preview.items}
+      lines={session ? session.quote.items : quoteReady && quote ? quote.items : preview.items}
       total={
         session ? session.quote.totalCents : quoteReady && quote ? quote.totalCents : preview.total
       }
@@ -554,6 +576,54 @@ function CheckoutForIdentity() {
                 </p>
               )}
               {orderSummary}
+              <details>
+                <summary>Have a promotional code?</summary>
+                <label htmlFor="promotion-code">Promotional code</label>
+                <input
+                  id="promotion-code"
+                  className="commerce-input"
+                  maxLength={32}
+                  autoComplete="off"
+                  autoCapitalize="characters"
+                  spellCheck={false}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      if (!loading && !starting)
+                        setPromotionCode(promotionInput.trim().toUpperCase());
+                    }
+                  }}
+                  value={promotionInput}
+                  onChange={(e) => setPromotionInput(e.target.value)}
+                />
+                <button
+                  type="button"
+                  className="button small"
+                  disabled={loading || starting || !promotionInput.trim()}
+                  onClick={() => setPromotionCode(promotionInput.trim().toUpperCase())}
+                >
+                  Apply code
+                </button>
+                {promotionCode && (
+                  <button
+                    type="button"
+                    className="button small"
+                    onClick={() => {
+                      setPromotionCode('');
+                      setPromotionInput('');
+                    }}
+                  >
+                    Remove code
+                  </button>
+                )}
+              </details>
+              {quoteReady && quote?.promotion && (
+                <p role="status" className="checkout-promotion">
+                  {quote.promotion.code}: {quote.promotion.discountPercent}% off · Discount{' '}
+                  {money(quote.discountCents ?? 0, currency)} · Original total{' '}
+                  {money(quote.originalRetailCents ?? quote.totalCents, currency)}
+                </p>
+              )}
               <label className="checkbox-label">
                 <input
                   type="checkbox"

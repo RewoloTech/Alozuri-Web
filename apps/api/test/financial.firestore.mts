@@ -12,7 +12,7 @@ assert.equal(process.env.FIRESTORE_EMULATOR_HOST, '127.0.0.1:8188');
 const app = initializeApp({ projectId: 'demo-alozuri' }, 'financial-tests'),
   db = getFirestore(app);
 let serial = 0;
-async function fixture() {
+async function fixture(promoted = false) {
   const id = 'purchase_' + (++serial).toString(16).padStart(48, '0');
   const source = {
     uid: null,
@@ -21,6 +21,13 @@ async function fixture() {
     paidAt: '2025-02-15T12:00:01.000Z',
     status: 'paid',
     test: false,
+    ...(promoted
+      ? {
+          promotion: { id: 'SAVE10', code: 'SAVE10', discountPercent: 10 },
+          discountCents: 222,
+          originalRetailCents: 2222,
+        }
+      : {}),
     totalCents: 2000,
     currency: 'GBP',
     paymentIntentId: 'pi_financial_' + serial,
@@ -34,7 +41,7 @@ async function fixture() {
     ],
   };
   const ref = db.collection('purchases').doc(id);
-  await ref.set({ ...source, financial: initialFinancial(id, 'purchases', source) });
+  await ref.set({ ...source, financial: initialFinancial(id, 'purchases', source, null, true) });
   const units = [];
   for (let i = 0; i < 2; i++) {
     const unit = db.collection('orders').doc('order_' + `${serial}${i}`.padStart(48, '0'));
@@ -219,6 +226,18 @@ test('date scoped reports paginate without double-counting child orders or test 
   const report = new OperationsReports(db);
   const first = await report.report({ from: '2025-02-15', to: '2025-02-15' });
   assert.equal(first.rows.length, 25);
+  assert.ok(first.trends);
+  assert.equal(
+    first.trends.points.reduce((n, p) => n + p.orders, 0),
+    first.summary.sales,
+  );
+  assert.equal(
+    first.trends.topPlans.reduce((n, p) => n + p.quantity, 0),
+    first.summary.sales * 2,
+  );
+  assert.equal(first.trends.points.find((p) => p.orders)?.revenueGbp, first.summary.revenueGbp);
+  assert.ok(!JSON.stringify(first.trends).includes('@'));
+
   assert.ok(first.nextCursor);
   assert.equal(first.summary.records, serial);
   const second = await report.report({
@@ -345,5 +364,39 @@ test('operator statement command validates dry runs and preserves quotes when ap
     await assert.rejects(run(process.execPath, args));
   } finally {
     await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('promoted partial/full refunds preserve original discount, frozen cost and checkout estimate in date reports', async () => {
+  const f = await fixture(true);
+  await f.ledger.sync(f.ref);
+  const initial = (await f.ref.get()).get('financial');
+  assert.equal(initial.selling.discountMinor, 222);
+  assert.equal(initial.checkoutEstimate.currency, 'GBP');
+  for (const refunded of [1000, 2000]) {
+    f.charge.amount_refunded = refunded;
+    f.refunds.splice(0, f.refunds.length, {
+      id: 're_promoted',
+      status: 'succeeded',
+      amount: refunded,
+      balance_transaction: {
+        id: 'txn_promoted',
+        amount: -refunded,
+        fee: 0,
+        currency: 'gbp',
+        exchange_rate: null,
+      },
+    });
+    await f.ledger.sync(f.ref);
+    const financial = (await f.ref.get()).get('financial');
+    assert.equal(financial.selling.refundedMinor, refunded);
+    assert.equal(financial.selling.discountMinor, 222);
+    assert.deepEqual(financial.checkoutEstimate, initial.checkoutEstimate);
+    assert.equal(financial.supplier.verifiedUnits, 100000);
+    assert.equal(financial.profitGbp, 2000 - refunded - 800 - 50);
+    const report = await new OperationsReports(db).report({ from: '2025-02-15', to: '2025-02-15' });
+    const promotion = report.promotions?.find((p) => p.code === 'SAVE10');
+    assert.equal(promotion?.revenueMinor, 2000 - refunded);
+    assert.equal(promotion?.discountMinor, 222);
   }
 });

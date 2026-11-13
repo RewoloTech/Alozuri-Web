@@ -1,3 +1,4 @@
+import { Promotions, promotionSnapshot, discountUnit } from './promotions.js';
 import { initialFinancial, financialSchema } from './financial-calculations.js';
 import {
   STRIPE_APP_INFO,
@@ -26,6 +27,7 @@ import { confirmationOrderSchema } from './confirmation-order.js';
 export { ResendOrderMailer, type OrderMailer } from './order-email.js';
 import { type CheckoutLegalInput } from '../../../../packages/shared/src/legal.ts';
 import {
+  MINIMUM_CHARGE_MINOR,
   ExchangeRates,
   currencySchema,
   convertedPlan,
@@ -80,6 +82,7 @@ export const itemsSchema = z
   });
 const snapshotSchema = z.object({
   plan: planSchema,
+  originalPriceCents: z.number().int().positive().optional(),
   baseSellingPriceUsdCents: z.number().int().positive().optional(),
   pricingVersion: z.string().optional(),
   exchange: z
@@ -102,6 +105,9 @@ const purchaseSchema = z
     items: z.array(snapshotSchema).min(1).max(10),
     currency: currencySchema,
     totalCents: z.number().int().positive(),
+    originalRetailCents: z.number().int().positive().optional(),
+    discountCents: z.number().int().nonnegative().optional(),
+    promotion: promotionSnapshot.optional(),
     subtotalCents: z.number().int().nonnegative().optional(),
     taxCents: z.number().int().nonnegative().optional(),
     confirmationVersion: confirmationVersionSchema.optional(),
@@ -125,6 +131,24 @@ const purchaseSchema = z
   })
   .refine(
     (p) =>
+      !p.promotion ||
+      (p.originalRetailCents !== undefined &&
+        p.discountCents !== undefined &&
+        p.originalRetailCents === p.totalCents + p.discountCents &&
+        p.promotion.id === p.promotion.code &&
+        p.items.every(
+          (line) =>
+            line.originalPriceCents !== undefined &&
+            line.plan.priceCents ===
+              line.originalPriceCents -
+                discountUnit(line.originalPriceCents, p.promotion!.discountPercent),
+        ) &&
+        p.items.reduce((sum, line) => sum + (line.originalPriceCents ?? 0) * line.quantity, 0) ===
+          p.originalRetailCents),
+    'Invalid historical promotion snapshot.',
+  )
+  .refine(
+    (p) =>
       p.items.every((i) => i.plan.currency === p.currency) &&
       p.items.reduce((n, i) => n + BigInt(i.plan.priceCents) * BigInt(i.quantity), 0n) ===
         BigInt(p.totalCents),
@@ -132,6 +156,9 @@ const purchaseSchema = z
   );
 type Purchase = z.infer<typeof purchaseSchema>;
 export type Quote = {
+  originalRetailCents?: number;
+  discountCents?: number;
+  promotion?: z.infer<typeof promotionSnapshot>;
   items: { plan: Plan; quantity: number }[];
   subtotalCents: number;
   taxCents: number;
@@ -218,14 +245,42 @@ export class CommerceService {
       throw new Error('Invalid checkout site URL.');
     if (accessSecret.length < 32) throw new Error('Order access signing secret is required.');
   }
-  private async priced(items: CartItem[], currency: Currency) {
+  private async priced(items: CartItem[], currency: Currency, code?: string, own?: string) {
     const fx = priceExchange(currency, currency === 'USD' ? undefined : await this.rates.current());
-    return priceCart(items, this.loadPlan, currency, fx);
+    const result = await priceCart(items, this.loadPlan, currency, fx);
+    if (!code) return result;
+    const service = new Promotions(this.db);
+    await service.releaseExpired(code, this.stripe);
+    const promotion = await service.validate(code, own);
+    const originalRetailCents = result.quote.totalCents;
+    for (const line of result.snapshots) {
+      line.originalPriceCents = line.plan.priceCents;
+      line.plan = {
+        ...line.plan,
+        priceCents:
+          line.plan.priceCents - discountUnit(line.plan.priceCents, promotion.discountPercent),
+      };
+    }
+    const totalCents = result.snapshots.reduce((n, l) => n + l.plan.priceCents * l.quantity, 0);
+    if (result.snapshots.some((line) => line.plan.priceCents < MINIMUM_CHARGE_MINOR[currency]))
+      throw new CommerceError(
+        'This code brings a plan below the supported payment minimum. Remove the code to continue.',
+      );
+    result.quote = {
+      ...result.quote,
+      originalRetailCents,
+      discountCents: originalRetailCents - totalCents,
+      promotion,
+      totalCents,
+      subtotalCents: totalCents,
+      items: result.snapshots.map((l) => ({ plan: l.plan, quantity: l.quantity })),
+    };
+    return result;
   }
-  quote(items: CartItem[], currency: Currency = 'USD') {
+  quote(items: CartItem[], currency: Currency = 'USD', code?: string) {
     if (process.env.CHECKOUT_PAUSED === 'true')
       throw new CommerceError('Checkout is temporarily paused for catalogue maintenance.', 503);
-    return this.priced(items, currency).then((r) => r.quote);
+    return this.priced(items, currency, code).then((r) => r.quote);
   }
   private token(id: string) {
     return createHmac('sha256', this.accessSecret)
@@ -249,6 +304,7 @@ export class CommerceService {
       legal: CheckoutLegalInput;
       currency: Currency;
       expectedTotalCents: number;
+      promotionCode?: string;
     },
     user: Principal | null,
   ) {
@@ -265,7 +321,12 @@ export class CommerceService {
       id = 'purchase_' + hash(this.mode + ':' + owner + ':' + input.requestId).slice(0, 48),
       ref = this.db.collection('purchases').doc(id),
       accessToken = this.token(id);
-    const { quote, snapshots } = await this.priced(input.items, input.currency);
+    const { quote, snapshots } = await this.priced(
+      input.items,
+      input.currency,
+      input.promotionCode,
+      id,
+    );
     await this.capacity?.(snapshots);
     if (input.expectedTotalCents !== quote.totalCents)
       throw new CommerceError('The price changed. Review the updated total before paying.', 409);
@@ -280,6 +341,13 @@ export class CommerceService {
       items: snapshots,
       currency: input.currency,
       totalCents: quote.totalCents,
+      ...(quote.promotion
+        ? {
+            promotion: quote.promotion,
+            discountCents: quote.discountCents,
+            originalRetailCents: quote.originalRetailCents,
+          }
+        : {}),
       subtotalCents: quote.subtotalCents,
       taxCents: quote.taxCents,
       confirmationVersion: CONFIRMATION_VERSION,
@@ -296,6 +364,9 @@ export class CommerceService {
       if (doc.exists) {
         const p = purchaseSchema.parse(doc.data());
         if (
+          p.promotion?.code !== quote.promotion?.code ||
+          p.promotion?.discountPercent !== quote.promotion?.discountPercent ||
+          p.originalRetailCents !== proposed.originalRetailCents ||
           p.legal?.version !== acceptance.version ||
           p.email !== email ||
           p.totalCents !== proposed.totalCents ||
@@ -331,6 +402,7 @@ export class CommerceService {
           throw new CommerceError('Checkout changed. Start a new checkout.', 409);
         return p;
       }
+      if (quote.promotion) await new Promotions(this.db).reserve(t, id, quote.promotion);
       const purchased = purchaseSchema.parse(proposed);
       const financial = financialSchema.parse(
         initialFinancial(
@@ -338,6 +410,7 @@ export class CommerceService {
           'purchases',
           proposed,
           input.currency === 'GBP' ? (snapshots[0]?.exchange ?? null) : reportingExchange,
+          true,
         ),
       );
       t.create(ref, { ...purchased, financial });
@@ -358,6 +431,15 @@ export class CommerceService {
           },
           { idempotencyKey: id + ':payment:v1' },
         );
+    if (purchase.promotion) {
+      try {
+        await new Promotions(this.db).bind(purchase.promotion.id, id, intent.id);
+      } catch (error) {
+        if (intent.status !== 'succeeded' && intent.status !== 'canceled')
+          await this.stripe.paymentIntents.cancel(intent.id);
+        throw error;
+      }
+    }
     this.assertIntent(id, purchase, intent);
     if (!intent.client_secret || intent.status === 'canceled' || intent.status === 'succeeded')
       throw new CommerceError('This payment is closed. Check your order.');
@@ -516,6 +598,16 @@ export class CommerceService {
         intent.amount_received === p.totalCents &&
         !p.paidAt
       ) {
+        if (p.promotion)
+          await new Promotions(this.db).settle(
+            t,
+            p.promotion.id,
+            id,
+            true,
+            p.currency,
+            p.totalCents,
+            p.discountCents ?? 0,
+          );
         const paidAt = new Date(
           z.number().int().positive().parse(event.created) * 1000,
         ).toISOString();
@@ -569,7 +661,17 @@ export class CommerceService {
               }
             : {}),
         });
-      } else if (!p.paidAt)
+      } else if (!p.paidAt) {
+        if (p.promotion && intent.status === 'canceled')
+          await new Promotions(this.db).settle(
+            t,
+            p.promotion.id,
+            id,
+            false,
+            p.currency,
+            p.totalCents,
+            p.discountCents ?? 0,
+          );
         t.update(ref, {
           financialReconciliationPending: true,
           status:
@@ -579,6 +681,7 @@ export class CommerceService {
                 ? 'payment_processing'
                 : 'pending_payment',
         });
+      }
       t.create(eventRef, { orderId: id, type: event.type, receivedAt: new Date().toISOString() });
     });
     // Even a duplicate event must repair a committed payment whose queue write failed.

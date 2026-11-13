@@ -19,6 +19,9 @@ import { authClient } from '@/lib/firebase';
 import { useCurrency } from './currency-provider';
 import { useAuth } from './auth-provider';
 export type Quote = {
+  originalRetailCents?: number;
+  discountCents?: number;
+  promotion?: { code: string; discountPercent: number };
   items: CartLine[];
   subtotalCents: number;
   taxCents: number;

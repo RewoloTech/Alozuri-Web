@@ -1,3 +1,4 @@
+import { promoCode } from './promotions.js';
 import type { UserProfiles } from './user-profiles.js';
 import { checkoutLegalSchema } from './legal.js';
 import { CONTRACT_PDF_FILENAME } from './confirmation-order.js';
@@ -41,10 +42,14 @@ export function registerCommerceRoutes(
     { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
     async (req) => {
       const input = z
-        .object({ items: itemsSchema, currency: currencySchema })
+        .object({
+          items: itemsSchema,
+          currency: currencySchema,
+          promotionCode: promoCode.optional(),
+        })
         .strict()
         .parse(req.body);
-      return { quote: await commerce().quote(input.items, input.currency) };
+      return { quote: await commerce().quote(input.items, input.currency, input.promotionCode) };
     },
   );
   app.post(
@@ -61,6 +66,7 @@ export function registerCommerceRoutes(
           compatible: z.literal(true),
           legal: checkoutLegalSchema,
           currency: currencySchema,
+          promotionCode: promoCode.optional(),
           expectedTotalCents: z.number().int().positive(),
         })
         .strict()

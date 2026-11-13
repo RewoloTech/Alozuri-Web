@@ -1,3 +1,5 @@
+import { Promotions, discountUnit } from '../src/lib/promotions.ts';
+import { contributionPreview } from '../src/lib/promotion-routes.ts';
 import { OperationsEsims } from '../src/lib/operations-esims.ts';
 import { orderReference } from '../src/lib/confirmation-order.ts';
 import { UserProfiles, type ProfileDirectory } from '../src/lib/user-profiles.ts';
@@ -101,6 +103,10 @@ function fixture(
         return intent;
       },
       retrieve: async () => intent,
+      cancel: async () => {
+        intent.status = 'canceled';
+        return intent;
+      },
     },
     webhooks: signer.webhooks,
     charges: { retrieve: async () => ({ ...intent.latest_charge, payment_intent: intent.id }) },
@@ -2336,4 +2342,354 @@ test('older usage caches refresh installation fields but preserve useful reading
   assert.equal(result.snapshot?.remainingBytes, usageReading.remainingBytes);
   await f.service.usage(f.result.orderId, unit, null, f.result.accessToken);
   assert.equal(calls, 2);
+});
+
+async function promotionFixture(maxUses: number | null = null, percent = 10) {
+  const code = 'SAVE_' + crypto.randomUUID().replaceAll('-', '').slice(0, 16).toUpperCase();
+  const input = {
+    code,
+    discountPercent: percent,
+    active: true,
+    startsAt: new Date(Date.now() - 86400000).toISOString(),
+    expiresAt: new Date(Date.now() + 86400000).toISOString(),
+    maxUses,
+  };
+  const promotions = new Promotions(db);
+  await promotions.save(input, true);
+  return { code, promotions, input, ref: db.doc('promotions/' + code) };
+}
+for (const currency of ['GBP', 'EUR', 'USD'] as const)
+  for (const percent of [5, 10, 15, 20, 30])
+    test(`${currency} ${percent}% guest and account checkout freezes exact unit discounts; paid replay allocates once`, async () => {
+      const f = fixture(false, undefined, currency),
+        promo = await promotionFixture(1, percent);
+      const quote = await f.service.quote(f.input.items, currency, promo.code);
+      const original = f.input.expectedTotalCents;
+      assert.equal(quote.originalRetailCents, original);
+      assert.equal(quote.discountCents, original - quote.totalCents);
+      const input = { ...f.input, promotionCode: promo.code, expectedTotalCents: quote.totalCents };
+      const user = percent === 10 ? { uid: 'promo-account', verified: true, admin: false } : null;
+      const result = await f.service.checkout(input, user);
+      const retry = await f.service.checkout(input, user);
+      assert.equal(retry.orderId, result.orderId);
+      assert.equal(f.getCreates(), 1);
+      assert.equal(f.intent.amount, quote.totalCents);
+      assert.equal((await promo.promotions.get(promo.code)).redemptionCount, 0);
+      f.intent.status = 'requires_payment_method';
+      await f.event('payment_intent.payment_failed');
+      assert.equal(
+        (await db.collection('orders').where('parentOrderId', '==', result.orderId).get()).size,
+        0,
+      );
+      f.intent.status = 'succeeded';
+      f.intent.amount_received = f.intent.amount;
+      const eventId = 'evt_promo_' + crypto.randomUUID();
+      await f.event('payment_intent.succeeded', eventId);
+      await f.event('payment_intent.succeeded', eventId);
+      await f.event(); // A different duplicate event also cannot count twice.
+      const saved = await db.doc('purchases/' + result.orderId).get();
+      assert.equal(saved.get('financial.selling.discountMinor'), quote.discountCents);
+      assert.equal(saved.get('financial.promotion.code'), promo.code);
+      assert.equal(
+        saved.get('items')[0].originalPriceCents - saved.get('items')[0].plan.priceCents,
+        discountUnit(saved.get('items')[0].originalPriceCents, percent),
+      );
+      const units = await db
+        .collection('orders')
+        .where('parentOrderId', '==', result.orderId)
+        .get();
+      assert.equal(units.size, 3);
+      assert.equal(
+        units.docs.reduce((sum, d) => sum + d.get('amountCents'), 0),
+        quote.totalCents,
+      );
+      assert.ok(units.docs.every((d) => d.get('wholesaleUnits') === 1000));
+      const completed = await promo.promotions.get(promo.code);
+      assert.equal(completed.redemptionCount, 1);
+      assert.deepEqual(completed.totals[currency], {
+        revenueMinor: quote.totalCents,
+        discountMinor: quote.discountCents,
+      });
+      assert.equal(Object.keys(completed.holds).length, 0);
+      await assert.rejects(f.service.quote(f.input.items, currency, promo.code), /limit/);
+      f.plans[0].priceCents = 1;
+      assert.equal(
+        (await f.service.order(result.orderId, user, result.accessToken)).totalCents,
+        quote.totalCents,
+      );
+      const contract = confirmationOrderSchema.parse({ ...saved.data(), id: saved.id });
+      const email = confirmationEmail(
+        contract,
+        'https://alozuri.com/order/private-token',
+        'email-v1',
+      );
+      assert.match(email.text, new RegExp('Promotion ' + promo.code));
+    });
+test('concurrent one-use promotion admits one purchase and leaves unsuccessful checkouts uncharged', async () => {
+  const promo = await promotionFixture(1),
+    a = fixture(),
+    b = fixture();
+  const q = await a.service.quote(a.input.items, 'USD', promo.code);
+  const attempts = await Promise.allSettled(
+    [a, b].map((f) =>
+      f.service.checkout(
+        { ...f.input, promotionCode: promo.code, expectedTotalCents: q.totalCents },
+        null,
+      ),
+    ),
+  );
+  assert.equal(attempts.filter((r) => r.status === 'fulfilled').length, 1);
+  assert.equal(a.getCreates() + b.getCreates(), 1);
+  assert.equal((await promo.promotions.get(promo.code)).redemptionCount, 0);
+});
+test('abandonment cancels an unpaid intent before releasing a slot; processing and succeeded are retained', async () => {
+  for (const status of ['requires_payment_method', 'processing', 'succeeded']) {
+    const promo = await promotionFixture(1),
+      f = fixture();
+    const quote = await f.service.quote(f.input.items, 'USD', promo.code);
+    const result = await f.service.checkout(
+      { ...f.input, promotionCode: promo.code, expectedTotalCents: quote.totalCents },
+      null,
+    );
+    const saved = await promo.promotions.get(promo.code);
+    await promo.ref.update({
+      holds: {
+        [result.orderId]: { ...saved.holds[result.orderId], at: Date.now() - 31 * 60 * 1000 },
+      },
+    });
+    f.intent.status = status;
+    await promo.promotions.releaseExpired(promo.code, f.stripe);
+    const p = await promo.promotions.get(promo.code);
+    assert.equal(Object.keys(p.holds).length, status === 'requires_payment_method' ? 0 : 1);
+    if (status === 'requires_payment_method') {
+      assert.equal(f.intent.status, 'canceled');
+      await f.event('payment_intent.canceled');
+      assert.equal((await db.doc('purchases/' + result.orderId).get()).get('status'), 'cancelled');
+      await assert.rejects(
+        promo.promotions.bind(promo.code, result.orderId, f.intent.id),
+        /expired/,
+      );
+    }
+  }
+});
+test('canceled checkout releases reservation without redemption; forged totals cannot reserve a use', async () => {
+  const promo = await promotionFixture(1),
+    f = fixture();
+  await assert.rejects(
+    f.service.checkout({ ...f.input, promotionCode: promo.code, expectedTotalCents: 1 }, null),
+    /price changed/,
+  );
+  assert.equal(Object.keys((await promo.promotions.get(promo.code)).holds).length, 0);
+  const q = await f.service.quote(f.input.items, 'USD', promo.code);
+  const r = await f.service.checkout(
+    { ...f.input, promotionCode: promo.code, expectedTotalCents: q.totalCents },
+    null,
+  );
+  f.intent.status = 'canceled';
+  await f.event('payment_intent.canceled');
+  assert.equal((await promo.promotions.get(promo.code)).redemptionCount, 0);
+  assert.equal(Object.keys((await promo.promotions.get(promo.code)).holds).length, 0);
+  assert.equal(
+    (await db.collection('orders').where('parentOrderId', '==', r.orderId).get()).size,
+    0,
+  );
+});
+test('backend promotion management rejects excessive discounts and preserves usage on edits; no margin veto', async () => {
+  const promo = await promotionFixture();
+  await assert.rejects(promo.promotions.save({ ...promo.input, discountPercent: 31 }, false));
+  assert.equal(contributionPreview(1000, 100000, 30).warning, 'critical');
+  await promo.promotions.save({ ...promo.input, discountPercent: 30 }, false);
+  assert.equal((await promo.promotions.get(promo.code)).discountPercent, 30);
+  await promo.promotions.save({ ...promo.input, active: false }, false);
+  const f = fixture();
+  await assert.rejects(f.service.quote(f.input.items, 'USD', promo.code), /inactive/);
+  await assert.rejects(f.service.quote(f.input.items, 'USD', 'MISSING_CODE'), /Invalid/);
+  await promo.promotions.save(
+    { ...promo.input, startsAt: '2020-01-01T00:00:00Z', expiresAt: '2020-02-01T00:00:00Z' },
+    false,
+  );
+  await assert.rejects(f.service.quote(f.input.items, 'USD', promo.code), /expired/);
+});
+
+test('a discounted paid purchase uses existing supplier fulfilment exactly once with the frozen wholesale cost', async () => {
+  const f = fixture(false, undefined, 'USD', undefined, undefined, undefined, null, false),
+    promo = await promotionFixture(null, 30);
+  const q = await f.service.quote(f.input.items, 'USD', promo.code);
+  const purchase = await f.service.checkout(
+    { ...f.input, promotionCode: promo.code, expectedTotalCents: q.totalCents },
+    null,
+  );
+  f.intent.status = 'succeeded';
+  f.intent.amount_received = f.intent.amount;
+  await f.event();
+  const units = await db.collection('orders').where('parentOrderId', '==', purchase.orderId).get();
+  const calls: { units: number; code: string }[] = [];
+  const delivery = new FulfillmentService(f.stripe, firestoreFulfillmentStore(), {
+    order: async (_tx, code, units) => {
+      calls.push({ units, code });
+      return 'supplier-promoted-' + calls.length;
+    },
+    profile: async () => ({
+      ac: 'LPA:1$example.com$promoted',
+      iccid: '8985224528000111301',
+      esimTranNo: 'promoted-profile',
+    }),
+  });
+  for (const unit of units.docs) {
+    await delivery.run([unit.id]);
+    await delivery.run([unit.id]);
+  }
+  assert.equal(calls.length, 3);
+  assert.ok(calls.every((c) => c.units === 1000));
+  assert.ok(
+    (await f.service.order(purchase.orderId, null, purchase.accessToken)).allocations.every(
+      (a) => a.status === 'ready',
+    ),
+  );
+});
+
+test('abandoned checkout cleanup never releases a slot when Stripe cancellation fails', async () => {
+  const f = fixture(),
+    promo = await promotionFixture(1);
+  const q = await f.service.quote(f.input.items, 'USD', promo.code);
+  const r = await f.service.checkout(
+    { ...f.input, promotionCode: promo.code, expectedTotalCents: q.totalCents },
+    null,
+  );
+  await promo.ref.update({
+    holds: { [r.orderId]: { at: Date.now() - 31 * 60 * 1000, intent: f.intent.id } },
+  });
+  const original = f.stripe.paymentIntents.cancel;
+  f.stripe.paymentIntents.cancel = async () => {
+    throw new Error('Outcome unknown');
+  };
+  await assert.rejects(promo.promotions.releaseExpired(promo.code, f.stripe), /Outcome unknown/);
+  assert.equal(Object.keys((await promo.promotions.get(promo.code)).holds).length, 1);
+  f.stripe.paymentIntents.cancel = original;
+});
+
+test('promotion API validates admin changes, price-preview catalogue provenance and paginated filters', async () => {
+  const f = fixture();
+  const api = await createApp({
+    repository: { plans: async () => f.plans, orders: async () => [], order: async () => null },
+    commerce: f.service,
+    payments: null,
+    fulfillment: null,
+    verify: async (token) => ({ uid: token, verified: true, admin: token === 'admin' }),
+  });
+  const headers = { authorization: 'Bearer admin' };
+  try {
+    const promo = await promotionFixture();
+    for (const extra of [
+      { discountPercent: 30 },
+      { promotionCode: [promo.code, 'SECOND'] },
+      { discountCents: 9999 },
+    ]) {
+      const invalid = await api.inject({
+        method: 'POST',
+        url: '/v2/quote',
+        payload: {
+          items: f.input.items,
+          currency: 'USD',
+          promotionCode: promo.code,
+          ...extra,
+        },
+      });
+      assert.equal(invalid.statusCode, 400);
+    }
+    assert.equal(
+      (
+        await api.inject({
+          method: 'PUT',
+          url: '/v1/operations/promotions',
+          headers,
+          payload: { ...promo.input, discountPercent: 31 },
+        })
+      ).statusCode,
+      400,
+    );
+    assert.equal(
+      (
+        await api.inject({
+          method: 'PUT',
+          url: '/v1/operations/promotions',
+          headers,
+          payload: { ...promo.input, discountPercent: 20 },
+        })
+      ).statusCode,
+      200,
+    );
+    const result = await api.inject({
+      url: '/v1/operations/promotions?q=' + promo.code + '&active=true',
+      headers,
+    });
+    assert.equal(result.statusCode, 200);
+    assert.equal(result.json().rows[0].discountPercent, 20);
+    assert.equal(result.json().rows[0].holds, undefined);
+    const plan = f.plans[0];
+    await db.doc('packages/' + plan.id).set(plan);
+    const response = await api.inject({
+      method: 'POST',
+      url: '/v1/operations/promotions/preview',
+      headers,
+      payload: { packageId: plan.id, discountPercent: 30 },
+    });
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.json().supplierUnits, 1000);
+    await db.doc('packages/' + plan.id).update({ wholesaleUnits: 1 });
+    assert.equal(
+      (
+        await api.inject({
+          method: 'POST',
+          url: '/v1/operations/promotions/preview',
+          headers,
+          payload: { packageId: plan.id, discountPercent: 30 },
+        })
+      ).statusCode,
+      400,
+    );
+    for (let i = 0; i < 22; i++)
+      await promo.promotions.save(
+        { ...promo.input, code: 'PAGE_' + String(i).padStart(3, '0') },
+        true,
+      );
+    const page = await promo.promotions.list(undefined, 'PAGE_', true);
+    assert.equal(page.rows.length, 20);
+    assert.ok(page.nextCursor);
+    const last = await promo.promotions.list(page.nextCursor ?? undefined, 'PAGE_', true);
+    assert.equal(last.rows.length, 2);
+    assert.ok(!page.rows.some((p) => last.rows.some((q) => p.code === q.code)));
+  } finally {
+    await api.close();
+  }
+});
+
+test('refunding a promoted purchase keeps the historical paid redemption and original discount', async () => {
+  const f = fixture(),
+    promo = await promotionFixture(1);
+  const q = await f.service.quote(f.input.items, 'USD', promo.code);
+  const r = await f.service.checkout(
+    { ...f.input, promotionCode: promo.code, expectedTotalCents: q.totalCents },
+    null,
+  );
+  f.intent.status = 'succeeded';
+  f.intent.amount_received = f.intent.amount;
+  await f.event();
+  f.intent.latest_charge.refunded = true;
+  f.intent.latest_charge.amount_refunded = q.totalCents;
+  const payload = JSON.stringify({
+    id: 'evt_promo_refund_' + crypto.randomUUID(),
+    object: 'event',
+    created: 1794430800,
+    livemode: true,
+    type: 'charge.refunded',
+    data: { object: f.intent.latest_charge },
+  });
+  const signature = signer.webhooks.generateTestHeaderString({ payload, secret: 'whsec_fixture' });
+  await f.service.webhook(Buffer.from(payload), signature);
+  await f.service.webhook(Buffer.from(payload), signature);
+  const p = await promo.promotions.get(promo.code);
+  assert.equal(p.redemptionCount, 1);
+  assert.equal(p.totals.USD.discountMinor, q.discountCents);
+  assert.equal((await db.doc('purchases/' + r.orderId).get()).get('status'), 'refunded');
 });

@@ -1,6 +1,8 @@
 'use client';
+import { PromotionPerformance, PromotionsPanel } from './promotions';
 import { useEffect, useRef, useState } from 'react';
 import { OperationsEsimDisclosure, OperationsEsimLookup } from './operations-esims';
+import { OperationsTrendCharts } from './operations-trends';
 import { PricingHistory } from './pricing-history';
 import type { OperationsReport } from '@alozuri/shared/financial';
 import { londonMonth } from '@alozuri/shared/financial';
@@ -31,7 +33,9 @@ export function Operations() {
 }
 function OperationsAccount() {
   const { user, admin } = useAuth();
-  const [section, setSection] = useState<'financial' | 'pricing'>('financial');
+  const [section, setSection] = useState<'financial' | 'pricing' | 'trends' | 'promotions'>(
+    'financial',
+  );
   const navigation = useRef<HTMLDivElement>(null);
   const [dates, setDates] = useState(() => londonMonth());
   const [authorized, setAuthorized] = useState(false),
@@ -72,7 +76,7 @@ function OperationsAccount() {
     };
   }, [user, admin]);
   useEffect(() => {
-    if (!authorized || !user || section !== 'financial') return;
+    if (!authorized || !user || section === 'pricing' || section === 'promotions') return;
     const controller = new AbortController();
     let active = true;
     setError('');
@@ -84,7 +88,7 @@ function OperationsAccount() {
       return;
     }
     const query = new URLSearchParams(dates);
-    if (cursor) query.set('cursor', cursor);
+    if (cursor && section === 'financial') query.set('cursor', cursor);
     void api<OperationsReport>(
       '/v1/operations/financials?' + query,
       { signal: controller.signal },
@@ -113,6 +117,31 @@ function OperationsAccount() {
     setCursor(undefined);
     setHistory([]);
   };
+  const dateFilters = (
+    <div className="surface operations-dates">
+      <label>
+        From Date
+        <input
+          type="date"
+          value={dates.from}
+          max={dates.to || undefined}
+          onChange={(e) => change('from', e.target.value)}
+        />
+      </label>
+      <label>
+        To Date
+        <input
+          type="date"
+          value={dates.to}
+          min={dates.from || undefined}
+          onChange={(e) => change('to', e.target.value)}
+        />
+      </label>
+      <button className="button" disabled={busy} onClick={() => setAttempt((n) => n + 1)}>
+        Refresh
+      </button>
+    </div>
+  );
   return (
     <section className="container section operations-page">
       <div className="page-intro">
@@ -134,15 +163,15 @@ function OperationsAccount() {
             aria-label="Operations sections"
             ref={navigation}
             onKeyDown={(event) => {
-              const options = ['financial', 'pricing'] as const;
-              const index = section === 'financial' ? 0 : 1;
+              const options = ['financial', 'pricing', 'trends', 'promotions'] as const;
+              const index = options.indexOf(section);
               const next =
                 event.key === 'ArrowRight' || event.key === 'ArrowLeft'
-                  ? 1 - index
+                  ? (index + (event.key === 'ArrowRight' ? 1 : options.length - 1)) % options.length
                   : event.key === 'Home'
                     ? 0
                     : event.key === 'End'
-                      ? 1
+                      ? options.length - 1
                       : null;
               if (next === null) return;
               event.preventDefault();
@@ -174,6 +203,67 @@ function OperationsAccount() {
             >
               Pricing History
             </button>
+            <button
+              type="button"
+              role="tab"
+              id="operations-trends-tab"
+              aria-selected={section === 'trends'}
+              aria-controls="operations-trends-panel"
+              tabIndex={section === 'trends' ? 0 : -1}
+              onClick={() => setSection('trends')}
+            >
+              Trends
+            </button>
+            <button
+              type="button"
+              role="tab"
+              id="operations-promotions-tab"
+              aria-selected={section === 'promotions'}
+              aria-controls="operations-promotions-panel"
+              tabIndex={section === 'promotions' ? 0 : -1}
+              onClick={() => setSection('promotions')}
+            >
+              Promotions
+            </button>
+          </div>
+          <div
+            role="tabpanel"
+            id="operations-promotions-panel"
+            aria-labelledby="operations-promotions-tab"
+            hidden={section !== 'promotions'}
+          >
+            {section === 'promotions' && user && <PromotionsPanel uid={user.uid} />}
+          </div>
+          <div
+            role="tabpanel"
+            id="operations-trends-panel"
+            aria-labelledby="operations-trends-tab"
+            hidden={section !== 'trends'}
+            tabIndex={0}
+          >
+            {section === 'trends' && (
+              <>
+                <h2>Trends</h2>
+                {dateFilters}
+                {busy && <p role="status">Loading trends…</p>}
+                {error && (
+                  <p role="alert" className="error-message">
+                    {error}
+                  </p>
+                )}
+                {current &&
+                  (current.trends ? (
+                    <OperationsTrendCharts
+                      key={`${dates.from}-${dates.to}`}
+                      data={current.trends}
+                    />
+                  ) : (
+                    <p role="alert">
+                      Trends are unavailable on the current API. Update the backend and refresh.
+                    </p>
+                  ))}
+              </>
+            )}
           </div>
           <div
             role="tabpanel"
@@ -194,33 +284,7 @@ function OperationsAccount() {
             {section === 'financial' && (
               <>
                 {user && <OperationsEsimLookup uid={user.uid} />}
-                <div className="surface operations-dates">
-                  <label>
-                    From Date
-                    <input
-                      type="date"
-                      value={dates.from}
-                      max={dates.to || undefined}
-                      onChange={(e) => change('from', e.target.value)}
-                    />
-                  </label>
-                  <label>
-                    To Date
-                    <input
-                      type="date"
-                      value={dates.to}
-                      min={dates.from || undefined}
-                      onChange={(e) => change('to', e.target.value)}
-                    />
-                  </label>
-                  <button
-                    className="button"
-                    disabled={busy}
-                    onClick={() => setAttempt((n) => n + 1)}
-                  >
-                    Refresh
-                  </button>
-                </div>
+                {dateFilters}
                 <p className="fine-print">
                   Inclusive dates in Europe/London, based on order creation time. Refunds adjust the
                   original order. GBP supplier valuations use the frozen historical reference rate;
@@ -267,6 +331,7 @@ function OperationsAccount() {
                         </div>
                       ))}
                     </div>
+                    <PromotionPerformance rows={current.promotions ?? []} />
                     <div className="surface operations-transactions">
                       <h2>Transactions</h2>
                       <p className="fine-print">
@@ -410,6 +475,36 @@ function OperationsAccount() {
                                       r.supplier.verifiedUnits == null && <small>Estimated</small>}
                                   </td>
                                   <td>
+                                    {r.promotion && (
+                                      <small>
+                                        Promotion {r.promotion.code} · discount{' '}
+                                        {original(r.selling.discountMinor, r.selling.currency)}
+                                      </small>
+                                    )}
+                                    {r.checkoutEstimate && (
+                                      <details>
+                                        <summary>Checkout estimate</summary>
+                                        <p>{r.checkoutEstimate.basis}</p>
+                                        <p>
+                                          Supplier{' '}
+                                          {original(
+                                            r.checkoutEstimate.supplierMinor,
+                                            r.checkoutEstimate.currency,
+                                          )}{' '}
+                                          · Fees{' '}
+                                          {original(
+                                            r.checkoutEstimate.feeMinor,
+                                            r.checkoutEstimate.currency,
+                                          )}{' '}
+                                          · Contribution{' '}
+                                          {original(
+                                            r.checkoutEstimate.contributionMinor,
+                                            r.checkoutEstimate.currency,
+                                          )}{' '}
+                                          · Margin {margin(r.checkoutEstimate.marginBps)}
+                                        </p>
+                                      </details>
+                                    )}
                                     {r.paymentStatus === 'pending_payment'
                                       ? 'Awaiting payment'
                                       : r.paymentStatus.replaceAll('_', ' ')}

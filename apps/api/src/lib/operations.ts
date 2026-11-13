@@ -1,3 +1,6 @@
+import { promotionReport } from './promotion-report.js';
+import { registerPromotionRoutes } from './promotion-routes.js';
+import { financialTrends } from './financial-trends.js';
 import { operationsLookupSchema, type OperationsEsims } from './operations-esims.js';
 import { customerReference, operationsSearchSchema } from './operations-order-search.js';
 import { pricingHistoryQuery, type PricingHistoryReports } from './pricing-history.js';
@@ -38,6 +41,9 @@ export class OperationsReports {
           .limit(5001)
           .select(
             'financial',
+            'promotion',
+            'originalRetailCents',
+            'discountCents',
             'financialReconciliationPending',
             'createdAt',
             'email',
@@ -121,6 +127,8 @@ export class OperationsReports {
       timezone: 'Europe/London',
       currency: 'GBP',
       summary: summarize(rows),
+      promotions: promotionReport(rows),
+      trends: financialTrends(rows, input.from, input.to),
       rows: page,
       nextCursor:
         start + page.length < rows.length
@@ -150,6 +158,7 @@ export function registerOperations(
     if (!p.verified || p.admin !== true)
       throw new OperationsError('Administrator access required.', 403);
   }
+  registerPromotionRoutes(app, requireAdmin);
   app.get('/v1/operations/access', async (req) => {
     await requireAdmin(req.headers.authorization);
     z.object({}).strict().parse(req.query);

@@ -618,6 +618,97 @@ test('Buy now goes straight to a simple guest checkout with clear terms links an
   }
 });
 
+test('promotional code apply, remove, invalid feedback and final Stripe amount stay clear on mobile', async ({
+  page,
+}) => {
+  await setup(page);
+  await mockStripe(page, true);
+  await page.route('http://127.0.0.1:8189/v2/quote', async (route) => {
+    const input = route.request().postDataJSON();
+    const headers = { 'Access-Control-Allow-Origin': 'http://localhost:3100' };
+    if (input.promotionCode && input.promotionCode !== 'SAVE20')
+      return route.fulfill({ status: 400, headers, json: { error: 'Promotion has expired.' } });
+    const applied = Boolean(input.promotionCode);
+    const price = applied ? 960 : 1200;
+    return route.fulfill({
+      headers,
+      json: {
+        quote: {
+          currency: 'USD',
+          items: [{ plan: { ...plan, priceCents: price }, quantity: 1 }],
+          subtotalCents: price,
+          taxCents: 0,
+          totalCents: price,
+          ...(applied
+            ? {
+                promotion: { code: 'SAVE20', discountPercent: 20 },
+                originalRetailCents: 1200,
+                discountCents: 240,
+              }
+            : {}),
+        },
+      },
+    });
+  });
+  await page.route('http://127.0.0.1:8189/v2/checkout', async (route) => {
+    if (route.request().method() === 'OPTIONS') return route.fallback();
+    const input = route.request().postDataJSON();
+    expect(input.promotionCode).toBe('SAVE20');
+    expect(input.expectedTotalCents).toBe(960);
+    await route.fulfill({
+      headers: { 'Access-Control-Allow-Origin': 'http://localhost:3100' },
+      json: {
+        orderId,
+        accessToken: 'private-browser-fixture',
+        clientSecret: 'pi_browser_secret',
+        paymentMode: 'test',
+        quote: {
+          currency: 'USD',
+          items: [{ plan: { ...plan, priceCents: 960 }, quantity: 1 }],
+          subtotalCents: 960,
+          taxCents: 0,
+          totalCents: 960,
+          originalRetailCents: 1200,
+          discountCents: 240,
+          promotion: { code: 'SAVE20', discountPercent: 20 },
+        },
+      },
+    });
+  });
+  await page.goto('/checkout?buy=' + plan.id);
+  await page.getByText('Have a promotional code?', { exact: true }).click();
+  await page.getByLabel('Promotional code', { exact: true }).fill('EXPIRED');
+  await page.getByRole('button', { name: 'Apply code', exact: true }).click();
+  await expect(page.locator('main').getByRole('alert')).toContainText('Promotion has expired');
+  await expect(page.getByRole('button', { name: 'Continue to payment' })).toBeDisabled();
+  await page.getByLabel('Promotional code', { exact: true }).fill('save20');
+  await page.getByRole('button', { name: 'Apply code', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'SAVE20: 20% off' })).toContainText(
+    '$2.40',
+  );
+  await page.getByRole('button', { name: 'Remove code', exact: true }).click();
+  await expect(page.getByText('SAVE20: 20% off', { exact: false })).toHaveCount(0);
+  await page.getByLabel('Promotional code', { exact: true }).fill('SAVE20');
+  await page.getByRole('button', { name: 'Apply code', exact: true }).click();
+  await expect(page.getByText('SAVE20: 20% off', { exact: false })).toBeVisible();
+  for (const width of [375, 390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    if (width === 390 || width === 1440)
+      await page.screenshot({
+        path: `/tmp/alozuri-promotion-checkout-${width}.png`,
+        fullPage: true,
+      });
+  }
+  await page.getByRole('textbox', { name: 'Email address', exact: true }).fill('guest@example.com');
+  await page.getByRole('checkbox').check();
+  await page.getByRole('button', { name: 'Continue to payment' }).click();
+  await expect(page.getByRole('button', { name: 'Pay $9.60', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Google Pay', exact: true })).toBeVisible();
+});
+
 test('normalising an old regional URL keeps single-country search local without trapping Back', async ({
   page,
 }) => {

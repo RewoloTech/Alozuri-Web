@@ -1,3 +1,5 @@
+import { promotionEstimate, promotionEstimateSchema } from './promotion-estimate.js';
+import { promotionSnapshot } from './promotions.js';
 import { z } from 'zod';
 import type { OperationsRow, OperationsReport } from '../../../../packages/shared/src/financial.ts';
 export const integer = z.number().int().safe();
@@ -26,6 +28,9 @@ export const financialSourceSchema = z.object({
   status: z.string().max(80),
   test: z.boolean(),
   paidAt: z.iso.datetime().optional(),
+  discountCents: nonnegative.optional(),
+  originalRetailCents: nonnegative.optional(),
+  promotion: promotionSnapshot.optional(),
   totalCents: nonnegative.optional(),
   amountCents: nonnegative.optional(),
   currency: z.enum(['USD', 'GBP', 'EUR']),
@@ -59,6 +64,7 @@ export function initialFinancial(
   source: OperationsRow['source'],
   raw: unknown,
   usdGbp: OperationsRow['usdGbp'] = null,
+  captureCheckoutEstimate = false,
 ): OperationsRow {
   const p = financialSourceSchema.parse(raw);
   const items =
@@ -98,11 +104,20 @@ export function initialFinancial(
       countries: i.plan.countries,
       quantity: i.quantity,
     })),
+    ...(p.promotion
+      ? {
+          promotion: p.promotion,
+          checkoutEstimate:
+            !captureCheckoutEstimate || quoted === null
+              ? null
+              : promotionEstimate(amount, p.currency, quoted, saleExchange),
+        }
+      : {}),
     selling: {
       currency: p.currency,
       amountMinor: amount,
       refundedMinor: p.paidAt ? null : 0,
-      discountMinor: 0,
+      discountMinor: p.discountCents ?? 0,
     },
     supplier: {
       currency: 'USD',
@@ -244,6 +259,8 @@ export function londonBounds(from: string, to: string) {
   return { start: midnight(from), end: midnight(next) };
 }
 export const financialSchema: z.ZodType<OperationsRow> = z.object({
+  promotion: promotionSnapshot.optional(),
+  checkoutEstimate: promotionEstimateSchema.nullable().optional(),
   id: z.string().max(100),
   source: z.enum(['purchases', 'orders']),
   createdAt: z.iso.datetime(),

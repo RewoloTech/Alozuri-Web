@@ -534,6 +534,7 @@ test('Data usage shows separate eSIM readings without opening orders, and explai
 test('Operations uses normal login, admin-only navigation, date reports and revoked access', async ({
   page,
 }) => {
+  test.setTimeout(90000);
   const state = await setup(page);
   const user = await signup(page);
   void state;
@@ -547,12 +548,15 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
   let provisional = false;
   let currentAdmin: (uid: string) => Promise<boolean> = async () => false;
   const queries: URLSearchParams[] = [];
+  const savedPromotions: import('zod').infer<
+    typeof import('../../apps/api/src/lib/promotions').promotionInput
+  >[] = [];
   await page.route('http://127.0.0.1:8189/v1/operations/**', async (route) => {
     const request = route.request();
     const headers = {
       'Access-Control-Allow-Origin': 'http://localhost:3100',
       'Access-Control-Allow-Headers': 'content-type,authorization',
-      'Access-Control-Allow-Methods': 'GET,OPTIONS',
+      'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS',
     };
     if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
     const token = request.headers().authorization?.slice(7).split('.')[1];
@@ -564,6 +568,42 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
         json: { error: 'Administrator access required.' },
       });
     const url = new URL(request.url());
+    if (url.pathname.endsWith('/promotions/packages'))
+      return route.fulfill({
+        headers,
+        json: { rows: [{ id: 'plan-uk', name: 'United Kingdom connection' }] },
+      });
+    if (url.pathname.endsWith('/promotions/preview')) {
+      const { contributionPreview } = await import('../../apps/api/src/lib/promotion-routes');
+      const percent = z
+        .object({ discountPercent: z.number() })
+        .parse(request.postDataJSON()).discountPercent;
+      return route.fulfill({ headers, json: contributionPreview(1000, 100000, percent) });
+    }
+    if (url.pathname.endsWith('/promotions')) {
+      if (request.method() !== 'GET') {
+        const { promotionInput } = await import('../../apps/api/src/lib/promotions');
+        const promotion = promotionInput.parse(request.postDataJSON());
+        const old = savedPromotions.findIndex((p) => p.code === promotion.code);
+        if (old >= 0) savedPromotions[old] = promotion;
+        else savedPromotions.push(promotion);
+        return route.fulfill({ headers, json: { saved: true } });
+      }
+      return route.fulfill({
+        headers,
+        json: {
+          rows: savedPromotions
+            .filter(
+              (p) =>
+                p.code.startsWith(url.searchParams.get('q') ?? '') &&
+                (!url.searchParams.has('active') ||
+                  String(p.active) === url.searchParams.get('active')),
+            )
+            .map((p) => ({ ...p, redemptionCount: 0, reservedCount: 0, totals: {} })),
+          nextCursor: null,
+        },
+      });
+    }
     if (url.pathname.endsWith('/access'))
       return route.fulfill({ headers, json: { authorized: true } });
     if (url.pathname.endsWith('/status'))
@@ -786,6 +826,11 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
         timezone: 'Europe/London',
         currency: 'GBP',
         summary: summarize(rows),
+        trends: (await import('../../apps/api/src/lib/financial-trends')).financialTrends(
+          rows,
+          url.searchParams.get('from')!,
+          url.searchParams.get('to')!,
+        ),
         rows,
         nextCursor: null,
       },
@@ -956,6 +1001,48 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
         fullPage: true,
       });
     }
+    await page.getByRole('tab', { name: 'Trends', exact: true }).click();
+    const trendsPanel = page.getByRole('tabpanel', { name: 'Trends', exact: true });
+    await expect(trendsPanel.getByRole('heading', { name: 'Revenue over time' })).toBeVisible();
+    await expect(trendsPanel.getByRole('heading', { name: 'Profit over time' })).toBeVisible();
+    await expect(trendsPanel.getByRole('heading', { name: 'Top-selling plans' })).toBeVisible();
+    await expect(
+      trendsPanel.getByRole('region', { name: 'Profit over time', exact: true }),
+    ).toContainText('£11.50');
+    await expect(
+      trendsPanel.getByRole('region', { name: 'Profit over time', exact: true }),
+    ).toContainText('Provisional');
+    await expect(
+      trendsPanel.getByRole('region', { name: 'Top-selling plans', exact: true }),
+    ).toContainText('2 sold');
+    const bar = trendsPanel
+      .getByRole('region', { name: 'Revenue over time chart' })
+      .getByRole('button')
+      .nth(10);
+    await bar.focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(
+      trendsPanel
+        .getByRole('region', { name: 'Revenue over time chart' })
+        .getByRole('button')
+        .nth(11),
+    ).toBeFocused();
+    for (const width of [320, 375, 390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      if (width === 390 || width === 1440)
+        await trendsPanel.screenshot({ path: `/tmp/alozuri-trends-${width}.png` });
+    }
+    await trendsPanel.getByLabel('To Date', { exact: true }).fill(previousDate);
+    await expect(
+      trendsPanel.getByRole('region', { name: 'Top-selling plans', exact: true }),
+    ).toContainText('No paid orders');
+    await trendsPanel.getByLabel('To Date', { exact: true }).fill(saleDate);
+    await expect(
+      trendsPanel.getByRole('region', { name: 'Top-selling plans', exact: true }),
+    ).toContainText('2 sold');
     await page.getByRole('tab', { name: 'Pricing History', exact: true }).click();
     const pricingPanel = page.getByRole('tabpanel', { name: 'Pricing History', exact: true });
     await expect(
@@ -1006,6 +1093,69 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
       page.getByRole('tab', { name: 'Financial Overview', exact: true }),
     ).toHaveAttribute('aria-selected', 'true');
     await expect(page.getByRole('heading', { name: 'Total Sales', exact: true })).toBeVisible();
+    await page.getByRole('tab', { name: 'Financial Overview', exact: true }).focus();
+    await page.keyboard.press('End');
+    await expect(page.getByRole('tab', { name: 'Promotions', exact: true })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    const promotionsPanel = page.getByRole('tabpanel', { name: 'Promotions', exact: true });
+    await expect(promotionsPanel.getByText('No promotions found.', { exact: true })).toBeVisible();
+    await expect(
+      promotionsPanel.getByRole('button', { name: 'Save promotion', exact: true }),
+    ).toBeEnabled();
+    await promotionsPanel.getByRole('button', { name: 'Save promotion', exact: true }).click();
+    await expect(promotionsPanel.getByRole('alert')).toContainText('Set the start date');
+    await expect(promotionsPanel.getByRole('alert')).toContainText('Preview impact');
+    await promotionsPanel.getByLabel('Code', { exact: true }).fill('SUMMER10');
+    await promotionsPanel.getByLabel('Starts at (UTC)').fill(period.from + 'T00:00');
+    await promotionsPanel.getByLabel('Expires at (UTC)').fill(period.to + 'T23:59');
+    await promotionsPanel.getByLabel('Maximum paid uses (optional)').fill('5');
+    await promotionsPanel.getByRole('button', { name: 'Find packages', exact: true }).click();
+    await promotionsPanel
+      .getByRole('combobox', { name: 'Package', exact: true })
+      .selectOption('plan-uk');
+    await promotionsPanel.getByRole('button', { name: 'Preview impact', exact: true }).click();
+    await expect(promotionsPanel.getByRole('status')).toContainText(
+      'Critical: zero or negative contribution',
+    );
+    await expect(
+      promotionsPanel.getByRole('button', { name: 'Save promotion', exact: true }),
+    ).toBeEnabled();
+    for (const width of [375, 390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      if (width === 390 || width === 1440)
+        await page.screenshot({ path: `/tmp/alozuri-promotions-${width}.png`, fullPage: true });
+    }
+    await promotionsPanel.getByRole('button', { name: 'Save promotion', exact: true }).click();
+    await expect(
+      promotionsPanel.getByRole('heading', { name: 'SUMMER10 · 10% · Active', exact: true }),
+    ).toBeVisible();
+    expect(savedPromotions[0].startsAt).toBe(period.from + 'T00:00:00.000Z');
+    await promotionsPanel
+      .getByRole('button', { name: 'Edit / change status', exact: true })
+      .click();
+    await promotionsPanel.getByLabel('Active', { exact: true }).uncheck();
+    await promotionsPanel.getByRole('button', { name: 'Preview impact', exact: true }).click();
+    await expect(
+      promotionsPanel.getByRole('button', { name: 'Save promotion', exact: true }),
+    ).toBeEnabled();
+    await promotionsPanel.getByRole('button', { name: 'Save promotion', exact: true }).click();
+    await expect(
+      promotionsPanel.getByRole('heading', { name: 'SUMMER10 · 10% · Inactive', exact: true }),
+    ).toBeVisible();
+    await promotionsPanel
+      .getByRole('combobox', { name: 'Status', exact: true })
+      .selectOption('true');
+    await expect(promotionsPanel.getByText('No promotions found.', { exact: true })).toBeVisible();
+    await page.getByRole('tab', { name: 'Promotions', exact: true }).focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(
+      page.getByRole('tab', { name: 'Financial Overview', exact: true }),
+    ).toHaveAttribute('aria-selected', 'true');
     await auth.setCustomUserClaims(account.uid, {});
     await page.reload();
     await expect(page.locator('.operations-page').getByRole('alert')).toContainText(

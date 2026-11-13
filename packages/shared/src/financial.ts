@@ -1,5 +1,15 @@
 import type { EsimUsage } from './esim-usage.ts';
 export type OperationsRow = {
+  promotion?: { id: string; code: string; discountPercent: number };
+  checkoutEstimate?: {
+    currency: 'USD' | 'GBP' | 'EUR';
+    revenueMinor: number;
+    supplierMinor: number;
+    feeMinor: number;
+    contributionMinor: number;
+    marginBps: number;
+    basis: string;
+  } | null;
   id: string;
   source: 'purchases' | 'orders';
   createdAt: string;
@@ -47,11 +57,38 @@ export type OperationsRow = {
   reasons: string[];
   updatedAt: string;
 };
+export type OperationsTrends = {
+  grain: 'day' | 'week' | 'month' | 'year';
+  step: number;
+  points: {
+    periodStart: string;
+    orders: number;
+    revenueGbp: number | null;
+    profitGbp: number | null;
+    revenueProvisional: boolean;
+    profitProvisional: boolean;
+  }[];
+  topPlans: { name: string; countries: string[]; quantity: number }[];
+  otherPlanQuantity: number;
+};
 export type OperationsReport = {
   from: string;
   to: string;
   timezone: 'Europe/London';
   currency: 'GBP';
+  trends?: OperationsTrends;
+  promotions?: {
+    code: string;
+    currency: string;
+    sales: number;
+    revenueMinor: number | null;
+    discountMinor: number;
+    supplierGbp: number | null;
+    feesGbp: number | null;
+    profitGbp: number | null;
+    provisional: number;
+    usage: { date: string; sales: number }[];
+  }[];
   summary: {
     sales: number;
     revenueGbp: number | null;

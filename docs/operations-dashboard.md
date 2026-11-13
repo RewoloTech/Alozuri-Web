@@ -346,3 +346,34 @@ Missing/invalid historical payment IDs stay “Not recorded”, and secret-beari
 values are rejected rather than displayed. Only the existing verified-admin API
 returns this field. No additional Stripe request or payment/fulfilment change is
 needed. The existing refund webhook integration continues to track refund events.
+
+## Trends
+
+The protected **Trends** tab reuses Financial Overview's date range, GBP amounts,
+paid-order cohort and existing `/v1/operations/financials` request. Its `trends`
+response field is computed on the server from **all matched orders before table
+pagination**, not from the browser's current 25 rows. There is no new endpoint,
+database, background job, chart dependency or supplier/Stripe polling.
+
+- **Revenue over time:** refund-adjusted GBP revenue, with successful-order counts.
+- **Profit over time:** revenue less supplier costs and Stripe fees, before other
+  operating expenses and taxes. Quoted costs remain explicitly provisional;
+  unknown amounts are pending, never zero. Negative values are rendered below zero.
+- **Top-selling plans:** top eight recorded plan-name/coverage groups ranked by
+  gross purchased quantity. Refunded orders remain in these gross quantities;
+  refunds reduce the money charts consistently with Financial Overview.
+
+Buckets use Europe/London order dates and include empty periods. Up to 31 selected
+days use daily buckets, up to 124 days weekly, and up to ten years monthly. Longer
+ranges use bounded year groups. Partial periods contain only selected dates;
+refunds restate the original order-date cohort, rather than a separate refund-date
+cash-flow series. Existing historical costs and exchange rates remain unchanged.
+
+The charts provide hover/click readouts, arrow-key selection, accessible data
+tables, explicit provisional/pending labels and a mobile horizontal chart region
+without page overflow. Empty, loading, error and missing-backend-version states
+are explicit. Roll out the API before the manually deployed Firebase frontend.
+
+## Promotions
+
+Operations includes a Promotions section for administrator-managed percentage codes (maximum 30%), package profitability previews and server-paginated code management. Financial Overview includes promotion performance for its selected date range. See [Phase 1 promotions](promotions.md) for accounting, reservation lifecycle, indexes and the release/acceptance checklist.
