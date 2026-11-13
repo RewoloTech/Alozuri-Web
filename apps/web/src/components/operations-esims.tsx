@@ -55,6 +55,24 @@ function Reading({ data, showReference }: { data: OperationsEsimDetails; showRef
         <br />
         Order total: {money(data.amountMinor, data.currency)} ({data.currency})
       </p>
+      <div className="operations-stripe-payment">
+        <strong>Stripe payment ID (PaymentIntent)</strong>
+        {data.stripePayment ? (
+          <>
+            <CopyReference value={data.stripePayment.paymentIntentId} label="Stripe payment ID" />
+            <a
+              className="text-link"
+              href={data.stripePayment.dashboardUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Open payment in Stripe ↗
+            </a>
+          </>
+        ) : (
+          <p className="fine-print">Not recorded for this order.</p>
+        )}
+      </div>
       <details>
         <summary>Internal order ID</summary>
         <CopyReference value={data.purchaseId} label="internal order ID" />

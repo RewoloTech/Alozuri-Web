@@ -144,6 +144,7 @@ test('Operations API authorizes every request before invoking financial queries'
       },
       lookup: async () => ({
         purchaseId: 'fixture',
+        stripePayment: null,
         createdAt: '2026-11-13T00:00:00Z',
         amountMinor: 100,
         currency: 'GBP',
@@ -156,6 +157,7 @@ test('Operations API authorizes every request before invoking financial queries'
       }),
       details: async () => ({
         purchaseId: 'fixture',
+        stripePayment: null,
         createdAt: '2026-11-13T00:00:00Z',
         amountMinor: 100,
         currency: 'GBP',

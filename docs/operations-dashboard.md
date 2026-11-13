@@ -334,3 +334,15 @@ identifier. Use the provider and its exact reference together when multiple
 suppliers are connected. These references come from existing activation records,
 with ownership checks and field projections excluding QR/activation credentials.
 No supplier status/usage requests run while listing these references.
+
+### Finding the original Stripe payment
+
+Full protected order details show the saved **Stripe payment ID (PaymentIntent)**,
+with a copy button and **Open payment in Stripe** link. This is the original
+`paymentIntentId` stored on the parent purchase, shared by its allocated eSIMs.
+The link opens the payment details in Stripe; the operator reviews and performs
+any refund there. No refund is created by Alozuri's link or by viewing the order.
+Missing/invalid historical payment IDs stay “Not recorded”, and secret-bearing
+values are rejected rather than displayed. Only the existing verified-admin API
+returns this field. No additional Stripe request or payment/fulfilment change is
+needed. The existing refund webhook integration continues to track refund events.

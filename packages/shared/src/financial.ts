@@ -109,6 +109,7 @@ export type OperationsOrderSearch = {
 };
 export type OperationsEsimDetails = {
   purchaseId: string;
+  stripePayment: { paymentIntentId: string; dashboardUrl: string } | null;
   items: { name: string; quantity: number }[];
   createdAt: string;
   amountMinor: number;

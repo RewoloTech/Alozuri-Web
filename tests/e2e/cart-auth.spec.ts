@@ -622,6 +622,10 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
         headers,
         json: {
           purchaseId: 'purchase_' + 'f'.repeat(48),
+          stripePayment: {
+            paymentIntentId: 'pi_StripeReferenceFixture',
+            dashboardUrl: 'https://dashboard.stripe.com/payments/pi_StripeReferenceFixture',
+          },
           createdAt: `${saleDate}T12:00:00.000Z`,
           amountMinor: 2000,
           currency: 'GBP',
@@ -843,6 +847,16 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
     await expect(lookup).toContainText('Installed · disabled');
     await expect(lookup).toContainText('eSIM Access');
     await expect(lookup).toContainText('Order total: £20.00 (GBP)');
+    await expect(lookup.getByRole('link', { name: 'Open payment in Stripe' })).toHaveAttribute(
+      'href',
+      'https://dashboard.stripe.com/payments/pi_StripeReferenceFixture',
+    );
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+    await lookup.getByRole('button', { name: 'Copy Stripe payment ID', exact: true }).click();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+      'pi_StripeReferenceFixture',
+    );
+    await expect(lookup).toContainText('pi_StripeReferenceFixture');
     await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
     await lookup
       .getByRole('button', { name: 'Copy order reference AZ-FFFF-FFFF-FFFF-FFFF', exact: true })

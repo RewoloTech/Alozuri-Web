@@ -73,7 +73,18 @@ export class OperationsEsims {
             : { state: 'unavailable', snapshot: null, stale: false },
       });
     }
+    const savedPayment = parent.get('paymentIntentId');
+    const paymentIntent = z
+      .string()
+      .regex(/^pi_[A-Za-z0-9]{1,200}$/)
+      .safeParse(savedPayment);
     return {
+      stripePayment: paymentIntent.success
+        ? {
+            paymentIntentId: paymentIntent.data,
+            dashboardUrl: `https://dashboard.stripe.com/payments/${paymentIntent.data}`,
+          }
+        : null,
       purchaseId: parent.id,
       reference: customerReference(parent),
       items: parent.get('items')

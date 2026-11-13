@@ -127,8 +127,16 @@ test('stored and historic references, transaction numbers and full details prese
   const results = await reports.search({ q: number });
   assert.equal(results.rows[0].id, f.ref.id);
   assert.equal(supplierReads, 0);
+  await f.ref.update({ paymentIntentId: 'pi_StripeReferenceFixture' });
   const detail = await reports.details(results.rows[0].id);
   assert.equal(detail.reference, 'AZ-261113-K7M4Q2');
+  assert.deepEqual(detail.stripePayment, {
+    paymentIntentId: 'pi_StripeReferenceFixture',
+    dashboardUrl: 'https://dashboard.stripe.com/payments/pi_StripeReferenceFixture',
+  });
+  await f.ref.update({ paymentIntentId: 'pi_fake_secret_PRIVATE' });
+  assert.equal((await reports.details(f.ref.id)).stripePayment, null);
+  await f.ref.update({ paymentIntentId: 'pi_StripeReferenceFixture' });
   assert.equal(detail.createdAt, '2026-11-13T12:00:00.000Z');
   assert.equal(detail.email, 'detail-search@example.test');
   assert.equal(detail.amountMinor, 3000);
@@ -169,6 +177,7 @@ test('legacy orders, empty results and coincident supplier references return eac
   });
   assert.equal((await reports.search({ q: 'legacy-search@example.test' })).rows[0].id, legacy.id);
   assert.equal((await reports.search({ q: 'B-LEGACY-SEARCH' })).rows[0].currency, 'EUR');
+  assert.equal((await reports.details(legacy.id)).stripePayment, null);
   assert.deepEqual((await reports.search({ q: 'absent@example.test' })).rows, []);
   const f = await purchase('duplicate-search@example.test', '26111399999999');
   for (const unit of f.units)
