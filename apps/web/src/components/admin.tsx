@@ -340,8 +340,8 @@ function OperationsAccount() {
                     <div className="surface operations-transactions">
                       <h2>Transactions</h2>
                       <p className="fine-print">
-                        Includes unpaid checkout attempts. Summary totals include confirmed payments
-                        only.
+                        Shows successful payments and their refunds. Failed payments and unpaid
+                        checkout attempts are excluded.
                       </p>
                       <p className="fine-print operations-table-hint">
                         Scroll horizontally to see all transaction columns.

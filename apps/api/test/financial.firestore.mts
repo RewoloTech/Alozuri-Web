@@ -527,3 +527,41 @@ test('supplier credit API authenticates the operator and refreshes the parent fi
     await server.close();
   }
 });
+
+test('Financial Overview includes paid/refunded orders and excludes all unpaid checkout and failed payment attempts', async () => {
+  const f = await fixture();
+  await f.ledger.sync(f.ref);
+  const reports = new OperationsReports(db);
+  const input = { from: '2025-02-15', to: '2025-02-15' };
+  const before = await reports.report(input);
+  const ids: string[] = [];
+  for (const [i, status] of [
+    'pending_payment',
+    'payment_processing',
+    'payment_failed',
+    'cancelled',
+  ].entries()) {
+    const id = 'purchase_' + 'c'.repeat(46) + String(i).padStart(2, '0');
+    ids.push(id);
+    const raw = { ...f.source, status };
+    const { paidAt: _paidAt, ...draft } = raw;
+    void _paidAt;
+    await db.doc('purchases/' + id).set(draft);
+  }
+  const after = await reports.report(input);
+  assert.deepEqual(after.summary, before.summary);
+  assert.ok(after.rows.every((row) => row.paid));
+  assert.ok(after.rows.every((row) => !ids.includes(row.id)));
+  await f.ref.update({ status: 'refunded' });
+  let cursor: string | undefined;
+  let found = false;
+  do {
+    const page = await reports.report({ ...input, ...(cursor ? { cursor } : {}) });
+    found ||= page.rows.some(
+      (row) => row.id === f.id && row.paid && row.paymentStatus === 'refunded',
+    );
+    cursor = page.nextCursor ?? undefined;
+  } while (cursor);
+  assert.equal(found, true);
+  for (const id of ids) assert.equal((await db.doc('purchases/' + id).get()).exists, true); // drafts remain safe for checkout retries
+});

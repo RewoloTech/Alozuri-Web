@@ -821,17 +821,9 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
     row.stripe.revenueGbp = 2000;
     row.stripe.feesGbp = 50;
     const ready = calculateFinancial(row);
-    const unpaid = calculateFinancial({
-      ...structuredClone(row),
-      id: 'unpaid-fixture',
-      reference: 'AZ-UNPAID',
-      paid: false,
-      paymentStatus: 'pending_payment',
-      supplier: { ...row.supplier, purchasedUnits: null, verifiedUnits: null },
-    });
     const rows =
       url.searchParams.get('from')! <= saleDate && url.searchParams.get('to')! >= saleDate
-        ? [ready, unpaid]
+        ? [ready]
         : [];
     await route.fulfill({
       headers,
@@ -971,12 +963,7 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
     await page.keyboard.press('Enter');
     await expect(countryDetails.getByText('France, Germany, Italy, Spain')).toBeVisible();
     await countryDetails.locator('summary').click();
-    const unpaidRow = transactions.getByRole('row').filter({ hasText: 'AZ-UNPAID' });
-    await expect(unpaidRow).toContainText('Awaiting payment');
-    await expect(unpaidRow).toContainText('No confirmed sale');
-    await expect(unpaidRow).toContainText('£20.00');
-    await expect(unpaidRow).toContainText('Unpaid · excluded from totals');
-    await expect(unpaidRow.getByText('Pending', { exact: true })).toHaveCount(0);
+    await expect(transactions.getByRole('row').filter({ hasText: 'AZ-UNPAID' })).toHaveCount(0);
     for (const width of [320, 375, 390, 430, 768, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       const fromBox = await page.getByLabel('From Date', { exact: true }).boundingBox();

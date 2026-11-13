@@ -6,12 +6,7 @@ Financial Overview contains six metrics, a date-only report and paginated
 transactions; an expandable service-configuration overview remains available. There is no new service, database
 or scheduled financial job.
 
-Transaction rows include unpaid checkout attempts, labelled “Awaiting payment”,
-and cancelled checkouts. These are excluded from financial summary totals;
-profit and supplier cost are not presented as pending financial calculations for
-unconfirmed sales. Paid orders retain provisional figures and expandable reasons
-until actual historical supplier and Stripe information is available. Older
-orders may require the reliable-data backfill described below.
+Transaction rows show successful payments and their refunds (including partial refunds and paid orders with fulfilment issues). Unpaid drafts, abandoned checkouts, processing attempts without confirmed payment and failed payments are excluded from this financial view; those attempts remain available in Stripe. Internal checkout drafts are retained for safe retries and linking later verified payments. This is a report filter, not a data deletion or change to payment/fulfilment behaviour. Paid orders retain provisional figures and expandable reasons until actual historical supplier and Stripe information is available. Older orders may require the reliable-data backfill described below.
 
 Country lists longer than three entries are collapsed under a country-count
 summary in both sections. Click or keyboard-activate the summary to view the

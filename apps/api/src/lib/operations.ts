@@ -72,7 +72,7 @@ export class OperationsReports {
     const rows: OperationsRow[] = [];
     for (const [index, result] of results.entries())
       for (const doc of result.docs) {
-        if (doc.get('test') !== false || doc.get('parentOrderId')) continue;
+        if (doc.get('test') !== false || doc.get('parentOrderId') || !doc.get('paidAt')) continue;
         try {
           const row = doc.get('financial')
             ? financialSchema.parse(doc.get('financial'))
