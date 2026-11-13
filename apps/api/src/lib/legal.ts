@@ -2,7 +2,6 @@ import { z } from 'zod';
 import {
   BUSINESS,
   NOTICE_LEGAL_VERSIONS,
-  LEGAL_EFFECTIVE_DATE,
   CHECKOUT_NOTICE,
   type CheckoutLegalInput,
 } from '../../../../packages/shared/src/legal.ts';
@@ -79,7 +78,7 @@ export function legalSnapshot(
     business: { ...BUSINESS },
     termsVersion: accepted.version,
     refundVersion: accepted.version,
-    effectiveDate: LEGAL_EFFECTIVE_DATE,
+    effectiveDate: accepted.version.slice(0, 10),
     acceptedAt: now,
     termsAccepted: true,
     immediateSupplyRequested: false,

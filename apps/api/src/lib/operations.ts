@@ -1,3 +1,5 @@
+import { operationsLookupSchema, type OperationsEsims } from './operations-esims.js';
+import { customerReference, operationsSearchSchema } from './operations-order-search.js';
 import { pricingHistoryQuery, type PricingHistoryReports } from './pricing-history.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -66,6 +68,8 @@ export class OperationsReports {
           const row = doc.get('financial')
             ? financialSchema.parse(doc.get('financial'))
             : initialFinancial(doc.id, index === 0 ? 'purchases' : 'orders', doc.data());
+          if (index === 0 && /^purchase_[a-f0-9]{48}$/.test(doc.id))
+            row.reference = customerReference(doc);
           row.paid = Boolean(doc.get('paidAt'));
           const paymentStatus = z.string().parse(doc.get('status'));
           row.paymentStatus =
@@ -132,6 +136,7 @@ export function registerOperations(
   verify: (token: string) => Promise<Principal>,
   reports: Pick<OperationsReports, 'report'> | null,
   pricing: Pick<PricingHistoryReports, 'report'> | null = null,
+  esims: Pick<OperationsEsims, 'lookup' | 'details' | 'search'> | null = null,
 ) {
   async function requireAdmin(header: string | undefined) {
     if (!header?.startsWith('Bearer '))
@@ -150,6 +155,40 @@ export function registerOperations(
     z.object({}).strict().parse(req.query);
     return { authorized: true };
   });
+  app.get(
+    '/v1/operations/orders/search',
+    { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
+    async (req) => {
+      await requireAdmin(req.headers.authorization);
+      const input = operationsSearchSchema.parse(req.query);
+      if (!esims) throw new OperationsError('Order search is unavailable.', 503);
+      return esims.search(input);
+    },
+  );
+  app.get(
+    '/v1/operations/esims/lookup',
+    { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
+    async (req) => {
+      await requireAdmin(req.headers.authorization);
+      const input = operationsLookupSchema.parse(req.query);
+      if (!esims) throw new OperationsError('eSIM support details are unavailable.', 503);
+      return esims.lookup(input.q);
+    },
+  );
+  app.get(
+    '/v1/operations/orders/:id/esims',
+    { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
+    async (req) => {
+      await requireAdmin(req.headers.authorization);
+      z.object({}).strict().parse(req.query);
+      const params = z
+        .object({ id: z.string().regex(/^(?:purchase|order)_[a-f0-9]{48}$/) })
+        .strict()
+        .parse(req.params);
+      if (!esims) throw new OperationsError('eSIM support details are unavailable.', 503);
+      return esims.details(params.id);
+    },
+  );
   app.get(
     '/v1/operations/financials',
     { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },

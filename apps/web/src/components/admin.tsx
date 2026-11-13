@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
+import { OperationsEsimDisclosure, OperationsEsimLookup } from './operations-esims';
 import { PricingHistory } from './pricing-history';
 import type { OperationsReport } from '@alozuri/shared/financial';
 import { londonMonth } from '@alozuri/shared/financial';
@@ -192,6 +193,7 @@ function OperationsAccount() {
           >
             {section === 'financial' && (
               <>
+                {user && <OperationsEsimLookup uid={user.uid} />}
                 <div className="surface operations-dates">
                   <label>
                     From Date
@@ -235,8 +237,8 @@ function OperationsAccount() {
                     {current.summary.provisional > 0 && (
                       <p role="status" className="notice">
                         {current.summary.provisional} paid order(s) have provisional financials.
-                        Pending costs or fees prevent a final profit figure. Missing amounts are
-                        never treated as zero.
+                        Supplier costs and profit use historical quotes until actual supplier
+                        charges are verified. Missing amounts are never treated as zero.
                       </p>
                     )}
                     <div className="operations-metrics">
@@ -317,7 +319,10 @@ function OperationsAccount() {
                                       timeStyle: 'short',
                                     }).format(new Date(r.createdAt))}
                                   </td>
-                                  <td>{r.reference}</td>
+                                  <td>
+                                    {r.reference}
+                                    {user && <OperationsEsimDisclosure id={r.id} uid={user.uid} />}
+                                  </td>
                                   <td>
                                     {r.packages.map((p, i) => (
                                       <div key={i}>
@@ -337,9 +342,26 @@ function OperationsAccount() {
                                     <small>
                                       {!r.paid
                                         ? 'Payment not confirmed'
-                                        : r.supplier.purchasedUnits === null
-                                          ? 'Supplier outcome pending'
-                                          : `USD ${(r.supplier.purchasedUnits / 10000).toFixed(4)}`}
+                                        : r.supplier.verifiedUnits != null
+                                          ? `Actual USD ${(r.supplier.verifiedUnits / 10000).toFixed(4)}`
+                                          : r.supplier.purchasedUnits === null
+                                            ? 'Supplier outcome pending'
+                                            : `Quoted USD ${(r.supplier.purchasedUnits / 10000).toFixed(4)} · actual charge unverified`}
+                                    </small>
+                                    {r.paid &&
+                                      r.supplier.verifiedUnits != null &&
+                                      r.supplier.quotedUnits !== null && (
+                                        <small>
+                                          Original quote USD{' '}
+                                          {(r.supplier.quotedUnits / 10000).toFixed(4)}
+                                        </small>
+                                      )}
+                                    <small>
+                                      {r.paid &&
+                                      r.supplier.verifiedUnits == null &&
+                                      r.supplier.purchasedUnits !== null
+                                        ? 'Estimated GBP cost'
+                                        : ''}
                                     </small>
                                   </td>
                                   <td>
@@ -375,8 +397,18 @@ function OperationsAccount() {
                                         </small>
                                       )}
                                   </td>
-                                  <td>{r.paid ? gbp(r.profitGbp) : '—'}</td>
-                                  <td>{r.paid ? margin(r.marginBps) : '—'}</td>
+                                  <td>
+                                    {r.paid ? gbp(r.profitGbp) : '—'}
+                                    {r.paid &&
+                                      r.profitGbp !== null &&
+                                      r.supplier.verifiedUnits == null && <small>Estimated</small>}
+                                  </td>
+                                  <td>
+                                    {r.paid ? margin(r.marginBps) : '—'}
+                                    {r.paid &&
+                                      r.marginBps !== null &&
+                                      r.supplier.verifiedUnits == null && <small>Estimated</small>}
+                                  </td>
                                   <td>
                                     {r.paymentStatus === 'pending_payment'
                                       ? 'Awaiting payment'

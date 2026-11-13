@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { installationLabel } from '../../../packages/shared/src/esim-usage.ts';
 import { parseSupplierUsage } from '../src/lib/usage-data.ts';
 import { SupplierClient } from '../src/lib/supplier.ts';
 const reference = {
@@ -15,18 +16,20 @@ const profile = {
   totalVolume: 5 * gb,
   orderUsage: 2 * gb,
   esimStatus: 'IN_USE',
+  smdpStatus: 'DISABLED',
   expiredTime: '2026-12-01T12:00:00+0000',
   ac: 'PRIVATE-ACTIVATION',
   iccid: 'PRIVATE-ICCID',
   qrCodeUrl: 'PRIVATE-QR',
 };
-test('fixed-data usage uses supplier bytes and strips credentials and supplier identifiers', () => {
+test('fixed-data usage uses supplier bytes and strips credentials while preserving the support transaction number', () => {
   const value = parseSupplierUsage({ esimList: [profile] }, reference, 'fixed');
   assert.equal(value?.remainingBytes, 3 * gb);
   assert.equal(value?.usedBytes, 2 * gb);
   assert.equal(value?.expiresAt, '2026-12-01T12:00:00.000Z');
   assert.ok(!JSON.stringify(value).includes('PRIVATE'));
-  assert.ok(!JSON.stringify(value).includes('supplier-profile'));
+  assert.equal(value?.esimTranNo, reference.esimTranNo);
+  assert.equal(value?.smdpStatus, 'DISABLED');
 });
 test('usage absence stays unknown, explicit zero stays zero and overages cannot produce negative remaining data', () => {
   const absent = parseSupplierUsage(
@@ -103,4 +106,27 @@ test('supplier usage requests only the documented read endpoint and verifies the
   } finally {
     globalThis.fetch = previous;
   }
+});
+
+test('installation labels distinguish downloaded, installed and unknown states without assuming unused', () => {
+  assert.equal(installationLabel('RELEASED'), 'Ready to install');
+  assert.equal(installationLabel('DOWNLOAD'), 'Downloaded; installation not confirmed');
+  assert.equal(installationLabel('INSTALLATION'), 'Installed');
+  assert.equal(installationLabel('ENABLED'), 'Installed · enabled');
+  assert.equal(installationLabel('DISABLED'), 'Installed · disabled');
+  assert.equal(installationLabel('DELETED'), 'Deleted');
+  assert.equal(installationLabel(null), 'Not reported');
+  assert.equal(installationLabel('NEW_VENDOR_STATUS'), 'Not reported');
+});
+
+test('missing or malformed optional supplier states do not hide valid usage counters', () => {
+  const result = parseSupplierUsage(
+    { esimList: [{ ...profile, esimStatus: null, smdpStatus: 12 }] },
+    reference,
+    'fixed',
+  );
+  assert.equal(result?.usedBytes, 2 * gb);
+  assert.equal(result?.remainingBytes, 3 * gb);
+  assert.equal(result?.profileStatus, 'UNKNOWN');
+  assert.equal(result?.smdpStatus, null);
 });

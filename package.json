@@ -15,7 +15,7 @@
     "dev:api": "npm run dev -w @alozuri/api",
     "build": "npm run build -w @alozuri/web && npm run build -w @alozuri/api",
     "build:web": "npm run build -w @alozuri/web",
-    "test:firestore": "firebase emulators:exec --only firestore --project demo-alozuri --config infra/production-emulator.json \"node --import tsx --test --test-concurrency=1 apps/api/test/production.firestore.mts apps/api/test/commerce.firestore.mts apps/api/test/catalogue.firestore.mts apps/api/test/featured.firestore.mts apps/api/test/financial.firestore.mts apps/api/test/pricing-history.firestore.mts\"",
+    "test:firestore": "firebase emulators:exec --only firestore --project demo-alozuri --config infra/production-emulator.json \"node --import tsx --test --test-concurrency=1 apps/api/test/production.firestore.mts apps/api/test/commerce.firestore.mts apps/api/test/catalogue.firestore.mts apps/api/test/featured.firestore.mts apps/api/test/financial.firestore.mts apps/api/test/pricing-history.firestore.mts apps/api/test/operations-order-search.firestore.mts\"",
     "test:auth": "firebase emulators:exec --only auth --project demo-alozuri --config infra/auth-emulator.json \"node --import tsx --test tests/integration/checkout-account.auth.mts\"",
     "test": "npm run test:unit",
     "typecheck": "npm run typecheck --workspaces --if-present",
@@ -35,7 +35,8 @@
     "test:cart:browser": "firebase emulators:exec --only auth --project demo-alozuri --config infra/auth-emulator.json \"E2E_CART_AUTH_EMULATOR=true playwright test tests/e2e/cart-auth.spec.ts\"",
     "deploy:api": "node scripts/deploy-api.mjs",
     "operations:admin": "node --import tsx scripts/operations-admin.mts",
-    "operations:backfill": "node --import tsx scripts/backfill-financials.mts"
+    "operations:backfill": "node --import tsx scripts/backfill-financials.mts",
+    "operations:supplier-cost": "node --import tsx scripts/reconcile-supplier-cost.mts"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.0",

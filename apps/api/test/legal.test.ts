@@ -112,3 +112,23 @@ test('an already-open version-one checkout retains its real acknowledgements and
     false,
   );
 });
+
+test('updated cancellation terms preserve the previous policy and effective dates', () => {
+  const current = legalSnapshot(CHECKOUT_LEGAL_ACCEPTANCE);
+  assert.ok(
+    current.refundText.includes(
+      'Uninstalled and unused eSIM plans may be cancelled within 14 days of purchase for a full refund',
+    ),
+  );
+  assert.ok(current.refundText.includes('except where required by applicable consumer law'));
+  assert.ok(current.refundText.includes('verified technical or network issue'));
+  assert.equal(current.effectiveDate, '2026-11-13');
+  const previous = legalSnapshot({ ...CHECKOUT_LEGAL_ACCEPTANCE, version: '2026-11-11.3' });
+  assert.equal(previous.effectiveDate, '2026-11-11');
+  assert.ok(
+    previous.refundText.includes(
+      'Installation or activation does not automatically prevent a refund',
+    ),
+  );
+  assert.ok(!previous.refundText.includes('Version 2026-11-13.1'));
+});

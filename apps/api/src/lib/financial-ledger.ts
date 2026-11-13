@@ -2,6 +2,7 @@ import Stripe from 'stripe';
 import { z } from 'zod';
 import type { Firestore, DocumentReference } from 'firebase-admin/firestore';
 import { database } from './firebase.js';
+import { supplierChargeSchema } from './supplier-cost.js';
 import { STRIPE_APP_INFO } from './stripe-attribution.js';
 import {
   calculateFinancial,
@@ -31,24 +32,34 @@ export async function refreshSupplierFinancial(db: Firestore, ref: DocumentRefer
     const expected = row.packages.reduce((n, i) => n + i.quantity, 0);
     let known = units.length === expected;
     let cost = 0n;
+    let verified = units.length === expected;
+    let actualCost = 0n;
     const states: string[] = [];
     for (const unit of units) {
       const u = financialSourceSchema.safeParse(unit.data());
       if (!u.success) {
         known = false;
+        verified = false;
         continue;
       }
       states.push(u.data.status);
       if (u.data.supplierOrderNo) {
+        const receipt = supplierChargeSchema.safeParse(unit.get('supplierCharge'));
+        if (receipt.success && receipt.data.supplierOrderNo === u.data.supplierOrderNo)
+          actualCost += BigInt(receipt.data.amountUnits);
+        else verified = false;
         if (u.data.wholesaleUnits === undefined) known = false;
         else cost += BigInt(u.data.wholesaleUnits);
       } else if (
         !u.data.supplierRejected &&
         !(u.data.supplierAttempted === false && ['refunded', 'cancelled'].includes(u.data.status))
-      )
+      ) {
         known = false;
+        verified = false;
+      }
     }
     row.supplier.purchasedUnits = known ? safeInteger(cost) : null;
+    row.supplier.verifiedUnits = verified ? safeInteger(actualCost) : null;
     row.paid = Boolean(p.paidAt);
     row.paymentStatus =
       p.status === 'attention'

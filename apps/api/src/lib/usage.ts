@@ -33,7 +33,7 @@ export class EsimUsageService {
     private supplier: UsageSupplier,
     private now = Date.now,
   ) {}
-  private async context(t: Transaction, purchaseId: string, unitId: string) {
+  private async context(t: Transaction, purchaseId: string, unitId: string, operations = false) {
     const [parent, unit, activation] = await t.getAll(
       this.db.doc('purchases/' + purchaseId),
       this.db.doc('orders/' + unitId),
@@ -44,12 +44,15 @@ export class EsimUsageService {
     if (
       parent.get('test') !== false ||
       unit.get('test') !== false ||
-      unit.get('paymentBlocked') === true ||
-      parent.get('status') !== 'paid' ||
-      ['refunded', 'refund_pending', 'cancelled', 'provision_error'].includes(unit.get('status'))
+      (!operations &&
+        (unit.get('paymentBlocked') === true ||
+          parent.get('status') !== 'paid' ||
+          ['refunded', 'refund_pending', 'cancelled', 'provision_error'].includes(
+            unit.get('status'),
+          )))
     )
       return null;
-    if (typeof parent.get('paidAt') !== 'string' || unit.get('status') !== 'ready')
+    if (typeof parent.get('paidAt') !== 'string' || (!operations && unit.get('status') !== 'ready'))
       return undefined;
     const uid = purchaseOwnerUid(purchaseId, parent.get('uid') ?? null);
     if (!activation.exists || unit.get('uid') !== uid || activation.get('uid') !== uid)
@@ -89,18 +92,29 @@ export class EsimUsageService {
   // Caller must authorize the purchase before invoking this service. Recheck
   // payment/ownership linkage even for cache hits and after slow supplier calls.
   async get(purchaseId: string, unitId: string): Promise<EsimUsage> {
+    return this.read(purchaseId, unitId, false);
+  }
+  // Only the independently administrator-authorized Operations route may use this.
+  async getForOperations(purchaseId: string, unitId: string): Promise<EsimUsage> {
+    return this.read(purchaseId, unitId, true);
+  }
+  private async read(purchaseId: string, unitId: string, operations: boolean): Promise<EsimUsage> {
     const ref = this.db.doc('esimUsage/' + unitId),
       budgetRef = this.db.doc('supplierLimits/esim-usage');
     const lease = randomUUID(),
       now = this.now();
     const claim = await this.db.runTransaction(async (t) => {
-      const reference = await this.context(t, purchaseId, unitId);
+      const reference = await this.context(t, purchaseId, unitId, operations);
       if (!reference)
         return { response: this.result(null, now, reference === null ? 'unavailable' : 'pending') };
       const [cache, budget] = await t.getAll(ref, budgetRef);
       const hash = fingerprint(reference),
         snapshot = this.cached(cache.data(), hash, now);
-      if (snapshot && now - Date.parse(snapshot.checkedAt) < USAGE_CACHE_MS)
+      if (
+        snapshot &&
+        cache.get('schemaVersion') === 2 &&
+        now - Date.parse(snapshot.checkedAt) < USAGE_CACHE_MS
+      )
         return { response: this.result(snapshot, now) };
       if (cache.get('leaseUntil') > now) return { response: this.result(snapshot, now) };
       if (cache.get('nextAttemptAt') > now)
@@ -144,7 +158,7 @@ export class EsimUsageService {
       snapshot = null;
     }
     return this.db.runTransaction(async (t) => {
-      const current = await this.context(t, purchaseId, unitId);
+      const current = await this.context(t, purchaseId, unitId, operations);
       const cache = await t.get(ref),
         at = this.now();
       if (!current || fingerprint(current) !== fingerprint(reference)) {
@@ -157,6 +171,7 @@ export class EsimUsageService {
         t.set(ref, {
           snapshot,
           referenceHash: fingerprint(current),
+          schemaVersion: 2,
           leaseUntil: 0,
           nextAttemptAt: 0,
         });

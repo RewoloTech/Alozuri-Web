@@ -1,3 +1,5 @@
+import { OperationsEsims } from '../src/lib/operations-esims.ts';
+import { orderReference } from '../src/lib/confirmation-order.ts';
 import { UserProfiles, type ProfileDirectory } from '../src/lib/user-profiles.ts';
 import { pendingOrderWork, prepareOrderWork } from '../src/lib/order-work-recovery.ts';
 import { OrderWorker } from '../src/lib/order-worker.ts';
@@ -2274,4 +2276,64 @@ test('private financial snapshots never appear in customer order responses', asy
   assert.equal(Object.hasOwn(visible, 'financial'), false);
   assert.equal(JSON.stringify(visible).includes('quotedUnits'), false);
   assert.equal(JSON.stringify(visible).includes('financialReconciliationPending'), false);
+});
+
+test('Operations links exact transaction numbers and historical order references to private installation and usage details', async () => {
+  let calls = 0;
+  const supplier: UsageSupplier = {
+    usage: async (_order, transaction) => {
+      calls++;
+      return { ...usageReading, esimTranNo: transaction, smdpStatus: 'DISABLED' };
+    },
+  };
+  const f = await usageFixture(supplier);
+  const unit = f.units[0];
+  await db.doc('orderActivations/' + unit.id).update({ esimTranNo: '26111300000001' });
+  const usage = new EsimUsageService(db, supplier);
+  const reports = new OperationsEsims(db, usage);
+  const found = await reports.lookup('26111300000001');
+  assert.equal(found.purchaseId, f.result.orderId);
+  assert.equal(found.units[0].esimTranNo, '26111300000001');
+  assert.equal(found.units[0].usage.snapshot?.smdpStatus, 'DISABLED');
+  assert.equal(found.units[0].usage.snapshot?.remainingBytes, usageReading.remainingBytes);
+  assert.ok(!JSON.stringify(found).includes('PRIVATE'));
+  const before = calls;
+  await reports.lookup(orderReference(f.result.orderId));
+  await reports.lookup(f.result.orderId);
+  await reports.lookup(unit.id);
+  assert.equal(calls, before);
+  await assert.rejects(reports.lookup('26111399999999'), /not found/);
+  await assert.rejects(reports.lookup('a@b.example'));
+  await unit.ref.update({ status: 'refunded', paymentBlocked: true });
+  await db.doc('purchases/' + f.result.orderId).update({ status: 'refunded' });
+  const support = await reports.lookup('26111300000001');
+  assert.equal(support.units[0].usage.snapshot?.smdpStatus, 'DISABLED');
+  const customer = await f.service.usage(f.result.orderId, unit.id, null, f.result.accessToken);
+  assert.equal(customer.snapshot, null);
+  await db.doc('orderActivations/' + unit.id).update({ uid: 'different-owner' });
+  await assert.rejects(reports.lookup('26111300000001'), /ownership/);
+});
+
+test('older usage caches refresh installation fields but preserve useful readings during a supplier outage', async () => {
+  let available = true,
+    calls = 0;
+  const f = await usageFixture({
+    usage: async () => {
+      calls++;
+      if (!available) throw new Error('Supplier temporarily unavailable');
+      return usageReading;
+    },
+  });
+  const unit = f.units[0].id;
+  await f.service.usage(f.result.orderId, unit, null, f.result.accessToken);
+  const cache = db.doc('esimUsage/' + unit);
+  assert.equal((await cache.get()).get('schemaVersion'), 2);
+  await cache.update({ schemaVersion: FieldValue.delete() });
+  available = false;
+  const result = await f.service.usage(f.result.orderId, unit, null, f.result.accessToken);
+  assert.equal(calls, 2);
+  assert.equal(result.snapshot?.usedBytes, usageReading.usedBytes);
+  assert.equal(result.snapshot?.remainingBytes, usageReading.remainingBytes);
+  await f.service.usage(f.result.orderId, unit, null, f.result.accessToken);
+  assert.equal(calls, 2);
 });

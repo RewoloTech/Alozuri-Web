@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { dataSizeLabel } from '@alozuri/shared';
+import { installationLabel } from '@alozuri/shared/esim-usage';
 import type { EsimUsage } from '@alozuri/shared/esim-usage';
 import { api } from '@/lib/api';
 
@@ -81,6 +82,16 @@ export function EsimUsagePanel({
                   <dd>{volume(snapshot.totalBytes)}</dd>
                 </div>
               </>
+            )}
+            <div>
+              <dt>Installation</dt>
+              <dd>{installationLabel(snapshot.smdpStatus)}</dd>
+            </div>
+            {snapshot.esimTranNo && (
+              <div>
+                <dt>eSIM Tran No</dt>
+                <dd>{snapshot.esimTranNo}</dd>
+              </div>
             )}
             <div>
               <dt>Supplier status</dt>

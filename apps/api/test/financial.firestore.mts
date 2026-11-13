@@ -5,6 +5,8 @@ import { getFirestore } from 'firebase-admin/firestore';
 import Stripe from 'stripe';
 import { FinancialLedger, refreshSupplierFinancial } from '../src/lib/financial-ledger.ts';
 import { initialFinancial } from '../src/lib/financial-calculations.ts';
+import { FieldValue } from 'firebase-admin/firestore';
+import { recordSupplierCharge } from '../src/lib/supplier-cost.ts';
 import { OperationsReports } from '../src/lib/operations.ts';
 assert.equal(process.env.FIRESTORE_EMULATOR_HOST, '127.0.0.1:8188');
 const app = initializeApp({ projectId: 'demo-alozuri' }, 'financial-tests'),
@@ -48,6 +50,14 @@ async function fixture() {
       plan: source.items[0].plan,
       wholesaleUnits: 50000,
       supplierOrderNo: 'supplier-' + i,
+      supplierCharge: {
+        amountUnits: 50000,
+        currency: 'USD',
+        supplierOrderNo: 'supplier-' + i,
+        source: 'supplier_statement',
+        reference: 'statement-fixture-' + serial + '-' + i,
+        verifiedAt: source.paidAt,
+      },
     });
     units.push(unit);
   }
@@ -227,4 +237,113 @@ test('date scoped reports paginate without double-counting child orders or test 
 });
 test.after(async () => {
   await deleteApp(app);
+});
+
+test('supplier quotes are provisional; exact immutable statement charges reconcile all purchased units', async () => {
+  const f = await fixture();
+  for (const unit of f.units) await unit.update({ supplierCharge: FieldValue.delete() });
+  await f.ledger.sync(f.ref);
+  let row = (await f.ref.get()).get('financial');
+  assert.equal(row.fulfilmentStatus, 'fulfilled');
+  assert.equal(row.supplier.purchasedUnits, 100000);
+  assert.equal(row.supplier.verifiedUnits, null);
+  assert.equal(row.calculationStatus, 'pending');
+  const evidence = {
+    amountUnits: 48000,
+    currency: 'USD',
+    supplierOrderNo: 'supplier-0',
+    source: 'supplier_statement',
+    reference: 'statement-actual-0',
+  };
+  await assert.rejects(
+    recordSupplierCharge(db, f.units[0].id, { ...evidence, supplierOrderNo: 'wrong-order' }),
+  );
+  await assert.rejects(recordSupplierCharge(db, f.units[0].id, { ...evidence, currency: 'GBP' }));
+  await recordSupplierCharge(db, f.units[0].id, evidence);
+  const originalReceipt = (await f.units[0].get()).get('supplierCharge');
+  await recordSupplierCharge(db, f.units[0].id, evidence);
+  assert.deepEqual((await f.units[0].get()).get('supplierCharge'), originalReceipt);
+  await assert.rejects(
+    recordSupplierCharge(db, f.units[0].id, { ...evidence, amountUnits: 47000 }),
+  );
+  await refreshSupplierFinancial(db, f.ref);
+  assert.equal((await f.ref.get()).get('financial.supplier.verifiedUnits'), null);
+  await recordSupplierCharge(db, f.units[1].id, {
+    ...evidence,
+    supplierOrderNo: 'supplier-1',
+    reference: 'statement-actual-1',
+  });
+  await refreshSupplierFinancial(db, f.ref);
+  row = (await f.ref.get()).get('financial');
+  assert.equal(row.supplier.quotedUnits, 100000);
+  assert.equal(row.supplier.purchasedUnits, 100000);
+  assert.equal(row.supplier.verifiedUnits, 96000);
+  assert.equal(row.profitGbp, 1182);
+  assert.equal(row.calculationStatus, 'final');
+  await f.ledger.sync(f.ref);
+  assert.equal((await f.ref.get()).get('financial.supplier.verifiedUnits'), 96000);
+  await f.units[0].update({ supplierCharge: { ...originalReceipt, supplierOrderNo: 'mismatch' } });
+  await refreshSupplierFinancial(db, f.ref);
+  assert.equal((await f.ref.get()).get('financial.supplier.verifiedUnits'), null);
+  assert.equal((await f.ref.get()).get('financial.calculationStatus'), 'pending');
+});
+
+test('operator statement command validates dry runs and preserves quotes when applying actual charges', async () => {
+  const { mkdtemp, writeFile, rm } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const { promisify } = await import('node:util');
+  const { execFile } = await import('node:child_process');
+  const run = promisify(execFile);
+  const f = await fixture();
+  for (const unit of f.units) await unit.update({ supplierCharge: FieldValue.delete() });
+  await f.ledger.sync(f.ref);
+  const dir = await mkdtemp(join(tmpdir(), 'alozuri-cost-statement-'));
+  try {
+    const file = join(dir, 'statement.json');
+    await writeFile(
+      file,
+      JSON.stringify(
+        f.units.map((unit, i) => ({
+          orderId: unit.id,
+          charge: {
+            amountUnits: 48000,
+            currency: 'USD',
+            supplierOrderNo: 'supplier-' + i,
+            source: 'supplier_statement',
+            reference: 'statement-cli-' + i,
+          },
+        })),
+      ),
+      { mode: 0o600 },
+    );
+    const args = [
+      '--import',
+      'tsx',
+      'scripts/reconcile-supplier-cost.mts',
+      '--project',
+      'demo-alozuri',
+      '--file',
+      file,
+    ];
+    const dry = await run(process.execPath, args);
+    assert.deepEqual(JSON.parse(dry.stdout), { dryRun: true, matched: 2, reconciled: 0 });
+    assert.equal((await f.units[0].get()).get('supplierCharge'), undefined);
+    const apply = [...args, '--apply', '--confirm-project', 'demo-alozuri'];
+    const result = await run(process.execPath, apply);
+    assert.equal(JSON.parse(result.stdout).reconciled, 2);
+    await run(process.execPath, apply);
+    const row = (await f.ref.get()).get('financial');
+    assert.equal(row.supplier.quotedUnits, 100000);
+    assert.equal(row.supplier.verifiedUnits, 96000);
+    assert.equal(row.profitGbp, 1182);
+    assert.equal(row.calculationStatus, 'final');
+    await assert.rejects(
+      run(process.execPath, [...args, '--apply', '--confirm-project', 'wrong-project']),
+    );
+    await f.units[0].update({ test: true });
+    await assert.rejects(run(process.execPath, args));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });

@@ -14,6 +14,8 @@ const reading: EsimUsage = {
     totalBytes: 5 * gb,
     remainingBytes: 3 * gb,
     profileStatus: 'IN_USE',
+    smdpStatus: 'DISABLED',
+    esimTranNo: '26111300000001',
     expiresAt: '2026-12-01T00:00:00.000Z',
     checkedAt: new Date().toISOString(),
   },
@@ -83,6 +85,8 @@ test('private order displays the supplier reading, expiry and delay notice at mo
 }) => {
   await setup(page, () => reading);
   const panel = page.getByRole('region', { name: 'Data usage', exact: true });
+  await expect(panel).toContainText('Installed · disabled');
+  await expect(panel).toContainText('26111300000001');
   await expect(panel).toContainText('3 GB');
   await expect(panel).toContainText('2 GB');
   await expect(panel.getByRole('progressbar', { name: 'Data used' })).toHaveAttribute(
@@ -108,6 +112,8 @@ test('usage can recover from pending data and labels stale readings', async ({ p
   expect(await panel.getByRole('progressbar').count()).toBe(0);
   value = { ...reading, stale: true };
   await panel.getByRole('button', { name: 'Refresh usage' }).click();
+  await expect(panel).toContainText('Installed · disabled');
+  await expect(panel).toContainText('26111300000001');
   await expect(panel).toContainText('3 GB');
   await expect(panel).toContainText('older reading');
 });
@@ -150,3 +156,17 @@ for (const kind of ['daily', 'unlimited'] as const)
     expect(await panel.getByRole('progressbar').count()).toBe(0);
     await expect(panel).toContainText('remaining high-speed balance is not reported');
   });
+
+test('missing installation status is not interpreted as an unused or uninstalled eSIM', async ({
+  page,
+}) => {
+  await setup(page, () => ({
+    ...reading,
+    snapshot: reading.snapshot && { ...reading.snapshot, smdpStatus: null },
+  }));
+  const panel = page.getByRole('region', { name: 'Data usage', exact: true });
+  await expect(panel).toContainText('Installation');
+  await expect(panel).toContainText('Not reported');
+  await expect(panel).not.toContainText('Ready to install');
+  await expect(panel).toContainText('3 GB');
+});

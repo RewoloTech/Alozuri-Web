@@ -104,7 +104,13 @@ export function initialFinancial(
       refundedMinor: p.paidAt ? null : 0,
       discountMinor: 0,
     },
-    supplier: { currency: 'USD', scale: 10000, quotedUnits: quoted, purchasedUnits: null },
+    supplier: {
+      currency: 'USD',
+      scale: 10000,
+      quotedUnits: quoted,
+      purchasedUnits: null,
+      verifiedUnits: null,
+    },
     stripe: {
       currency: null,
       feeMinor: null,
@@ -131,6 +137,7 @@ export function initialFinancial(
 }
 export function calculateFinancial(input: OperationsRow): OperationsRow {
   const r = structuredClone(input);
+  r.supplier.verifiedUnits ??= null;
   const reasons: string[] = [];
   if (r.paid && !r.stripe.observedAt) r.selling.refundedMinor = null;
   const net =
@@ -156,15 +163,15 @@ export function calculateFinancial(input: OperationsRow): OperationsRow {
     r.feesGbp = r.stripe.feesGbp;
     if (r.feesGbp === null) reasons.push('Actual GBP Stripe fees pending');
   }
+  const supplierUnits = r.supplier.verifiedUnits ?? r.supplier.purchasedUnits;
   r.supplierGbp =
-    r.supplier.purchasedUnits === 0
-      ? 0
-      : r.supplier.purchasedUnits === null
-        ? null
-        : convert(r.supplier.purchasedUnits, r.usdGbp, 100);
-  if (r.supplier.purchasedUnits === null)
-    reasons.push('Supplier purchase outcome pending or unknown');
+    supplierUnits === 0 ? 0 : supplierUnits === null ? null : convert(supplierUnits, r.usdGbp, 100);
+  if (supplierUnits === null) reasons.push('Supplier purchase outcome pending or unknown');
   else if (r.supplierGbp === null) reasons.push('Historical supplier GBP valuation unavailable');
+  if (supplierUnits !== null && r.supplier.verifiedUnits === null)
+    reasons.push(
+      'Actual supplier charge not verified; supplier costs and profit use the historical quote',
+    );
   if (r.stripe.refundsPending) reasons.push('Refund or dispute settlement pending');
   if (r.fulfilmentStatus === 'needs_attention')
     reasons.push('Fulfilment outcome or refund requires review');
@@ -266,6 +273,7 @@ export const financialSchema: z.ZodType<OperationsRow> = z.object({
     scale: z.literal(10000),
     quotedUnits: nonnegative.nullable(),
     purchasedUnits: nonnegative.nullable(),
+    verifiedUnits: nonnegative.nullable().default(null),
   }),
   stripe: z.object({
     currency: z.string().nullable(),

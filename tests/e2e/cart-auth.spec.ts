@@ -577,6 +577,89 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
         },
       });
 
+    if (url.pathname.endsWith('/orders/search')) {
+      const q = url.searchParams.get('q');
+      const next = Boolean(url.searchParams.get('cursor'));
+      return route.fulfill({
+        headers,
+        json: {
+          query: q,
+          rows:
+            q === '26111399999999'
+              ? []
+              : [
+                  {
+                    id: 'purchase_' + (next ? 'e' : 'f').repeat(48),
+                    reference: next ? 'AZ-EEEE-EEEE-EEEE-EEEE' : 'AZ-FFFF-FFFF-FFFF-FFFF',
+                    email: 'sample@example.test',
+                    createdAt: `${saleDate}T12:00:00.000Z`,
+                    amountMinor: 2000,
+                    currency: 'GBP',
+                    paymentStatus: 'paid',
+                    plans: [{ name: 'France connection', quantity: 2 }],
+                    esims: [
+                      {
+                        id: 'order_' + 'a'.repeat(48),
+                        name: 'France connection',
+                        supplier: { id: 'esimaccess', name: 'eSIM Access' },
+                        esimTranNo: '26111300000001',
+                      },
+                    ],
+                  },
+                ],
+          nextCursor: q === 'sample@example.test' && !next ? 'next-fixture' : null,
+        },
+      });
+    }
+    if (url.pathname.includes('/esims')) {
+      if (url.searchParams.get('q') === '26111399999999')
+        return route.fulfill({
+          status: 404,
+          headers,
+          json: { error: 'eSIM transaction not found.' },
+        });
+      return route.fulfill({
+        headers,
+        json: {
+          purchaseId: 'purchase_' + 'f'.repeat(48),
+          createdAt: `${saleDate}T12:00:00.000Z`,
+          amountMinor: 2000,
+          currency: 'GBP',
+          fulfilmentStatus: 'fulfilled',
+          items: [{ name: 'France connection', quantity: 2 }],
+          reference: 'AZ-FFFF-FFFF-FFFF-FFFF',
+          email: 'sample@example.test',
+          paymentStatus: 'paid',
+          units: [
+            {
+              id: 'order_' + 'a'.repeat(48),
+              name: 'France connection',
+              fulfilmentStatus: 'ready',
+              supplier: { id: 'esimaccess', name: 'eSIM Access' },
+              amountMinor: 1000,
+              currency: 'GBP',
+              supplierOrderNo: 'B-SUPPORT-FIXTURE',
+              esimTranNo: '26111300000001',
+              usage: {
+                state: 'available',
+                stale: false,
+                snapshot: {
+                  kind: 'fixed',
+                  usedBytes: 1073741824,
+                  totalBytes: 5 * 1073741824,
+                  remainingBytes: 4 * 1073741824,
+                  profileStatus: 'IN_USE',
+                  smdpStatus: 'DISABLED',
+                  esimTranNo: '26111300000001',
+                  expiresAt: null,
+                  checkedAt: new Date().toISOString(),
+                },
+              },
+            },
+          ],
+        },
+      });
+    }
     if (url.pathname.endsWith('/pricing-history')) {
       pricingReads++;
       pricingQueries.push(url.searchParams);
@@ -672,11 +755,12 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
       { source: 'fixture', asOf: saleDate, numerator: '8', denominator: '10' },
     );
     row.supplier.purchasedUnits = 100000;
+    row.supplier.verifiedUnits = provisional ? null : 100000;
     row.fulfilmentStatus = 'fulfilled';
     row.stripe.observedAt = `${saleDate}T12:02:00.000Z`;
     row.selling.refundedMinor = 0;
     row.stripe.revenueGbp = 2000;
-    row.stripe.feesGbp = provisional ? null : 50;
+    row.stripe.feesGbp = 50;
     const ready = calculateFinancial(row);
     const unpaid = calculateFinancial({
       ...structuredClone(row),
@@ -684,7 +768,7 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
       reference: 'AZ-UNPAID',
       paid: false,
       paymentStatus: 'pending_payment',
-      supplier: { ...row.supplier, purchasedUnits: null },
+      supplier: { ...row.supplier, purchasedUnits: null, verifiedUnits: null },
     });
     const rows =
       url.searchParams.get('from')! <= saleDate && url.searchParams.get('to')! >= saleDate
@@ -736,6 +820,67 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
       'France connection',
     );
     const transactions = page.getByRole('region', { name: 'Financial transactions' });
+    const supportDetails = transactions.locator('.operations-esim-details').first();
+    await supportDetails.locator(':scope > summary').click();
+    await expect(supportDetails).toContainText('26111300000001');
+    await expect(supportDetails).toContainText('Installed · disabled');
+    await expect(supportDetails).toContainText('4 GB');
+    await supportDetails.locator(':scope > summary').click();
+    const lookup = page.getByRole('region', { name: 'Order search' });
+    await lookup.getByLabel('Search orders', { exact: true }).fill('sample@example.test');
+    await lookup.getByRole('button', { name: 'Search', exact: true }).click();
+    await expect(
+      lookup.getByRole('button', { name: 'Open order AZ-FFFF-FFFF-FFFF-FFFF' }),
+    ).toBeVisible();
+    await expect(lookup.locator('.operations-provider-reference').first()).toContainText(
+      'eSIM Access',
+    );
+    await expect(lookup.locator('.operations-provider-reference').first()).toContainText(
+      '26111300000001',
+    );
+    await expect(lookup.getByText('Installed · disabled', { exact: true })).toHaveCount(0);
+    await lookup.getByRole('button', { name: 'Open order AZ-FFFF-FFFF-FFFF-FFFF' }).click();
+    await expect(lookup).toContainText('Installed · disabled');
+    await expect(lookup).toContainText('eSIM Access');
+    await expect(lookup).toContainText('Order total: £20.00 (GBP)');
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+    await lookup
+      .getByRole('button', { name: 'Copy order reference AZ-FFFF-FFFF-FFFF-FFFF', exact: true })
+      .click();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+      'AZ-FFFF-FFFF-FFFF-FFFF',
+    );
+    await lookup
+      .getByRole('button', {
+        name: 'Copy supplier order number for France connection',
+        exact: true,
+      })
+      .click();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('B-SUPPORT-FIXTURE');
+    await lookup
+      .getByRole('button', {
+        name: 'Copy eSIM Tran No for France connection',
+        exact: true,
+      })
+      .click();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('26111300000001');
+    for (const width of [375, 390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      if (width === 390 || width === 1440)
+        await lookup.screenshot({ path: `/tmp/alozuri-order-search-${width}.png` });
+    }
+    await lookup.getByRole('button', { name: 'Next results', exact: true }).click();
+    await expect(lookup).toContainText('AZ-EEEE-EEEE-EEEE-EEEE');
+    await expect(lookup.getByText('Installed · disabled', { exact: true })).toHaveCount(0);
+    await lookup.getByRole('button', { name: 'Previous results', exact: true }).click();
+    await expect(lookup).toContainText('AZ-FFFF-FFFF-FFFF-FFFF');
+    await lookup.getByLabel('Search orders', { exact: true }).fill('26111399999999');
+    await lookup.getByRole('button', { name: 'Search', exact: true }).click();
+    await expect(lookup.getByText('No matching orders found.', { exact: true })).toBeVisible();
+    await expect(lookup.getByText('Installed · disabled', { exact: true })).toHaveCount(0);
     const countryDetails = transactions.locator('.operations-countries').first();
     await expect(countryDetails).not.toHaveAttribute('open', '');
     await expect(countryDetails.getByText('France, Germany, Italy, Spain')).not.toBeVisible();
@@ -782,8 +927,21 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
     await page.getByRole('button', { name: 'Refresh', exact: true }).click();
     await expect(
       page.getByRole('heading', { name: 'Profit', exact: true }).locator('..').locator('strong'),
-    ).toHaveText('Pending');
+    ).toHaveText('£11.50');
+    await expect(page.getByRole('region', { name: 'Financial transactions' })).toContainText(
+      'Quoted USD 10.0000 · actual charge unverified',
+    );
+    await expect(page.getByRole('region', { name: 'Financial transactions' })).toContainText(
+      'fulfilled · Provisional',
+    );
 
+    for (const width of [390, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.screenshot({
+        path: `/tmp/alozuri-supplier-estimates-${width}.png`,
+        fullPage: true,
+      });
+    }
     await page.getByRole('tab', { name: 'Pricing History', exact: true }).click();
     const pricingPanel = page.getByRole('tabpanel', { name: 'Pricing History', exact: true });
     await expect(

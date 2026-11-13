@@ -46,6 +46,7 @@ export function financialFixture(currency: 'GBP' | 'USD' | 'EUR' = 'GBP') {
 test('profit uses purchased historical supplier units and actual GBP Stripe fees', () => {
   const row = financialFixture();
   row.supplier.purchasedUnits = 110000;
+  row.supplier.verifiedUnits = 110000;
   row.stripe = { ...row.stripe, revenueGbp: 2000, feesGbp: 30 };
   const result = calculateFinancial(row);
   assert.equal(result.supplierGbp, 880);
@@ -69,6 +70,7 @@ test('actual Stripe settlement overrides reference revenue for USD and EUR', () 
     const row = financialFixture(currency);
     row.stripe = { ...row.stripe, revenueGbp: 1750, feesGbp: 45 };
     row.supplier.purchasedUnits = 110000;
+    row.supplier.verifiedUnits = 110000;
     const result = calculateFinancial(row);
     assert.equal(result.revenueGbp, 1750);
     assert.equal(result.profitGbp, 825);
@@ -78,6 +80,7 @@ test('actual Stripe settlement overrides reference revenue for USD and EUR', () 
 test('partial and full refunds retain non-returned supplier costs and fees', () => {
   const row = financialFixture();
   row.supplier.purchasedUnits = 110000;
+  row.supplier.verifiedUnits = 110000;
   row.selling.refundedMinor = 1000;
   row.stripe = { ...row.stripe, revenueGbp: 1000, feesGbp: 30 };
   let result = calculateFinancial(row);
@@ -125,7 +128,8 @@ test('London date ranges include the whole day across both DST transitions', () 
   });
 });
 test('Operations API authorizes every request before invoking financial queries', async () => {
-  let reads = 0;
+  let reads = 0,
+    supportReads = 0;
   const app = await createApp({
     demo: true,
     payments: null,
@@ -133,6 +137,36 @@ test('Operations API authorizes every request before invoking financial queries'
     fulfillment: null,
     profiles: null,
     financial: null,
+    operationsEsims: {
+      search: async (input) => {
+        supportReads++;
+        return { query: input.q, rows: [], nextCursor: null };
+      },
+      lookup: async () => ({
+        purchaseId: 'fixture',
+        createdAt: '2026-11-13T00:00:00Z',
+        amountMinor: 100,
+        currency: 'GBP',
+        fulfilmentStatus: 'fulfilled',
+        items: [],
+        reference: 'fixture',
+        email: null,
+        paymentStatus: 'paid',
+        units: [],
+      }),
+      details: async () => ({
+        purchaseId: 'fixture',
+        createdAt: '2026-11-13T00:00:00Z',
+        amountMinor: 100,
+        currency: 'GBP',
+        fulfilmentStatus: 'fulfilled',
+        items: [],
+        reference: 'fixture',
+        email: null,
+        paymentStatus: 'paid',
+        units: [],
+      }),
+    },
     operations: {
       report: async (input) => {
         reads++;
@@ -163,6 +197,9 @@ test('Operations API authorizes every request before invoking financial queries'
       for (const url of [
         '/v1/operations/access',
         '/v1/operations/financials?from=2026-11-01&to=2026-11-30',
+        '/v1/operations/esims/lookup?q=26111300000001',
+        '/v1/operations/orders/search?q=sample%40example.test',
+        '/v1/operations/orders/purchase_' + 'a'.repeat(48) + '/esims',
       ]) {
         const response = await app.inject({ url, headers });
         assert.equal(response.statusCode, code);
@@ -170,6 +207,17 @@ test('Operations API authorizes every request before invoking financial queries'
       }
     }
     assert.equal(reads, 1);
+    assert.equal(supportReads, 1);
+    for (const url of [
+      '/v1/operations/orders/search?q=',
+      '/v1/operations/orders/search?q=sample%40example.test&limit=1000',
+    ]) {
+      assert.equal(
+        (await app.inject({ url, headers: { authorization: 'Bearer admin' } })).statusCode,
+        400,
+      );
+    }
+    assert.equal(supportReads, 1);
     const response = await app.inject({
       url: '/v1/operations/financials?from=2026-11-01&to=2026-11-30&admin=true',
       headers: { authorization: 'Bearer admin' },
@@ -188,4 +236,31 @@ test('unreconciled historical refunds are unknown, never an invented zero', () =
   assert.equal(result.selling.refundedMinor, null);
   assert.equal(result.revenueGbp, null);
   assert.equal(result.profitGbp, null);
+});
+
+test('a fulfilled purchase quote remains provisional until actual charge evidence is recorded', () => {
+  const row = financialFixture();
+  row.fulfilmentStatus = 'fulfilled';
+  row.supplier.purchasedUnits = 110000;
+  row.stripe.revenueGbp = 2000;
+  row.stripe.feesGbp = 30;
+  let result = calculateFinancial(row);
+  assert.equal(result.profitGbp, 1090);
+  assert.equal(result.supplier.verifiedUnits, null);
+  assert.equal(result.calculationStatus, 'pending');
+  assert.ok(
+    result.reasons.some((reason) => reason.includes('Actual supplier charge not verified')),
+  );
+  row.supplier.verifiedUnits = 104000;
+  result = calculateFinancial(row);
+  assert.equal(result.supplier.quotedUnits, 110000);
+  assert.equal(result.supplier.purchasedUnits, 110000);
+  assert.equal(result.supplierGbp, 832);
+  assert.equal(result.profitGbp, 1138);
+  assert.equal(result.calculationStatus, 'final');
+  const legacy = financialSchema.parse({
+    ...row,
+    supplier: { currency: 'USD', scale: 10000, quotedUnits: 110000, purchasedUnits: 110000 },
+  });
+  assert.equal(calculateFinancial(legacy).calculationStatus, 'pending');
 });

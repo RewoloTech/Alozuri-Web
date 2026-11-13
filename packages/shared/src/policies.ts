@@ -1,3 +1,4 @@
+import { POLICIES_V3 } from './policies-v3.ts';
 import { POLICIES_V1 } from './policies-v1.ts';
 import { POLICIES_V2 } from './policies-v2.ts';
 import { BUSINESS, LEGAL_VERSION, LEGAL_EFFECTIVE_DATE } from './legal.ts';
@@ -413,7 +414,7 @@ export const POLICIES: Record<string, Policy> = {
       {
         title: 'Before supply or when the plan is unused',
         paragraphs: [
-          'Contact us as soon as you decide to cancel, especially before installation or use. We will check the order and any applicable cancellation right. An unused or uninstalled eSIM may already have started its validity if the plan starts on purchase; we will explain any lawful restriction or charge.',
+          'Uninstalled and unused eSIM plans may be cancelled within 14 days of purchase for a full refund. Contact us as soon as you decide to cancel, especially before installation or use.',
         ],
       },
       {
@@ -426,7 +427,7 @@ export const POLICIES: Record<string, Policy> = {
       {
         title: 'Installed or activated plans',
         paragraphs: [
-          'Installation or activation does not automatically prevent a refund. We assess the activation rule, actual supply or use, the information and choices recorded with your order, and applicable law. Please do not delete an eSIM while we investigate, as this can prevent troubleshooting or reinstallation.',
+          'Once an eSIM has been installed or activated, refunds are generally not available for changes of mind or travel plans, except where required by applicable consumer law. Installation or activation does not by itself waive statutory rights. We assess the activation rule, actual supply or use, and the information and choices recorded with your order. Please do not delete an eSIM while we investigate, as this can prevent troubleshooting or reinstallation.',
           'If you selected the wrong device, country or plan, contact us promptly before use so we can assess cancellation and available options. If we supplied the wrong plan or incorrect material information, we remain responsible for the appropriate remedy.',
         ],
       },
@@ -434,7 +435,7 @@ export const POLICIES: Record<string, Policy> = {
         title: 'Delivery failures and faults',
         paragraphs: [
           'If the email is missing, check spam and your private order page, then contact us. We will verify ownership before resending installation details. A successful payment alone does not mean an eSIM has been delivered. If we cannot supply it, we will arrange the remedy or refund required by law.',
-          'For unusable service, technical faults or coverage complaints, tell us your device, location, approximate time and error. We may suggest reasonable troubleshooting and work with the supplier. Depending on the circumstances and law, remedies may include repair, replacement or repeat performance, a price reduction or a refund.',
+          'If your eSIM does not work because of a verified technical or network issue, we will investigate and provide an appropriate replacement or refund. For unusable service, technical faults or coverage complaints, tell us your device, location, approximate time and error. We may suggest reasonable troubleshooting and work with the supplier. Depending on the circumstances and law, remedies may include repair, replacement or repeat performance, a price reduction or a refund.',
         ],
       },
       {
@@ -643,11 +644,12 @@ export const POLICIES: Record<string, Policy> = {
 export const POLICY_VERSIONS: Record<string, Record<string, Policy>> = {
   '2026-11-11.1': POLICIES_V1,
   '2026-11-11.2': POLICIES_V2,
+  '2026-11-11.3': POLICIES_V3,
   [LEGAL_VERSION]: POLICIES,
 };
 export function policyText(policy: Policy, version: string = LEGAL_VERSION): string {
   return (
-    `${policy.title}\nVersion ${version} — effective ${LEGAL_EFFECTIVE_DATE}\n${BUSINESS.identity}\n${BUSINESS.address}\n${BUSINESS.email}\n\n` +
+    `${policy.title}\nVersion ${version} — effective ${version === LEGAL_VERSION ? LEGAL_EFFECTIVE_DATE : version.slice(0, 10)}\n${BUSINESS.identity}\n${BUSINESS.address}\n${BUSINESS.email}\n\n` +
     policy.sections
       .map((s, i) => {
         const steps = s.steps?.map((step, index) => `${index + 1}. ${step}`).join('\n');

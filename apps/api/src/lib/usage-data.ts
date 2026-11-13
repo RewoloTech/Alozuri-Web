@@ -12,6 +12,13 @@ export const usageSnapshotSchema = z
       .string()
       .max(64)
       .regex(/^[A-Z_]+$/),
+    smdpStatus: z
+      .string()
+      .max(64)
+      .regex(/^[A-Z_]+$/)
+      .nullable()
+      .default(null),
+    esimTranNo: z.string().min(1).max(200).optional(),
     expiresAt: z.iso.datetime().nullable(),
     checkedAt: z.iso.datetime(),
   })
@@ -25,6 +32,8 @@ export const usageSnapshotSchema = z
         : snapshot.totalBytes === null && snapshot.remainingBytes === null,
     'Inconsistent usage counters.',
   );
+const reportedStatus = (value: unknown) =>
+  typeof value === 'string' && /^[A-Z_]{1,64}$/.test(value) ? value : null;
 const profileSchema = z.object({
   orderNo: z.string().min(1).max(200),
   esimTranNo: z.string().min(1).max(200),
@@ -32,10 +41,8 @@ const profileSchema = z.object({
   totalVolume: bytes.nullish(),
   orderUsage: bytes.nullish(),
   dataType: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).optional(),
-  esimStatus: z
-    .string()
-    .max(64)
-    .regex(/^[A-Z_]+$/),
+  esimStatus: z.unknown().transform((value) => reportedStatus(value) ?? 'UNKNOWN'),
+  smdpStatus: z.unknown().transform(reportedStatus),
   expiredTime: z.string().max(100).nullish(),
 });
 export function parseSupplierUsage(
@@ -79,6 +86,8 @@ export function parseSupplierUsage(
     remainingBytes:
       totalBytes !== null && usedBytes !== null ? Math.max(0, totalBytes - usedBytes) : null,
     profileStatus: p.esimStatus,
+    smdpStatus: p.smdpStatus ?? null,
+    esimTranNo: p.esimTranNo,
     expiresAt,
     checkedAt: new Date(now).toISOString(),
   });

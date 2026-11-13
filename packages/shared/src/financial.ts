@@ -1,3 +1,4 @@
+import type { EsimUsage } from './esim-usage.ts';
 export type OperationsRow = {
   id: string;
   source: 'purchases' | 'orders';
@@ -19,7 +20,10 @@ export type OperationsRow = {
     currency: 'USD';
     scale: 10000;
     quotedUnits: number | null;
+    /** Historical quoted cost of profiles confirmed purchased; not proof of debit. */
     purchasedUnits: number | null;
+    /** Actual USD charges reconciled against supplier transaction evidence. */
+    verifiedUnits: number | null;
   };
   stripe: {
     currency: string | null;
@@ -80,3 +84,48 @@ export function londonMonth(at = new Date()) {
     to: `${today.slice(0, 8)}${new Date(Date.UTC(year, month, 0)).getUTCDate()}`,
   };
 }
+
+export type OperationsEsimReference = {
+  id: string;
+  name: string;
+  supplier: { id: string; name: string };
+  esimTranNo: string | null;
+};
+export type OperationsOrderSummary = {
+  id: string;
+  reference: string;
+  createdAt: string;
+  email: string | null;
+  paymentStatus: string;
+  amountMinor: number;
+  currency: 'USD' | 'GBP' | 'EUR';
+  plans: { name: string; quantity: number }[];
+  esims: OperationsEsimReference[];
+};
+export type OperationsOrderSearch = {
+  query: string;
+  rows: OperationsOrderSummary[];
+  nextCursor: string | null;
+};
+export type OperationsEsimDetails = {
+  purchaseId: string;
+  items: { name: string; quantity: number }[];
+  createdAt: string;
+  amountMinor: number;
+  currency: 'USD' | 'GBP' | 'EUR';
+  fulfilmentStatus: string;
+  reference: string;
+  email: string | null;
+  paymentStatus: string;
+  units: {
+    id: string;
+    name: string;
+    fulfilmentStatus: string;
+    supplier: { id: string; name: string };
+    amountMinor: number;
+    currency: 'USD' | 'GBP' | 'EUR';
+    supplierOrderNo: string | null;
+    esimTranNo: string | null;
+    usage: EsimUsage;
+  }[];
+};

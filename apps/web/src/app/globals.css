@@ -3824,3 +3824,87 @@ body:has(.operations-page) .support-shortcut {
   min-height: 44px;
   white-space: normal;
 }
+
+.operations-esim-lookup {
+  margin-bottom: 16px;
+}
+.operations-esim-lookup summary {
+  cursor: pointer;
+  min-height: 44px;
+}
+.operations-esim-search {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.operations-esim-search input {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.operations-esim-reading {
+  overflow-wrap: anywhere;
+}
+.operations-esim-details[open] {
+  min-width: 260px;
+}
+.operations-esim-reading .spec-list {
+  display: block;
+}
+.operations-esim-reading .spec-list > div {
+  padding: 6px 0;
+}
+
+.operations-reference {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+.operations-order-results {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+}
+.operations-order-results > li {
+  border-top: 1px solid var(--border);
+  padding: 16px 0;
+}
+.operations-order-result {
+  width: 100%;
+  display: grid;
+  gap: 6px;
+  text-align: left;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-top: 8px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.operations-order-result:hover {
+  background: var(--soft);
+}
+.operations-order-result:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+}
+
+.operations-esim-lookup .operations-pagination {
+  flex-wrap: wrap;
+}
+.operations-esim-lookup .operations-pagination .button {
+  flex: 1 1 120px;
+  min-width: 0;
+  min-height: 44px;
+  white-space: normal;
+}
+
+.operations-provider-reference {
+  display: grid;
+  gap: 4px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}

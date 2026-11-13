@@ -57,9 +57,10 @@ responses explicitly select public fields and do not expose financial snapshots.
   ordered products and original supplier units (1/10,000 USD), quoted amount,
   currency, supported discounts (zero in the current checkout), customer,
   creation timestamp and historical FX. These never come from browser prices.
-- Supplier costs become booked only after a supplier order reference is saved.
-  An explicit supplier rejection can be zero cost; unknown outcomes remain
-  pending. A refund does not erase an already purchased supplier profile's cost.
+- A supplier order reference confirms a purchase, but not its actual debit.
+  Historical quoted supplier costs and profit stay provisional until matched
+  supplier transaction evidence is recorded (see Supplier cost reconciliation).
+  Unknown purchase outcomes remain pending; refunds retain already purchased costs.
 - Payment and refund events retrieve the current Stripe charge and expanded
   balance transactions. Settled refunds adjust revenue; original fees are retained
   unless Stripe records a fee adjustment on the related balance transactions.
@@ -195,3 +196,141 @@ Wait for index creation to complete, deploy the API, then manually roll out the
 website. The emulator tests do not establish production index readiness. No live
 index, scheduler, pricing rule, financial transaction or role assignment was
 changed for this feature.
+
+## Supplier cost reconciliation
+
+A catalogue quote is not proof of a supplier debit. `financial.supplier.quotedUnits`
+preserves the checkout quote; `purchasedUnits` tracks that historical quoted cost
+for profiles actually ordered. `verifiedUnits` is the separate sum of confirmed
+supplier charges. Costs and profit use the verified sum when available; otherwise
+they use the purchased historical quote and are explicitly **provisional estimates**.
+Existing records without charge evidence also remain provisional. Refunds do not
+remove costs of profiles that were already purchased. Explicitly rejected purchases
+or confirmed unattempted cancellations can have a verified zero cost.
+
+The documented eSIM Access ordering response supplies an order reference, and the
+profile query supplies allocation details, not a transaction debit ledger. Do not
+use today's catalogue, an account balance difference, or an unverified portal price
+to rewrite historical costs. There is no additional scheduler or polling job.
+
+To reconcile actual debits from an original supplier transaction statement, a
+trusted operator can prepare a private JSON file (outside Git) with this structure:
+
+```json
+[
+  {
+    "orderId": "ORDER_DOCUMENT_ID",
+    "charge": {
+      "amountUnits": 5200,
+      "currency": "USD",
+      "supplierOrderNo": "SUPPLIER_ORDER_NUMBER",
+      "source": "supplier_statement",
+      "reference": "STATEMENT_TRANSACTION_REFERENCE"
+    }
+  }
+]
+```
+
+The amount above is an example: use the **actual debit** in 1/10,000 USD units
+($0.52 = 5200), matched to that exact order. Keep the source statement privately.
+Validate without writing first:
+
+```sh
+npm run operations:supplier-cost -- --project alozuri --file /private/path/charges.json
+```
+
+Then apply the validated statement:
+
+```sh
+npm run operations:supplier-cost -- --project alozuri --file /private/path/charges.json --apply --confirm-project alozuri
+```
+
+This uses existing operator ADC/IAM permissions, never a browser role or public
+endpoint. Each immutable `orders/{id}.supplierCharge` records the USD amount,
+supplier order number, statement reference and verification time. Exact replays
+are harmless; conflicting charges, wrong supplier references and non-live/unpaid
+orders are rejected. Every purchased unit needs evidence before the aggregate
+cost becomes verified. The tool refreshes the existing purchase financials while
+preserving Stripe fees, original quotes and frozen exchange rates. It never
+creates supplier purchases, charges customers, sends email or changes catalogue pricing.
+
+Roll out the backend and frontend together for these new fields and labels;
+legacy snapshots are treated as unverified automatically, with no full-database migration.
+
+## Finding an eSIM for support
+
+In Financial Overview, expand **eSIM details** beside an order, or use the **Orders**
+search field with the customer's full `AZ-…` order reference, eSIM Tran No, supplier order number or complete customer email. Full internal order
+IDs also remain supported. The lookup uses bounded Firestore index queries, including
+historical order references, without scanning the catalogue or all orders. The
+financial date filter remains separate from this exact support lookup.
+
+Each allocated eSIM shows its supplier order number, `esimTranNo`, fulfilment
+state, supplier lifecycle state, installation state, used data, and fixed-plan
+remaining data when reported. No QR code, activation code, EID or card information
+is returned. Customer-owned order/usage pages also display the transaction number
+and installation state. Customer ownership checks still apply to every request;
+Operations access requires current, verified administrator permission server-side.
+
+Installation labels use the documented `smdpStatus`: `RELEASED` means ready to
+install; `DOWNLOAD` confirms download but not installation; `INSTALLATION`,
+`ENABLED` and `DISABLED` report installed profiles; `DELETED` reports deletion.
+Unknown or missing states stay “Not reported”. `esimStatus` is displayed separately
+because “Ready”/`GOT_RESOURCE` alone does not prove whether a profile is installed.
+These supplier readings support manual refund review, not automatic eligibility.
+
+The existing usage service retrieves status on demand, caches it for 15 minutes,
+and applies the same concurrency and supplier rate budget. There is no new cron,
+background poll or per-minute refresh. Usage can lag by 2–3 hours; daily/unlimited
+plans do not fabricate a remaining high-speed allowance. Support may inspect a
+previously paid refunded/blocked order, while the customer access restrictions
+remain unchanged. An old reading is identified with its last-check time.
+
+Supplier reference: https://docs.esimaccess.com/ (Query All Allocated Profiles).
+Refund policy version 2026-11-13.1 adds the uninstalled-and-unused 14-day full-refund
+offer and the installed/activated change-of-mind restriction, preserving statutory
+rights and technical-fault remedies. Previously accepted policy text is frozen
+under its original version, including already-open checkouts.
+
+Deploy the updated API **before** the frontend: it accepts the new policy version
+as well as previous checkout versions, so existing checkout sessions can complete.
+
+## Universal order search
+
+`GET /v1/operations/orders/search?q=…&cursor=…` is independently protected by
+current verified-administrator authorization. Search is exact (email addresses
+are case-insensitive and stored normalized); order references accept either the
+current historical format or another **already stored** reference format. Search
+never generates or rewrites customer references. It is independent of the
+financial date range and includes legacy standalone orders where matching data
+was originally stored. Missing historical emails are not guessed.
+
+Results show at most ten customer orders per page, with reference, purchase date,
+email, payment state, plans, selling amount and original currency. Clicking a
+result loads full details and the existing cached usage check; supplier calls do
+not run while listing results. Each purchased eSIM stays separate within its
+customer order. Copy buttons beside Alozuri and supplier references report success
+or a useful clipboard-permission failure.
+
+Queries use existing single-field/document-ID Firestore indexes. A scoped cursor
+advances over at most 50 matching index records per request, with sibling checks
+bounded by the existing ten-eSIM order limit. Shared supplier order numbers and
+coincident transaction identifiers resolve to one result per customer order,
+including across page boundaries. If a page contains only duplicate or excluded
+records, the next-page control remains available. No whole-database/browser scan,
+search service, additional schedule or index deployment is required.
+
+Supplier identity is separate from the original supplier's **product name**.
+Current `esimaccess`/`esim_access` records display “eSIM Access”. Future order records
+can supply `supplierId` and `supplierDisplayName`; the same search/details interface
+shows them and their existing `supplierOrderNo`/`esimTranNo`. Unknown suppliers do
+not trigger eSIM Access usage requests. Adding another supplier's actual usage
+adapter is separate from this provider-neutral search interface.
+
+Order search results show **Provider + eSIM Tran No** for each allocated eSIM,
+with a copy button, before opening full details. `esimTranNo` is the supplier-assigned
+profile reference used in that provider's dashboard; it is not a Stripe/payment
+identifier. Use the provider and its exact reference together when multiple
+suppliers are connected. These references come from existing activation records,
+with ownership checks and field projections excluding QR/activation credentials.
+No supplier status/usage requests run while listing these references.

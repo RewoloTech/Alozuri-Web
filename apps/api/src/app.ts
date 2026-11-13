@@ -1,3 +1,4 @@
+import { OperationsEsims } from './lib/operations-esims.js';
 import { PricingHistoryReports } from './lib/pricing-history.js';
 import { OperationsReports, OperationsError, registerOperations } from './lib/operations.js';
 import { configuredFinancialLedger, type FinancialLedger } from './lib/financial-ledger.js';
@@ -80,6 +81,7 @@ export async function createApp(
   options: {
     repository?: Repository;
     operations?: Pick<OperationsReports, 'report'> | null;
+    operationsEsims?: Pick<OperationsEsims, 'lookup' | 'details' | 'search'> | null;
     pricingHistory?: Pick<PricingHistoryReports, 'report'> | null;
     financial?: Pick<FinancialLedger, 'webhook'> | null;
     profiles?: UserProfiles | null;
@@ -216,6 +218,11 @@ export async function createApp(
         ? null
         : { report: (input) => new PricingHistoryReports().report(input) }
       : options.pricingHistory,
+    options.operationsEsims === undefined
+      ? demo
+        ? null
+        : new OperationsEsims()
+      : options.operationsEsims,
   );
   const profiles =
     options.profiles === undefined ? (demo ? null : new UserProfiles()) : options.profiles;
