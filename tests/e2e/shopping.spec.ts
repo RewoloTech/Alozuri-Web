@@ -676,7 +676,22 @@ test('promotional code apply, remove, invalid feedback and final Stripe amount s
     });
   });
   await page.goto('/checkout?buy=' + plan.id);
-  await page.getByText('Have a promotional code?', { exact: true }).click();
+  const disclosure = page.locator('.checkout-promo-entry');
+  for (const width of [375, 390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(disclosure).not.toHaveAttribute('open', '');
+    await expect(page.getByLabel('Promotional code', { exact: true })).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Apply code', exact: true })).toBeHidden();
+    if (width === 390)
+      await page.screenshot({ path: '/tmp/alozuri-promo-collapsed-390.png', fullPage: true });
+    await disclosure.locator('summary').click();
+    await expect(page.getByLabel('Promotional code', { exact: true })).toBeVisible();
+    await disclosure.locator('summary').click();
+    await expect(page.getByLabel('Promotional code', { exact: true })).toBeHidden();
+  }
+  await disclosure.locator('summary').focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByLabel('Promotional code', { exact: true })).toBeVisible();
   await page.getByLabel('Promotional code', { exact: true }).fill('EXPIRED');
   await page.getByRole('button', { name: 'Apply code', exact: true }).click();
   await expect(page.locator('main').getByRole('alert')).toContainText('Promotion has expired');
@@ -696,6 +711,24 @@ test('promotional code apply, remove, invalid feedback and final Stripe amount s
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
+    const inputBox = await page.getByLabel('Promotional code', { exact: true }).boundingBox();
+    const applyBox = await page
+      .getByRole('button', { name: 'Apply code', exact: true })
+      .boundingBox();
+    const removeBox = await page
+      .getByRole('button', { name: 'Remove code', exact: true })
+      .boundingBox();
+    expect(inputBox).not.toBeNull();
+    expect(applyBox).not.toBeNull();
+    expect(removeBox).not.toBeNull();
+    if (inputBox && applyBox && removeBox) {
+      expect(applyBox.y - (inputBox.y + inputBox.height)).toBeGreaterThanOrEqual(11);
+      expect(applyBox.height).toBeGreaterThanOrEqual(44);
+      expect(
+        removeBox.x >= applyBox.x + applyBox.width + 9 ||
+          removeBox.y >= applyBox.y + applyBox.height + 9,
+      ).toBe(true);
+    }
     if (width === 390 || width === 1440)
       await page.screenshot({
         path: `/tmp/alozuri-promotion-checkout-${width}.png`,

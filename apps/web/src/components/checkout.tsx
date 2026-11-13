@@ -576,7 +576,7 @@ function CheckoutForIdentity() {
                 </p>
               )}
               {orderSummary}
-              <details>
+              <details className="checkout-promo-entry">
                 <summary>Have a promotional code?</summary>
                 <label htmlFor="promotion-code">Promotional code</label>
                 <input
@@ -596,26 +596,28 @@ function CheckoutForIdentity() {
                   value={promotionInput}
                   onChange={(e) => setPromotionInput(e.target.value)}
                 />
-                <button
-                  type="button"
-                  className="button small"
-                  disabled={loading || starting || !promotionInput.trim()}
-                  onClick={() => setPromotionCode(promotionInput.trim().toUpperCase())}
-                >
-                  Apply code
-                </button>
-                {promotionCode && (
+                <div className="checkout-promo-actions">
                   <button
                     type="button"
                     className="button small"
-                    onClick={() => {
-                      setPromotionCode('');
-                      setPromotionInput('');
-                    }}
+                    disabled={loading || starting || !promotionInput.trim()}
+                    onClick={() => setPromotionCode(promotionInput.trim().toUpperCase())}
                   >
-                    Remove code
+                    Apply code
                   </button>
-                )}
+                  {promotionCode && (
+                    <button
+                      type="button"
+                      className="button small"
+                      onClick={() => {
+                        setPromotionCode('');
+                        setPromotionInput('');
+                      }}
+                    >
+                      Remove code
+                    </button>
+                  )}
+                </div>
               </details>
               {quoteReady && quote?.promotion && (
                 <p role="status" className="checkout-promotion">

@@ -4064,3 +4064,27 @@ body:has(.operations-page) .support-shortcut {
 .checkout-promotion {
   overflow-wrap: anywhere;
 }
+
+.checkout-promo-entry > label {
+  display: block;
+  margin-top: 12px;
+}
+.checkout-promo-entry > .commerce-input {
+  display: block;
+  margin-top: 8px;
+}
+.checkout-promo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+.checkout-promo-actions > .button {
+  min-height: 44px;
+  margin: 0;
+}
+
+/* Keep author display rules from exposing closed disclosure content on mobile. */
+.checkout-promo-entry:not([open]) > :not(summary) {
+  display: none;
+}
