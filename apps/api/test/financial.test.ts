@@ -212,6 +212,7 @@ test('Operations API authorizes every request before invoking financial queries'
       for (const [method, url] of [
         ['GET', '/v1/operations/promotions'],
         ['POST', '/v1/operations/promotions'],
+        ['POST', '/v1/operations/orders/order_' + 'a'.repeat(48) + '/supplier-credit'],
         ['PUT', '/v1/operations/promotions'],
         ['GET', '/v1/operations/promotions/packages'],
         ['POST', '/v1/operations/promotions/preview'],

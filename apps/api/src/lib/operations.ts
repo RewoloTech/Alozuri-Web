@@ -1,3 +1,5 @@
+import { recordSupplierCredit } from './supplier-credit.js';
+import { refreshSupplierFinancial } from './financial-ledger.js';
 import { promotionReport } from './promotion-report.js';
 import { registerPromotionRoutes } from './promotion-routes.js';
 import { financialTrends } from './financial-trends.js';
@@ -45,6 +47,7 @@ export class OperationsReports {
             'originalRetailCents',
             'discountCents',
             'financialReconciliationPending',
+            'supplierFinancialPending',
             'createdAt',
             'email',
             'uid',
@@ -90,6 +93,10 @@ export class OperationsReports {
             row.stripe.observedAt = null;
             row.stripe.revenueGbp = null;
             row.selling.refundedMinor = null;
+          }
+          if (doc.get('supplierFinancialPending') === true) {
+            row.supplier.purchasedUnits = null;
+            row.supplier.verifiedUnits = null;
           }
           const calculated = calculateFinancial(row);
           calculated.updatedAt = row.updatedAt;
@@ -157,8 +164,21 @@ export function registerOperations(
     }
     if (!p.verified || p.admin !== true)
       throw new OperationsError('Administrator access required.', 403);
+    return p;
   }
-  registerPromotionRoutes(app, requireAdmin);
+  app.post('/v1/operations/orders/:id/supplier-credit', async (req) => {
+    const actor = await requireAdmin(req.headers.authorization);
+    const { id } = z
+      .object({ id: z.string().regex(/^order_[a-f0-9]{48}$/) })
+      .strict()
+      .parse(req.params);
+    const ref = await recordSupplierCredit(database(), id, req.body, actor.uid);
+    await refreshSupplierFinancial(database(), ref);
+    return { saved: true };
+  });
+  registerPromotionRoutes(app, async (header) => {
+    await requireAdmin(header);
+  });
   app.get('/v1/operations/access', async (req) => {
     await requireAdmin(req.headers.authorization);
     z.object({}).strict().parse(req.query);

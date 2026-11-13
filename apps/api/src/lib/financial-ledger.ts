@@ -1,3 +1,4 @@
+import { supplierCreditSchema } from './supplier-credit.js';
 import Stripe from 'stripe';
 import { z } from 'zod';
 import type { Firestore, DocumentReference } from 'firebase-admin/firestore';
@@ -34,6 +35,7 @@ export async function refreshSupplierFinancial(db: Firestore, ref: DocumentRefer
     let cost = 0n;
     let verified = units.length === expected;
     let actualCost = 0n;
+    let credit = 0n;
     const states: string[] = [];
     for (const unit of units) {
       const u = financialSourceSchema.safeParse(unit.data());
@@ -43,6 +45,8 @@ export async function refreshSupplierFinancial(db: Firestore, ref: DocumentRefer
         continue;
       }
       states.push(u.data.status);
+      if (unit.get('supplierCredit'))
+        credit += BigInt(supplierCreditSchema.parse(unit.get('supplierCredit')).amountUnits);
       if (u.data.supplierOrderNo) {
         const receipt = supplierChargeSchema.safeParse(unit.get('supplierCharge'));
         if (receipt.success && receipt.data.supplierOrderNo === u.data.supplierOrderNo)
@@ -58,6 +62,7 @@ export async function refreshSupplierFinancial(db: Firestore, ref: DocumentRefer
         verified = false;
       }
     }
+    row.supplier.refundedUnits = safeInteger(credit);
     row.supplier.purchasedUnits = known ? safeInteger(cost) : null;
     row.supplier.verifiedUnits = verified ? safeInteger(actualCost) : null;
     row.paid = Boolean(p.paidAt);
@@ -79,7 +84,10 @@ export async function refreshSupplierFinancial(db: Firestore, ref: DocumentRefer
             : states.length && states.every((s) => ['ready', 'refunded'].includes(s))
               ? 'partially_refunded'
               : 'pending';
-    t.update(ref, { financial: financialSchema.parse(calculateFinancial(row)) });
+    t.update(ref, {
+      financial: financialSchema.parse(calculateFinancial(row)),
+      supplierFinancialPending: false,
+    });
   });
 }
 export class FinancialLedger {

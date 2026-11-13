@@ -34,6 +34,7 @@ export type OperationsRow = {
     purchasedUnits: number | null;
     /** Actual USD charges reconciled against supplier transaction evidence. */
     verifiedUnits: number | null;
+    refundedUnits?: number;
   };
   stripe: {
     currency: string | null;
@@ -164,6 +165,13 @@ export type OperationsEsimDetails = {
     currency: 'USD' | 'GBP' | 'EUR';
     supplierOrderNo: string | null;
     esimTranNo: string | null;
+    supplierCost?: {
+      originalUnits: number;
+      verified: boolean;
+      creditUnits: number;
+      version: number;
+      reference: string | null;
+    };
     usage: EsimUsage;
   }[];
 };

@@ -617,6 +617,14 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
         },
       });
 
+    if (url.pathname.endsWith('/supplier-credit')) {
+      const input = request.postDataJSON();
+      expect(input.amountUsd).toBe('5.0000');
+      expect(input.reference).toBe('Supplier refund receipt');
+      expect(input.expectedVersion).toBe(0);
+      expect(input.requestId).toBeTruthy();
+      return route.fulfill({ headers, json: { saved: true } });
+    }
     if (url.pathname.endsWith('/orders/search')) {
       const q = url.searchParams.get('q');
       const next = Boolean(url.searchParams.get('cursor'));
@@ -682,6 +690,13 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
               supplier: { id: 'esimaccess', name: 'eSIM Access' },
               amountMinor: 1000,
               currency: 'GBP',
+              supplierCost: {
+                originalUnits: 50000,
+                verified: true,
+                creditUnits: 0,
+                version: 0,
+                reference: null,
+              },
               supplierOrderNo: 'B-SUPPORT-FIXTURE',
               esimTranNo: '26111300000001',
               usage: {
@@ -923,6 +938,15 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
       })
       .click();
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('26111300000001');
+    const creditEditor = lookup.locator('.operations-supplier-credit').first();
+    await creditEditor.locator('summary').click();
+    await creditEditor.getByLabel('Total supplier refund received (USD)').fill('5.0000');
+    await creditEditor
+      .getByLabel('Supplier refund reference / evidence')
+      .fill('Supplier refund receipt');
+    await creditEditor.getByRole('button', { name: 'Record supplier credit', exact: true }).click();
+    await expect(creditEditor.getByRole('status')).toContainText('Supplier credit recorded');
+    await expect(creditEditor).toContainText('Net supplier cost : USD 0.0000');
     for (const width of [375, 390, 768, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(

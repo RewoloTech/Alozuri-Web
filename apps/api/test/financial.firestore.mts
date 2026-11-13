@@ -400,3 +400,130 @@ test('promoted partial/full refunds preserve original discount, frozen cost and 
     assert.equal(promotion?.discountMinor, 222);
   }
 });
+
+test('manual supplier credits preserve original cost, audit changes, prevent stale writes and update net profit through refunds', async () => {
+  const { recordSupplierCredit } = await import('../src/lib/supplier-credit.ts');
+  const f = await fixture();
+  await f.ledger.sync(f.ref);
+  const input = {
+    amountUsd: '2.5000',
+    reference: 'credit-statement-1',
+    expectedVersion: 0,
+    requestId: crypto.randomUUID(),
+  };
+  const parent = await recordSupplierCredit(db, f.units[0].id, input, 'verified-admin');
+  assert.equal(parent.id, f.id);
+  assert.equal((await f.ref.get()).get('supplierFinancialPending'), true);
+  await refreshSupplierFinancial(db, parent);
+  let row = (await f.ref.get()).get('financial');
+  assert.equal(row.supplier.verifiedUnits, 100000); // immutable original charge
+  assert.equal(row.supplier.refundedUnits, 25000);
+  assert.equal(row.supplierGbp, 600);
+  assert.equal(row.profitGbp, 1350);
+  await recordSupplierCredit(db, f.units[0].id, input, 'verified-admin');
+  assert.equal((await f.units[0].collection('supplierCreditHistory').get()).size, 1);
+  await assert.rejects(
+    recordSupplierCredit(
+      db,
+      f.units[0].id,
+      { ...input, amountUsd: '6', requestId: crypto.randomUUID() },
+      'verified-admin',
+    ),
+    /changed/,
+  );
+  await assert.rejects(
+    recordSupplierCredit(
+      db,
+      f.units[0].id,
+      { ...input, expectedVersion: 1, amountUsd: '6', requestId: crypto.randomUUID() },
+      'verified-admin',
+    ),
+    /exceed/,
+  );
+  await recordSupplierCredit(
+    db,
+    f.units[0].id,
+    { ...input, expectedVersion: 1, amountUsd: '5', requestId: crypto.randomUUID() },
+    'verified-admin',
+  );
+  await recordSupplierCredit(
+    db,
+    f.units[1].id,
+    { ...input, amountUsd: '5', requestId: crypto.randomUUID() },
+    'verified-admin',
+  );
+  await refreshSupplierFinancial(db, parent);
+  row = (await f.ref.get()).get('financial');
+  assert.equal(row.supplierGbp, 0);
+  assert.equal(row.profitGbp, 1950);
+  assert.equal((await f.units[0].get()).get('supplierCharge.amountUnits'), 50000);
+  assert.equal((await f.units[0].collection('supplierCreditHistory').get()).size, 2);
+  f.charge.amount_refunded = 2000;
+  f.refunds.push({
+    id: 're_supplier_credit',
+    status: 'succeeded',
+    amount: 2000,
+    balance_transaction: {
+      id: 'txn_supplier_credit',
+      amount: -2000,
+      fee: 0,
+      currency: 'gbp',
+      exchange_rate: null,
+    },
+  });
+  await f.ledger.sync(f.ref);
+  row = (await f.ref.get()).get('financial');
+  assert.equal(row.profitGbp, -50);
+  assert.equal(row.supplier.verifiedUnits, 100000);
+  const report = await new OperationsReports(db).report({ from: '2025-02-15', to: '2025-02-15' });
+  assert.equal(report.rows.find((r) => r.id === f.id)?.supplierGbp, 0);
+});
+
+test('supplier credit API authenticates the operator and refreshes the parent financial record', async () => {
+  const { createApp } = await import('../src/app.ts');
+  const f = await fixture();
+  await f.ledger.sync(f.ref);
+  const server = await createApp({
+    repository: { plans: async () => [], orders: async () => [], order: async () => null },
+    payments: null,
+    commerce: null,
+    fulfillment: null,
+    verify: async (token) => ({ uid: token, verified: true, admin: token === 'operator' }),
+  });
+  try {
+    const payload = {
+      amountUsd: '1.0000',
+      reference: 'Supplier statement API test',
+      expectedVersion: 0,
+      requestId: crypto.randomUUID(),
+    };
+    const path = '/v1/operations/orders/' + f.units[0].id + '/supplier-credit';
+    assert.equal(
+      (
+        await server.inject({
+          method: 'POST',
+          url: path,
+          headers: { authorization: 'Bearer customer' },
+          payload,
+        })
+      ).statusCode,
+      403,
+    );
+    assert.equal(
+      (
+        await server.inject({
+          method: 'POST',
+          url: path,
+          headers: { authorization: 'Bearer operator' },
+          payload,
+        })
+      ).statusCode,
+      200,
+    );
+    assert.equal((await f.units[0].get()).get('supplierCredit.recordedBy'), 'operator');
+    assert.equal((await f.ref.get()).get('financial.profitGbp'), 1230);
+    assert.equal((await f.ref.get()).get('supplierFinancialPending'), false);
+  } finally {
+    await server.close();
+  }
+});

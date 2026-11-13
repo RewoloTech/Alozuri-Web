@@ -49,6 +49,11 @@ function OperationsAccount() {
     [busy, setBusy] = useState(false),
     [attempt, setAttempt] = useState(0);
   useEffect(() => {
+    const updated = () => setAttempt((n) => n + 1);
+    window.addEventListener('alozuri-financial-updated', updated);
+    return () => window.removeEventListener('alozuri-financial-updated', updated);
+  }, []);
+  useEffect(() => {
     if (!user) return;
     setAuthorized(false);
     setReport(null);
@@ -405,6 +410,12 @@ function OperationsAccount() {
                                   <td>
                                     {r.paid ? gbp(r.supplierGbp) : '—'}
                                     <small>
+                                      {(r.supplier.refundedUnits ?? 0) > 0 && (
+                                        <small>
+                                          Supplier credit USD{' '}
+                                          {((r.supplier.refundedUnits ?? 0) / 10000).toFixed(4)}
+                                        </small>
+                                      )}
                                       {!r.paid
                                         ? 'Payment not confirmed'
                                         : r.supplier.verifiedUnits != null

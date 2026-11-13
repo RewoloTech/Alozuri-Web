@@ -178,7 +178,14 @@ export function calculateFinancial(input: OperationsRow): OperationsRow {
     r.feesGbp = r.stripe.feesGbp;
     if (r.feesGbp === null) reasons.push('Actual GBP Stripe fees pending');
   }
-  const supplierUnits = r.supplier.verifiedUnits ?? r.supplier.purchasedUnits;
+  const originalSupplierUnits = r.supplier.verifiedUnits ?? r.supplier.purchasedUnits;
+  const credit = r.supplier.refundedUnits ?? 0;
+  const supplierUnits =
+    originalSupplierUnits === null || credit > originalSupplierUnits
+      ? null
+      : originalSupplierUnits - credit;
+  if (originalSupplierUnits !== null && credit > originalSupplierUnits)
+    reasons.push('Supplier credit exceeds recorded cost; review required');
   r.supplierGbp =
     supplierUnits === 0 ? 0 : supplierUnits === null ? null : convert(supplierUnits, r.usdGbp, 100);
   if (supplierUnits === null) reasons.push('Supplier purchase outcome pending or unknown');
@@ -291,6 +298,7 @@ export const financialSchema: z.ZodType<OperationsRow> = z.object({
     quotedUnits: nonnegative.nullable(),
     purchasedUnits: nonnegative.nullable(),
     verifiedUnits: nonnegative.nullable().default(null),
+    refundedUnits: nonnegative.optional(),
   }),
   stripe: z.object({
     currency: z.string().nullable(),

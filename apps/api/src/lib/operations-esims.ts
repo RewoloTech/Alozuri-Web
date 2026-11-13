@@ -1,3 +1,5 @@
+import { supplierChargeSchema } from './supplier-cost.js';
+import { supplierCreditSchema } from './supplier-credit.js';
 import { operationsSupplier } from './operations-esim-reference.js';
 import {
   OperationsOrderSearchService,
@@ -58,7 +60,31 @@ export class OperationsEsims {
       if (activation.exists && activation.get('uid') !== owner)
         throw new OperationsError('eSIM ownership requires review.', 409);
       const supplier = operationsSupplier(unit);
+      const charge = supplierChargeSchema.safeParse(unit.get('supplierCharge'));
+      const validCharge =
+        charge.success && charge.data.supplierOrderNo === unit.get('supplierOrderNo');
+      const credit = unit.get('supplierCredit')
+        ? supplierCreditSchema.parse(unit.get('supplierCredit'))
+        : null;
+      const original = z
+        .number()
+        .int()
+        .nonnegative()
+        .safe()
+        .nullish()
+        .parse(validCharge ? charge.data.amountUnits : unit.get('wholesaleUnits'));
       rows.push({
+        ...(original !== null && original !== undefined
+          ? {
+              supplierCost: {
+                originalUnits: original,
+                verified: validCharge,
+                creditUnits: credit?.amountUnits ?? 0,
+                version: credit?.version ?? 0,
+                reference: credit?.reference ?? null,
+              },
+            }
+          : {}),
         id: unit.id,
         name: z.string().min(1).max(1000).parse(unit.get('plan')?.name),
         fulfilmentStatus: z.string().max(80).parse(unit.get('status')),

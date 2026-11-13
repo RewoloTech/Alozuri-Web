@@ -377,3 +377,13 @@ are explicit. Roll out the API before the manually deployed Firebase frontend.
 ## Promotions
 
 Operations includes a Promotions section for administrator-managed percentage codes (maximum 30%), package profitability previews and server-paginated code management. Financial Overview includes promotion performance for its selected date range. See [Phase 1 promotions](promotions.md) for accounting, reservation lifecycle, indexes and the release/acceptance checklist.
+
+## Manually recording supplier credits
+
+Open an order in Operations (search or transaction details), then expand **Supplier cost / record refund** beneath the relevant eSIM. Enter the **total supplier refund received in USD** (up to four decimal places), the supplier refund reference/evidence, and select **Record supplier credit**. Enter the actual confirmed supplier credit, not the desired net cost. For additional partial credits, enter the new cumulative total. A correction to zero removes the credit's effect but retains its audit history.
+
+Original supplier quotes and verified charges remain unchanged. Confirmed credits reduce net supplier cost and contribution/profit calculations, separately from Stripe/customer refunds. Where the original supplier debit is unverified, the net cost stays provisional. Credits cannot exceed the recorded cost. Actual GBP comparisons use existing historical conversion rules; original USD amounts remain available.
+
+Only verified administrators can use the server endpoint `POST /v1/operations/orders/:id/supplier-credit`. The server supplies the actor UID and timestamp, validates the original paid order/cost, enforces revision checks, and stores an idempotent change record under `orders/{id}/supplierCreditHistory/{requestId}`. Direct client Firestore access remains denied. Financial results are marked pending until recalculation succeeds, and the dashboard refreshes its selected report after saving. No supplier cancellation, Stripe refund, API supplier-credit sync or scheduled job is performed by this action.
+
+This feature needs backend and frontend deployment. No additional indexes, rules, secrets or backfill are required. Existing orders default to zero recorded supplier credit. Implementation and emulator/browser verification do not change live orders.

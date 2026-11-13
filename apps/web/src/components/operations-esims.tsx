@@ -1,4 +1,5 @@
 'use client';
+import { SupplierCredit } from './supplier-credit';
 import { useEffect, useId, useState } from 'react';
 import type { OperationsEsimDetails, OperationsOrderSearch } from '@alozuri/shared/financial';
 import { installationLabel } from '@alozuri/shared/esim-usage';
@@ -40,7 +41,15 @@ const date = (at: string) =>
     timeStyle: 'short',
   }).format(new Date(at));
 
-function Reading({ data, showReference }: { data: OperationsEsimDetails; showReference: boolean }) {
+function Reading({
+  data,
+  showReference,
+  uid,
+}: {
+  data: OperationsEsimDetails;
+  showReference: boolean;
+  uid: string;
+}) {
   const bytes = (n: number | null) => (n === null ? 'Not reported' : dataSizeLabel(n / 1073741824));
   return (
     <div className="operations-esim-reading">
@@ -86,6 +95,7 @@ function Reading({ data, showReference }: { data: OperationsEsimDetails; showRef
       {data.units.map((unit) => (
         <section key={unit.id} aria-label={unit.name}>
           <h3>{unit.name}</h3>
+          <SupplierCredit unit={unit} uid={uid} />
           <dl className="spec-list">
             <div>
               <dt>Supplier</dt>
@@ -215,7 +225,7 @@ function Details({
     <div aria-busy={busy}>
       {busy && <p role="status">Checking eSIM details…</p>}
       {error && <p role="alert">{error}</p>}
-      {data && <Reading data={data} showReference={showReference} />}
+      {data && <Reading data={data} showReference={showReference} uid={uid} />}
       <button className="button small" disabled={busy} onClick={() => setAttempt((n) => n + 1)}>
         Refresh eSIM details
       </button>

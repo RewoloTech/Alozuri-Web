@@ -4088,3 +4088,22 @@ body:has(.operations-page) .support-shortcut {
 .checkout-promo-entry:not([open]) > :not(summary) {
   display: none;
 }
+
+.operations-supplier-credit {
+  margin: 12px 0;
+}
+.operations-supplier-credit[open] form {
+  display: grid;
+  gap: 12px;
+  max-width: 480px;
+}
+.operations-supplier-credit label {
+  display: block;
+}
+.operations-supplier-credit .commerce-input {
+  display: block;
+  margin-top: 8px;
+}
+.operations-supplier-credit:not([open]) > :not(summary) {
+  display: none;
+}
