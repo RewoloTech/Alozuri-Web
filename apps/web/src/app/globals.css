@@ -4144,3 +4144,13 @@ body:has(.operations-page) .support-shortcut {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+
+.operations-plan-search-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 12px 0 18px;
+}
+.operations-top-plans .operations-pagination {
+  flex-wrap: wrap;
+}

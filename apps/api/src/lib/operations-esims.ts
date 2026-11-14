@@ -1,3 +1,4 @@
+import { billingCountryCode } from './billing-country.js';
 import { supplierChargeSchema } from './supplier-cost.js';
 import { supplierCreditSchema } from './supplier-credit.js';
 import { operationsSupplier } from './operations-esim-reference.js';
@@ -112,6 +113,7 @@ export class OperationsEsims {
           }
         : null,
       purchaseId: parent.id,
+      billingCountry: billingCountryCode(parent.get('financial.billingCountry')),
       reference: customerReference(parent),
       items: parent.get('items')
         ? z

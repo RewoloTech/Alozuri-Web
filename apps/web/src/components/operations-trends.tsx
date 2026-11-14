@@ -1,4 +1,6 @@
 'use client';
+import { OperationsCountries } from './operations-countries';
+import { countryName } from '@alozuri/shared';
 import { useEffect, useRef, useState } from 'react';
 import type { OperationsTrends } from '@alozuri/shared/financial';
 const gbp = (n: number | null) =>
@@ -193,7 +195,32 @@ function MoneyChart({
   );
 }
 export function OperationsTrendCharts({ data }: { data: OperationsTrends }) {
-  const max = Math.max(1, ...data.topPlans.map((p) => p.quantity));
+  const [planSearch, setPlanSearch] = useState('');
+  const [showAllPlans, setShowAllPlans] = useState(false);
+  const [planPage, setPlanPage] = useState(0);
+  const allPlans = data.planSales ?? data.topPlans;
+  const normalise = (value: string) => value.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase();
+  const words = normalise(planSearch).trim().split(/\s+/).filter(Boolean);
+  const searching = words.length > 0;
+  const filteredPlans = allPlans.filter((plan) => {
+    const label = normalise(
+      [
+        plan.name,
+        ...plan.countries.flatMap((code) => [
+          code,
+          countryName(code),
+          ...(code === 'GB' ? ['UK'] : []),
+        ]),
+      ].join(' '),
+    );
+    return words.every((word) => label.includes(word));
+  });
+  const expanded = showAllPlans || searching;
+  const shownPlans = expanded ? filteredPlans : data.topPlans;
+  const lastPage = Math.max(0, Math.ceil(shownPlans.length / 8) - 1);
+  const activePage = Math.min(planPage, lastPage);
+  const pagePlans = shownPlans.slice(activePage * 8, activePage * 8 + 8);
+  const max = Math.max(1, ...shownPlans.map((p) => p.quantity));
   return (
     <>
       <p className="fine-print">
@@ -201,6 +228,49 @@ export function OperationsTrendCharts({ data }: { data: OperationsTrends }) {
         Profit is before other operating expenses and taxes. Partial periods include only the
         selected dates.
       </p>
+      <section className="surface operations-trend-card" aria-label="Sales by billing country">
+        <h3>Sales by billing country</h3>
+        <p className="fine-print">
+          Country supplied with Stripe payment, not the eSIM destination or verified physical
+          location. Paid order counts include later refunds; revenue is adjusted for refunds.
+          Missing countries remain unknown.
+        </p>
+        {!data.billingCountries?.length ? (
+          <p>No billing-country data in this date range.</p>
+        ) : (
+          <div
+            className="operations-table-scroll"
+            role="region"
+            aria-label="Billing country sales"
+            tabIndex={0}
+          >
+            <table>
+              <caption className="sr-only">
+                Paid orders and refund-adjusted revenue by Stripe billing country
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Billing country</th>
+                  <th scope="col">Paid orders</th>
+                  <th scope="col">Revenue (GBP)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.billingCountries.map((row) => (
+                  <tr key={row.country ?? 'unknown'}>
+                    <td>{row.country ? countryName(row.country) : 'Unknown / not recorded'}</td>
+                    <td>{row.orders}</td>
+                    <td>
+                      {gbp(row.revenueGbp)}
+                      {row.revenueProvisional && <small>Provisional</small>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
       <div className="operations-trend-grid">
         <MoneyChart
           key={`revenue-${data.points[0]?.periodStart}-${data.grain}`}
@@ -220,27 +290,109 @@ export function OperationsTrendCharts({ data }: { data: OperationsTrends }) {
         >
           <h3>Top-selling plans</h3>
           <p className="fine-print">
-            Gross quantities from paid orders, including later refunds. Grouped by recorded plan
-            name and coverage.
+            Plans ranked by units sold in the selected dates. Search all recorded sold plans by name
+            or destination. Counts include later refunds and group recorded plan name and coverage;
+            they measure sales volume, not revenue or profit.
           </p>
-          {!data.topPlans.length ? (
-            <p>No paid orders in this date range.</p>
-          ) : (
-            <ol>
-              {data.topPlans.map((p) => (
-                <li key={JSON.stringify([p.name, p.countries])}>
-                  <div>
-                    <span>{p.name}</span>
-                    <strong>{p.quantity} sold</strong>
-                  </div>
-                  <div className="operations-plan-track" aria-hidden="true">
-                    <span style={{ width: `${(p.quantity / max) * 100}%` }} />
-                  </div>
-                </li>
-              ))}
-            </ol>
+          <label htmlFor="plan-sales-search">Find a package</label>
+          <input
+            id="plan-sales-search"
+            type="search"
+            className="commerce-input"
+            placeholder="Package name or destination"
+            maxLength={100}
+            value={planSearch}
+            onChange={(event) => {
+              setPlanSearch(event.target.value);
+              setPlanPage(0);
+            }}
+          />
+          <div className="operations-plan-search-actions">
+            {planSearch && (
+              <button
+                type="button"
+                className="button small"
+                onClick={() => {
+                  setPlanSearch('');
+                  setPlanPage(0);
+                }}
+              >
+                Clear package search
+              </button>
+            )}
+            {data.planSales && (
+              <button
+                type="button"
+                className="button small"
+                onClick={() => {
+                  setShowAllPlans((value) => !value);
+                  setPlanSearch('');
+                  setPlanPage(0);
+                }}
+              >
+                {showAllPlans ? 'Show top eight' : 'Browse all sold packages'}
+              </button>
+            )}
+          </div>
+          {!data.planSales && data.otherPlanQuantity > 0 && (
+            <p role="status">
+              Only the top eight are available from this API version. Update the backend to search
+              all sold packages.
+            </p>
           )}
-          {data.otherPlanQuantity > 0 && (
+          {!allPlans.length ? (
+            <p>No paid orders in this date range.</p>
+          ) : !shownPlans.length ? (
+            <p role="status">
+              No recorded paid sales match this package search in the selected dates. Try another
+              name, destination or date range.
+            </p>
+          ) : (
+            <>
+              {expanded && (
+                <p role="status" className="fine-print">
+                  {filteredPlans.length} matching{' '}
+                  {filteredPlans.length === 1 ? 'package' : 'packages'}
+                  {lastPage > 0 && ` · Page ${activePage + 1} of ${lastPage + 1}`}
+                </p>
+              )}
+              <ol start={activePage * 8 + 1}>
+                {pagePlans.map((p) => (
+                  <li key={JSON.stringify([p.name, p.countries])}>
+                    <div>
+                      <span>{p.name}</span>
+                      <strong>{p.quantity} sold</strong>
+                    </div>
+                    {expanded && <OperationsCountries countries={p.countries} />}
+                    <div className="operations-plan-track" aria-hidden="true">
+                      <span style={{ width: `${(p.quantity / max) * 100}%` }} />
+                    </div>
+                  </li>
+                ))}
+              </ol>
+              {expanded && lastPage > 0 && (
+                <div className="operations-pagination">
+                  <button
+                    type="button"
+                    className="button"
+                    disabled={activePage === 0}
+                    onClick={() => setPlanPage(activePage - 1)}
+                  >
+                    Previous packages
+                  </button>
+                  <button
+                    type="button"
+                    className="button"
+                    disabled={activePage === lastPage}
+                    onClick={() => setPlanPage(activePage + 1)}
+                  >
+                    Next packages
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+          {!expanded && data.otherPlanQuantity > 0 && (
             <p className="fine-print">
               Top eight shown; {data.otherPlanQuantity} further packages sold across other plans.
             </p>

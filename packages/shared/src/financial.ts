@@ -16,6 +16,8 @@ export type OperationsRow = {
   reference: string;
   email: string | null;
   customerId: string | null;
+  /** Billing country from the verified Stripe charge; not physical location. */
+  billingCountry?: string | null;
   paid: boolean;
   paymentStatus: string;
   fulfilmentStatus: string;
@@ -70,7 +72,15 @@ export type OperationsTrends = {
     profitProvisional: boolean;
   }[];
   topPlans: { name: string; countries: string[]; quantity: number }[];
+  /** All date-scoped sold-plan aggregates, ranked by gross units. */
+  planSales?: { name: string; countries: string[]; quantity: number }[];
   otherPlanQuantity: number;
+  billingCountries?: {
+    country: string | null;
+    orders: number;
+    revenueGbp: number | null;
+    revenueProvisional?: boolean;
+  }[];
 };
 export type OperationsReport = {
   from: string;
@@ -146,6 +156,7 @@ export type OperationsOrderSearch = {
   nextCursor: string | null;
 };
 export type OperationsEsimDetails = {
+  billingCountry?: string | null;
   purchaseId: string;
   stripePayment: { paymentIntentId: string; dashboardUrl: string } | null;
   items: { name: string; quantity: number }[];

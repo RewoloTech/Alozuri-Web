@@ -21,6 +21,7 @@ export type PricingHistoryRow = {
   active: boolean | null;
 };
 export type PricingHistoryReport = {
+  query?: string;
   from: string;
   to: string;
   timezone: 'Europe/London';

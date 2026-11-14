@@ -3,7 +3,7 @@ import { SupplierCredit } from './supplier-credit';
 import { useEffect, useId, useState } from 'react';
 import type { OperationsEsimDetails, OperationsOrderSearch } from '@alozuri/shared/financial';
 import { installationLabel } from '@alozuri/shared/esim-usage';
-import { dataSizeLabel } from '@alozuri/shared';
+import { countryName, dataSizeLabel } from '@alozuri/shared';
 import { api } from '@/lib/api';
 
 function CopyReference({ value, label }: { value: string; label: string }) {
@@ -63,6 +63,9 @@ function Reading({
         {data.fulfilmentStatus.replaceAll('_', ' ')}
         <br />
         Order total: {money(data.amountMinor, data.currency)} ({data.currency})
+        <br />
+        Stripe billing country:{' '}
+        {data.billingCountry ? countryName(data.billingCountry) : 'Not recorded'}
       </p>
       <div className="operations-stripe-payment">
         <strong>Stripe payment ID (PaymentIntent)</strong>

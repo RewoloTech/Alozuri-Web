@@ -165,6 +165,55 @@ test('old audit records use explicitly labelled current metadata or retain their
   assert.equal(result.rows[0].identitySource, 'unavailable');
   assert.equal(result.rows[0].name, parent.id);
 });
+test('search finds matching historical labels beyond the visible page with scoped continuations and a bounded scan', async () => {
+  const before = { wholesaleUnits: 10000, priceCents: 300 },
+    after = { wholesaleUnits: 11000, priceCents: 300 };
+  const batch = db.batch();
+  for (let i = 0; i < 261; i++) {
+    const target = i === 0;
+    batch.set(
+      db.doc(`packages/search-bounded/pricingHistory/entry_${String(i).padStart(3, '0')}`),
+      {
+        before,
+        after,
+        recordedAt: Timestamp.fromDate(new Date(Date.parse('2024-05-01T12:00:00Z') + i * 1000)),
+        ...pricingHistoryMetadata(
+          {
+            id: 'search-bounded',
+            name: target ? 'Retired United Kingdom plan' : 'Japan connection',
+            countries: target ? ['GB'] : ['JP'],
+          },
+          before,
+          after,
+        ),
+      },
+    );
+  }
+  await batch.commit();
+  const input = { from: '2024-05-01', to: '2024-05-01', q: 'united kingdom' };
+  const first = await report.report(input);
+  assert.equal(first.query, input.q);
+  assert.equal(first.rows.length, 0);
+  assert.ok(first.nextCursor);
+  const next = await report.report({ ...input, cursor: first.nextCursor! });
+  assert.equal(next.rows.length, 1);
+  assert.equal(next.rows[0].name, 'Retired United Kingdom plan');
+  assert.equal(next.nextCursor, null);
+  await assert.rejects(
+    report.report({ ...input, q: 'Japan', cursor: first.nextCursor! }),
+    /selection changed/,
+  );
+  const country = await report.report({ ...input, q: 'UK' });
+  const found = await report.report({ ...input, q: 'UK', cursor: country.nextCursor! });
+  assert.equal(found.rows[0].packageId, 'search-bounded');
+  const noMatch = await report.report({
+    from: '2024-05-02',
+    to: '2024-05-02',
+    q: 'United Kingdom',
+  });
+  assert.equal(noMatch.rows.length, 0);
+  assert.equal(noMatch.nextCursor, null);
+});
 test.after(async () => {
   await deleteApp(app);
 });

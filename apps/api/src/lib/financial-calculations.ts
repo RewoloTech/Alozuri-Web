@@ -96,6 +96,7 @@ export function initialFinancial(
     reference: p.orderReference ?? id,
     email: p.email ?? null,
     customerId: p.uid,
+    billingCountry: null,
     paid: Boolean(p.paidAt),
     paymentStatus: p.status,
     fulfilmentStatus: 'pending',
@@ -274,6 +275,11 @@ export const financialSchema: z.ZodType<OperationsRow> = z.object({
   reference: z.string().max(100),
   email: z.email().nullable(),
   customerId: z.string().nullable(),
+  billingCountry: z
+    .string()
+    .regex(/^[A-Z]{2}$/)
+    .nullable()
+    .optional(),
   paid: z.boolean(),
   paymentStatus: z.string().max(80),
   fulfilmentStatus: z.string().max(80),

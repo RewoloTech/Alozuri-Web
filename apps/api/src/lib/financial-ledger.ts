@@ -1,3 +1,4 @@
+import { billingCountryCode } from './billing-country.js';
 import { supplierCreditSchema } from './supplier-credit.js';
 import Stripe from 'stripe';
 import { z } from 'zod';
@@ -171,6 +172,7 @@ export class FinancialLedger {
           asOf: new Date(charge.created * 1000).toISOString(),
         };
       }
+      row.billingCountry ??= billingCountryCode(charge.billing_details?.address?.country);
       row.selling.refundedMinor = refunded;
       row.paid = Boolean(latest.paidAt);
       row.paymentStatus = latest.status;

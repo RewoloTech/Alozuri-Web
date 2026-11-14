@@ -1,3 +1,4 @@
+import { countryName } from '../../../../packages/shared/src/index.ts';
 import type { Firestore, DocumentData, Query } from 'firebase-admin/firestore';
 import { FieldPath, Timestamp } from 'firebase-admin/firestore';
 import { z } from 'zod';
@@ -95,6 +96,7 @@ export const pricingHistoryQuery = z
     from: z.iso.date(),
     to: z.iso.date(),
     packageId: documentId.optional(),
+    q: z.string().trim().max(80).optional(),
     cursor: z.string().max(1500).optional(),
   })
   .strict();
@@ -103,6 +105,7 @@ const cursorSchema = z
     from: z.string(),
     to: z.string(),
     packageId: z.string().nullable(),
+    q: z.string().optional(),
     seconds: z.number().int().min(-62135596800).max(253402300799),
     nanoseconds: z.number().int().min(0).max(999999999),
     path: z
@@ -110,9 +113,44 @@ const cursorSchema = z
       .regex(/^packages\/[a-zA-Z0-9_-]{1,100}\/pricingHistory\/[a-zA-Z0-9_-]{1,100}$/),
   })
   .strict();
+const normaliseSearch = (text: string) =>
+  text.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase();
+export function matchesPricingSearch(
+  row: Pick<PricingHistoryRow, 'name' | 'packageId' | 'countries'>,
+  query: string,
+) {
+  const text = normaliseSearch(
+    [
+      row.name,
+      row.packageId,
+      ...row.countries.flatMap((code) => [
+        code,
+        countryName(code),
+        ...(code === 'GB' ? ['UK'] : []),
+      ]),
+    ].join(' '),
+  );
+  return normaliseSearch(query)
+    .trim()
+    .split(/\s+/)
+    .every((word) => text.includes(word));
+}
 export class PricingHistoryReports {
   constructor(private db: Firestore = database()) {}
   async report(input: z.infer<typeof pricingHistoryQuery>): Promise<PricingHistoryReport> {
+    const q = input.q?.trim() ?? '';
+    let cursor = input.cursor;
+    // Bound sparse searches to 250 history records per request. Continuation cursors
+    // allow searching the complete date range without an unbounded database scan.
+    for (let page = 0; page < (q ? 10 : 1); page++) {
+      const result = await this.page({ ...input, q, cursor });
+      const rows = q ? result.rows.filter((row) => matchesPricingSearch(row, q)) : result.rows;
+      if (rows.length || !result.nextCursor || page === 9 || !q) return { ...result, rows };
+      cursor = result.nextCursor;
+    }
+    throw new OperationsError('Pricing history search could not complete.');
+  }
+  private async page(input: z.infer<typeof pricingHistoryQuery>): Promise<PricingHistoryReport> {
     let bounds: ReturnType<typeof londonBounds>;
     try {
       bounds = londonBounds(input.from, input.to);
@@ -138,6 +176,7 @@ export class PricingHistoryReports {
         cursor.from !== input.from ||
         cursor.to !== input.to ||
         cursor.packageId !== (input.packageId ?? null) ||
+        (cursor.q ?? '') !== (input.q ?? '') ||
         (input.packageId && cursor.path.split('/')[1] !== input.packageId)
       )
         throw new OperationsError('Pricing history selection changed.');
@@ -200,6 +239,7 @@ export class PricingHistoryReports {
     });
     const last = parsed.at(-1);
     return {
+      query: input.q ?? '',
       from: input.from,
       to: input.to,
       timezone: 'Europe/London',
@@ -209,6 +249,7 @@ export class PricingHistoryReports {
         snapshot.size > 25 && last
           ? Buffer.from(
               JSON.stringify({
+                q: input.q ?? '',
                 from: input.from,
                 to: input.to,
                 packageId: input.packageId ?? null,

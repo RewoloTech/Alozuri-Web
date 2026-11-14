@@ -1,3 +1,4 @@
+import { billingCountryCode } from './billing-country.js';
 import type { OperationsRow, OperationsTrends } from '../../../../packages/shared/src/financial.ts';
 import { londonDate } from '../../../../packages/shared/src/financial.ts';
 import { londonBounds, safeInteger } from './financial-calculations.js';
@@ -42,6 +43,15 @@ export function financialTrends(rows: OperationsRow[], from: string, to: string)
     else date.setUTCDate(date.getUTCDate() + (grain === 'week' ? 7 : 1));
     at = date.toISOString().slice(0, 10);
   }
+  const billingCountries = new Map<
+    string,
+    {
+      country: string | null;
+      orders: number;
+      revenueGbp: number | null;
+      revenueProvisional?: boolean;
+    }
+  >();
   const plans = new Map<string, OperationsTrends['topPlans'][number]>();
   const sum = (a: number | null, b: number | null) =>
     a === null || b === null ? null : safeInteger(BigInt(a) + BigInt(b));
@@ -56,6 +66,17 @@ export function financialTrends(rows: OperationsRow[], from: string, to: string)
     point.profitGbp = sum(point.profitGbp, row.profitGbp);
     point.revenueProvisional ||= row.stripe.revenueGbp === null || row.stripe.refundsPending;
     point.profitProvisional ||= row.calculationStatus !== 'final';
+    const country = billingCountryCode(row.billingCountry);
+    const countryRow = billingCountries.get(country ?? '') ?? {
+      country,
+      orders: 0,
+      revenueGbp: 0,
+      revenueProvisional: false,
+    };
+    countryRow.orders++;
+    countryRow.revenueProvisional ||= row.stripe.revenueGbp === null || row.stripe.refundsPending;
+    countryRow.revenueGbp = sum(countryRow.revenueGbp, row.revenueGbp);
+    billingCountries.set(country ?? '', countryRow);
     for (const plan of row.packages) {
       const countries = [...new Set(plan.countries)].sort();
       const id = JSON.stringify([plan.name, countries]);
@@ -71,10 +92,14 @@ export function financialTrends(rows: OperationsRow[], from: string, to: string)
       a.countries.join(',').localeCompare(b.countries.join(',')),
   );
   return {
+    billingCountries: [...billingCountries.values()].sort(
+      (a, b) => b.orders - a.orders || (a.country ?? '').localeCompare(b.country ?? ''),
+    ),
     grain,
     step,
     points: [...buckets.values()],
     topPlans: ranked.slice(0, 8),
+    planSales: ranked,
     otherPlanQuantity: ranked
       .slice(8)
       .reduce((n, p) => safeInteger(BigInt(n) + BigInt(p.quantity)), 0),

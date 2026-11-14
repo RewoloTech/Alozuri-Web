@@ -25,6 +25,8 @@ const directionLabels = {
 };
 export function PricingHistory({ uid }: { uid: string }) {
   const [dates, setDates] = useState(() => londonMonth()),
+    [draftSearch, setDraftSearch] = useState(''),
+    [search, setSearch] = useState(''),
     [selected, setSelected] = useState<{ id: string; name: string } | null>(null);
   const [report, setReport] = useState<PricingHistoryReport | null>(null),
     [error, setError] = useState(''),
@@ -44,6 +46,7 @@ export function PricingHistory({ uid }: { uid: string }) {
       return;
     }
     const query = new URLSearchParams(dates);
+    if (search) query.set('q', search);
     if (selected) query.set('packageId', selected.id);
     if (cursor) query.set('cursor', cursor);
     void api<PricingHistoryReport>(
@@ -64,13 +67,14 @@ export function PricingHistory({ uid }: { uid: string }) {
       active = false;
       controller.abort();
     };
-  }, [uid, dates, selected, cursor, attempt]);
+  }, [uid, dates, selected, cursor, attempt, search]);
   const reset = () => {
     setCursor(undefined);
     setHistory([]);
   };
   const current =
     report?.from === dates.from &&
+    (report.query ?? '') === search &&
     report.to === dates.to &&
     report.packageId === (selected?.id ?? null) &&
     !busy
@@ -114,6 +118,47 @@ export function PricingHistory({ uid }: { uid: string }) {
           Refresh pricing
         </button>
       </div>
+      <form
+        className="surface operations-esim-search"
+        role="search"
+        aria-label="Search pricing history"
+        onSubmit={(event) => {
+          event.preventDefault();
+          setSearch(draftSearch.trim());
+          reset();
+          setAttempt((n) => n + 1);
+        }}
+      >
+        <label htmlFor="pricing-history-search">Search pricing history</label>
+        <p className="fine-print">
+          Package name, package ID or destination within the selected dates.
+        </p>
+        <input
+          id="pricing-history-search"
+          type="search"
+          className="commerce-input"
+          maxLength={80}
+          value={draftSearch}
+          onChange={(e) => setDraftSearch(e.target.value)}
+          placeholder="For example, United Kingdom or Europe"
+        />
+        <button className="button" type="submit" disabled={busy}>
+          Search prices
+        </button>
+        {search && (
+          <button
+            className="button"
+            type="button"
+            onClick={() => {
+              setSearch('');
+              setDraftSearch('');
+              reset();
+            }}
+          >
+            Clear search
+          </button>
+        )}
+      </form>
       {selected && (
         <div className="pricing-selection">
           <p>
@@ -142,9 +187,12 @@ export function PricingHistory({ uid }: { uid: string }) {
       {current && (
         <div className="surface operations-transactions pricing-history-table">
           {!current.rows.length ? (
-            <p>
-              No pricing history recorded in this date range. Try an earlier date range to see older
-              changes.
+            <p role="status">
+              {search
+                ? current.nextCursor
+                  ? 'No matches in the history checked so far. Continue searching to check older records.'
+                  : 'No pricing history matches your search in this date range.'
+                : 'No pricing history recorded in this date range. Try an earlier date range to see older changes.'}
             </p>
           ) : (
             <>
@@ -200,6 +248,8 @@ export function PricingHistory({ uid }: { uid: string }) {
                               aria-label={'View price history for ' + row.name}
                               onClick={() => {
                                 setSelected({ id: row.packageId, name: row.name });
+                                setSearch('');
+                                setDraftSearch('');
                                 reset();
                               }}
                             >
@@ -269,7 +319,7 @@ export function PricingHistory({ uid }: { uid: string }) {
                 setCursor(current.nextCursor ?? undefined);
               }}
             >
-              Next prices
+              {search ? 'Search older history' : 'Next prices'}
             </button>
           </div>
         </div>

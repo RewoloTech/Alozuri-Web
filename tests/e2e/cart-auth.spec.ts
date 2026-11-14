@@ -722,7 +722,8 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
     if (url.pathname.endsWith('/pricing-history')) {
       pricingReads++;
       pricingQueries.push(url.searchParams);
-      const { pricingMovement } = await import('../../apps/api/src/lib/pricing-history');
+      const { pricingMovement, matchesPricingSearch } =
+        await import('../../apps/api/src/lib/pricing-history');
       const base = {
         id: 'point1',
         packageId: 'france-price',
@@ -766,6 +767,7 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
         (row) =>
           (!url.searchParams.get('packageId') ||
             row.packageId === url.searchParams.get('packageId')) &&
+          matchesPricingSearch(row, url.searchParams.get('q') ?? '') &&
           saleDate >= url.searchParams.get('from')! &&
           saleDate <= url.searchParams.get('to')!,
       );
@@ -776,6 +778,7 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
           to: url.searchParams.get('to'),
           timezone: 'Europe/London',
           packageId: url.searchParams.get('packageId'),
+          query: url.searchParams.get('q') ?? '',
           rows,
           nextCursor: null,
         },
@@ -813,6 +816,7 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
       },
       { source: 'fixture', asOf: saleDate, numerator: '8', denominator: '10' },
     );
+    row.billingCountry = 'GB';
     row.supplier.purchasedUnits = 100000;
     row.supplier.verifiedUnits = provisional ? null : 100000;
     row.fulfilmentStatus = 'fulfilled';
@@ -1054,8 +1058,26 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
     await expect(
       trendsPanel.getByRole('region', { name: 'Top-selling plans', exact: true }),
     ).toContainText('2 sold');
+    await expect(
+      trendsPanel.getByRole('region', { name: 'Sales by billing country', exact: true }),
+    ).toContainText('United Kingdom');
     await page.getByRole('tab', { name: 'Pricing History', exact: true }).click();
     const pricingPanel = page.getByRole('tabpanel', { name: 'Pricing History', exact: true });
+    await expect(
+      pricingPanel.getByRole('region', { name: 'Catalogue pricing history' }),
+    ).toContainText('France connection');
+    await pricingPanel
+      .getByRole('searchbox', { name: 'Search pricing history', exact: true })
+      .fill('japan');
+    await pricingPanel.getByRole('button', { name: 'Search prices', exact: true }).click();
+    await expect(
+      pricingPanel.getByRole('region', { name: 'Catalogue pricing history' }),
+    ).toContainText('Japan connection');
+    await expect(
+      pricingPanel.getByRole('region', { name: 'Catalogue pricing history' }),
+    ).not.toContainText('France connection');
+    expect(pricingQueries.at(-1)?.get('q')).toBe('japan');
+    await pricingPanel.getByRole('button', { name: 'Clear search', exact: true }).click();
     await expect(
       pricingPanel.getByRole('region', { name: 'Catalogue pricing history' }),
     ).toContainText('France connection');

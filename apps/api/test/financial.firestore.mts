@@ -78,6 +78,7 @@ async function fixture(promoted = false) {
   };
   const charge = {
     id: 'ch_financial',
+    billing_details: { address: { country: 'GB' } },
     amount: 2000,
     amount_refunded: 0,
     payment_intent: intent.id,
@@ -125,6 +126,7 @@ test('financial events are idempotent, historical and private from catalogue cha
   await f.ledger.sync(f.ref);
   let row = (await f.ref.get()).get('financial');
   assert.equal(row.profitGbp, 1150);
+  assert.equal(row.billingCountry, 'GB');
   assert.equal(row.calculationStatus, 'final');
   await db.collection('packages').doc('unrelated-current-plan').set({ wholesaleUnits: 99999999 });
   const body = JSON.stringify({
@@ -144,6 +146,9 @@ test('financial events are idempotent, historical and private from catalogue cha
   assert.equal(row.supplier.quotedUnits, 100000);
   assert.equal(row.profitGbp, 1150);
   assert.equal(row.stripe.balanceTransactions.length, 1);
+  f.charge.billing_details.address.country = 'US';
+  await f.ledger.sync(f.ref);
+  assert.equal((await f.ref.get()).get('financial.billingCountry'), 'GB');
   await assert.rejects(f.ledger.webhook(Buffer.from(body), 'invalid'));
 });
 test('partial/full refunds and missing balance transactions never erase booked supplier costs', async () => {

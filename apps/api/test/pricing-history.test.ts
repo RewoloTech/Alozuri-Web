@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { pricingMovement, pricingHistoryMetadata } from '../src/lib/pricing-history.ts';
+import {
+  pricingMovement,
+  pricingHistoryMetadata,
+  matchesPricingSearch,
+} from '../src/lib/pricing-history.ts';
 import { createApp } from '../src/app.ts';
 test('supplier movements preserve exact four-decimal USD amounts and both selling prices', () => {
   const before = { wholesaleUnits: 10001, priceCents: 300, active: true },
@@ -109,7 +113,12 @@ test('pricing history API checks the same current administrator permissions befo
       assert.equal(response.headers['cache-control'], 'no-store');
     }
     assert.equal(reads, 1);
-    for (const query of ['&packageId=../orders', '&admin=true', '&limit=50000']) {
+    for (const query of [
+      '&packageId=../orders',
+      '&admin=true',
+      '&limit=50000',
+      '&q=' + 'x'.repeat(81),
+    ]) {
       const response = await app.inject({
         url: '/v1/operations/pricing-history?from=2026-11-01&to=2026-11-30' + query,
         headers: { authorization: 'Bearer admin' },
@@ -120,4 +129,12 @@ test('pricing history API checks the same current administrator permissions befo
   } finally {
     await app.close();
   }
+});
+
+test('pricing search matches historical package names, IDs and country names/codes', () => {
+  const row = { name: 'Europe Élite 5GB', packageId: 'sku-42', countries: ['GB', 'FR'] };
+  for (const query of ['europe elite', '5gb', 'SKU-42', 'united kingdom', 'UK', 'france', 'gb'])
+    assert.equal(matchesPricingSearch(row, query), true, query);
+  for (const query of ['Japan', 'europe 50gb'])
+    assert.equal(matchesPricingSearch(row, query), false, query);
 });
