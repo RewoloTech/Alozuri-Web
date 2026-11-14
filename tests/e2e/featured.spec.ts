@@ -221,6 +221,10 @@ test('missing regions and unavailable currency never expose fictional options or
   await expect(
     page.getByText('Bundle prices are temporarily unavailable. Please try again later.'),
   ).toBeVisible();
-  await expect(page.locator('.featured-card a').first()).toHaveAttribute('aria-disabled', 'true');
+  await expect(page.locator('.featured-card a').first()).not.toHaveAttribute(
+    'aria-disabled',
+    'true',
+  );
+  await expect(page.locator('.featured-price').first()).toContainText('Price unavailable');
   await expect(page.locator('.featured-price').first()).not.toContainText('$');
 });

@@ -47,7 +47,7 @@ export function FeaturedBundles({ initial }: { initial: FeaturedBundle[] | null 
       active = false;
     };
   }, [currency, refresh, initial, ready]);
-  const current = ready && loadedCurrency === currency;
+  const current = ready && loadedCurrency === currency && !error;
   return (
     <section
       className="section container featured-bundles"
@@ -82,7 +82,11 @@ export function FeaturedBundles({ initial }: { initial: FeaturedBundle[] | null 
                   </p>
                   <p className="featured-coverage">Covers {selected.countryCount} countries</p>
                   <strong className="featured-price">
-                    {current ? money(selected.priceCents, selected.currency) : '—'}{' '}
+                    {current
+                      ? money(selected.priceCents, selected.currency)
+                      : error
+                        ? 'Price unavailable'
+                        : 'Loading price…'}{' '}
                     <small>{ready ? currency : ''}</small>
                   </strong>
                   <fieldset className="featured-allowances">
@@ -92,7 +96,6 @@ export function FeaturedBundles({ initial }: { initial: FeaturedBundle[] | null 
                         type="button"
                         key={option.dataGb}
                         aria-pressed={option.dataGb === selected.dataGb}
-                        disabled={!current || loading}
                         onClick={() =>
                           setChoices((previous) => ({
                             ...previous,
@@ -107,11 +110,7 @@ export function FeaturedBundles({ initial }: { initial: FeaturedBundle[] | null 
                   <Link
                     className="button primary"
                     aria-label={'View plan: ' + bundle.regionName + ' ' + selected.dataGb + ' GB'}
-                    aria-disabled={!current || loading}
                     href={'/plans/' + encodeURIComponent(selected.productId)}
-                    onClick={(event) => {
-                      if (!current || loading) event.preventDefault();
-                    }}
                   >
                     View plan <ArrowUpRight size={16} aria-hidden="true" />
                   </Link>

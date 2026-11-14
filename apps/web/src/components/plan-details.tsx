@@ -31,30 +31,44 @@ export function PlanDetails({
     [loading, setLoading] = useState(!demoMode && !initialPlan),
     [adding, setAdding] = useState(false),
     [added, setAdded] = useState(false),
-    [error, setError] = useState('');
+    [error, setError] = useState(''),
+    [retry, setRetry] = useState(0);
+  const loadedRequest = useRef(initialPlan ? `${id}:USD:0:0` : '');
   useEffect(() => {
     if (demoMode || !ready) return;
+    const key = `${id}:${currency}:${refresh}:${retry}`;
+    if (loadedRequest.current === key) {
+      setLoading(false);
+      setError('');
+      return;
+    }
     let active = true;
+    const controller = new AbortController();
     setLoading(true);
     setError('');
     void api<{ plan: Plan }>(
       '/v1/packages/' +
         encodeURIComponent(id) +
         (currency === 'USD' ? '' : '?currency=' + currency),
+      { signal: controller.signal },
     )
       .then((r) => {
-        if (active) setPlan(r.plan);
+        if (active) {
+          setPlan(r.plan);
+          loadedRequest.current = key;
+        }
       })
       .catch(() => {
-        if (active) setError('This plan is no longer available. Search again.');
+        if (active) setError('We could not load the current price. Please retry.');
       })
       .finally(() => {
         if (active) setLoading(false);
       });
     return () => {
       active = false;
+      controller.abort();
     };
-  }, [id, currency, refresh, ready]);
+  }, [id, currency, refresh, ready, retry]);
   useEffect(() => {
     if (
       !marketing ||
@@ -77,7 +91,7 @@ export function PlanDetails({
     );
   }, [marketing, ready, loading, error, plan, id, currency]);
   async function add() {
-    if (!ready || !plan || plan.demo || plan.currency !== currency) return;
+    if (!ready || !plan || plan.demo || plan.currency !== currency || loading || error) return;
     setAdding(true);
     setAdded(false);
     setError('');
@@ -97,7 +111,7 @@ export function PlanDetails({
       setAdding(false);
     }
   }
-  if (loading)
+  if (loading && !plan)
     return (
       <div className="loading-page" role="status">
         Loading your plan…
@@ -118,7 +132,7 @@ export function PlanDetails({
     (cart.items.find((i) => i.plan.id === id)?.quantity ?? 0) >= 5;
   return (
     <section className="container section">
-      {!plan.demo && (!ready || plan.currency === currency) && (
+      {!plan.demo && !error && !loading && (!ready || plan.currency === currency) && (
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: jsonLd(productStructuredData(plan)) }}
@@ -190,7 +204,11 @@ export function PlanDetails({
         <aside className="surface purchase-summary">
           <span className="eyebrow">{plan.demo ? 'SAMPLE PLAN' : 'PLAN SUMMARY'}</span>
           <h2>
-            {!ready || plan.currency === currency ? money(plan.priceCents, plan.currency) : '—'}{' '}
+            {ready && plan.currency === currency && !loading && !error
+              ? money(plan.priceCents, plan.currency)
+              : error
+                ? 'Price unavailable'
+                : 'Loading price…'}{' '}
             <small>{ready ? currency : plan.currency}</small>
           </h2>
           <p>
@@ -206,6 +224,8 @@ export function PlanDetails({
               !ready ||
               plan.currency !== currency ||
               Boolean(plan.demo) ||
+              loading ||
+              Boolean(error) ||
               adding ||
               limit ||
               !cart.ready ||
@@ -213,18 +233,33 @@ export function PlanDetails({
             }
             onClick={() => void add()}
           >
-            {adding ? 'Adding…' : 'Add to cart'}
+            {adding
+              ? 'Adding…'
+              : !ready || plan.currency !== currency || loading
+                ? 'Loading price…'
+                : !cart.ready || cart.syncing
+                  ? 'Preparing basket…'
+                  : 'Add to cart'}
           </button>
           <Link
             className="button full-width"
             href={plan.demo ? '#' : '/checkout?buy=' + encodeURIComponent(id)}
-            aria-disabled={!ready || plan.currency !== currency || Boolean(plan.demo)}
+            aria-disabled={Boolean(plan.demo)}
             onClick={(event) => {
-              if (!ready || plan.currency !== currency || plan.demo) event.preventDefault();
+              if (plan.demo) event.preventDefault();
             }}
           >
             Buy now
           </Link>
+          {error && (
+            <button
+              type="button"
+              className="button full-width"
+              onClick={() => setRetry((value) => value + 1)}
+            >
+              Retry price
+            </button>
+          )}
           {added && (
             <div role="status" className="success-message">
               <p>Added to your cart.</p>

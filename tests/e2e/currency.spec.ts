@@ -214,3 +214,86 @@ test('UK geography is independent of French destination and currency changes pre
   expect(input.legal).toEqual(CHECKOUT_LEGAL_ACCEPTANCE);
   expect(input.items).toEqual([{ planId: 'currency-france', quantity: 1 }]);
 });
+
+test('home plan browsing stays enabled while initial currency is resolving', async ({ page }) => {
+  let release = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route('**/api/currency', async (route) => {
+    await gate;
+    await route.fulfill({ json: { currency: 'GBP' } });
+  });
+  await page.goto('/');
+  const card = page.locator('.featured-card').first();
+  await expect(card.locator('.featured-price')).toContainText('Loading price');
+  await expect(card.getByRole('button', { name: '20 GB', exact: true })).toBeEnabled();
+  await card.getByRole('button', { name: '20 GB', exact: true }).click();
+  const link = card.getByRole('link', { name: /View plan/ });
+  await expect(link).not.toHaveAttribute('aria-disabled', 'true');
+  await expect(link).toHaveAttribute('href', /20$/);
+  release();
+  await expect(card.locator('.featured-price')).toContainText('GBP');
+});
+
+test('plan details remain visible while currency prices load, with a retry after failures', async ({
+  page,
+}) => {
+  await page.setExtraHTTPHeaders({ 'cf-ipcountry': 'GB', 'cf-ray': 'a58fd7cb59b6b29c-LHR' });
+  let release = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let fail = false;
+  await page.route(
+    (url) =>
+      url.pathname === '/v1/packages/currency-france' && url.searchParams.get('currency') === 'GBP',
+    async (route) => {
+      await gate;
+      if (fail)
+        return route.fulfill({
+          status: 503,
+          json: { error: 'Temporarily unavailable' },
+          headers: { 'Access-Control-Allow-Origin': 'http://localhost:3100' },
+        });
+      return route.continue();
+    },
+  );
+  await page.goto('/plans/currency-france');
+  await expect(page.getByRole('combobox', { name: 'Currency', exact: true })).toHaveValue('GBP');
+  await expect(page.locator('main h1')).toBeVisible();
+  await expect(page.locator('.purchase-summary')).toBeVisible();
+  await expect(page.locator('.purchase-summary h2')).toContainText('Loading price');
+  await expect(page.getByRole('link', { name: 'Buy now', exact: true })).toHaveAttribute(
+    'aria-disabled',
+    'false',
+  );
+  for (const width of [375, 390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    if (width === 390 || width === 1440)
+      await page
+        .locator('.purchase-summary')
+        .screenshot({ path: `/tmp/alozuri-loading-plan-${width}.png` });
+  }
+  release();
+  await expect(page.locator('.purchase-summary h2')).toContainText('£9.00');
+  fail = true;
+  await page.getByRole('combobox', { name: 'Currency', exact: true }).selectOption('EUR');
+  await expect(page.locator('.purchase-summary h2')).toContainText('€11.00');
+  await page.getByRole('combobox', { name: 'Currency', exact: true }).selectOption('GBP');
+  await expect(page.getByRole('button', { name: 'Retry price', exact: true })).toBeVisible();
+  await expect(page.locator('main h1')).toBeVisible();
+  await expect(page.locator('.purchase-summary h2')).toContainText('Price unavailable');
+  fail = false;
+  await page.getByRole('button', { name: 'Retry price', exact: true }).click();
+  await expect(page.locator('.purchase-summary h2')).toContainText('£9.00');
+  for (const width of [375, 390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+  }
+});
