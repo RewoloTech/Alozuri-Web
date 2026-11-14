@@ -1,4 +1,6 @@
 'use client';
+import { trackMeta } from '@/lib/meta-pixel';
+import { metaMoney } from '@/lib/meta-events';
 import { LEGAL_VERSION, CHECKOUT_LEGAL_ACCEPTANCE } from '@alozuri/shared/legal';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -425,6 +427,8 @@ function CheckoutForIdentity() {
         throw new Error('Stripe could not load. Check your connection and try again.');
       }
       setSession({ ...result, deliveryEmail: email.trim().toLowerCase() });
+      const trackingValue = metaMoney(result.quote.totalCents, result.quote.currency);
+      if (trackingValue) void trackMeta('InitiateCheckout', trackingValue, result.orderId, true);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Checkout could not start.');
       if (e instanceof Error && /reservation expired|payment is closed/i.test(e.message)) {

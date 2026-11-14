@@ -39,11 +39,11 @@ const second = {
   priceCents: 500,
 };
 const orderId = 'purchase_' + 'a'.repeat(48);
-async function setup(page: Page) {
+async function setup(page: Page, marketing = false) {
   await page.context().addCookies([
     {
       name: CONSENT_COOKIE,
-      value: encodeURIComponent(JSON.stringify(privacyChoice(false))),
+      value: encodeURIComponent(JSON.stringify(privacyChoice(false, Date.now(), marketing))),
       domain: 'localhost',
       path: '/',
     },
@@ -1526,3 +1526,139 @@ for (const legacy of [false, true])
     expect(pdfRequests).toBe(0);
     expect(new URL(page.url()).pathname).toBe('/checkout/success');
   });
+
+async function captureMeta(page: Page) {
+  const calls: unknown[][] = [];
+  await page.exposeFunction('__metaCall', (...args: unknown[]) => calls.push(args));
+  await page.route('https://connect.facebook.net/**', (route) =>
+    route.fulfill({
+      contentType: 'application/javascript',
+      body: `document.cookie = '_fbp=fb.1.1794614400000.123456; Path=/; SameSite=Lax'; const p = window.fbq; p.callMethod = (...args) => window.__metaCall(...args); const queued = p.queue.splice(0); queued.forEach(args => p.callMethod(...args));`,
+    }),
+  );
+  return calls;
+}
+test('Meta tracks consented navigation, plan view and actual checkout once, and stops on withdrawal', async ({
+  page,
+}) => {
+  const calls = await captureMeta(page);
+  await mockStripe(page);
+  await setup(page);
+  await page.goto('/plans/' + plan.id);
+  await expect(page.getByRole('button', { name: 'Add to cart', exact: true })).toBeVisible();
+  expect(calls).toHaveLength(0);
+  await page.getByRole('button', { name: 'Cookie settings', exact: true }).click();
+  const consent = page.getByRole('dialog', { name: 'Cookie settings' });
+  await consent.getByRole('checkbox', { name: /Optional advertising/ }).check();
+  await expect(consent.getByRole('checkbox', { name: /Optional support/ })).not.toBeChecked();
+  await consent.getByRole('button', { name: 'Save choices' }).click();
+  const events = (name: string) => calls.filter((c) => c[0] === 'track' && c[1] === name);
+  await expect.poll(() => events('ViewContent').length).toBe(1);
+  expect(events('ViewContent')[0][2]).toEqual({
+    value: 12,
+    currency: 'USD',
+    content_ids: [plan.id],
+    content_type: 'product',
+  });
+  await page.getByRole('button', { name: 'Add to cart', exact: true }).click();
+  await page.getByRole('link', { name: 'Shopping cart, 1 item' }).click();
+  await expect.poll(() => events('PageView').length).toBe(2);
+  await page.getByRole('link', { name: /Secure checkout/ }).click();
+  await page.getByRole('textbox', { name: 'Email address', exact: true }).fill('guest@example.com');
+  await page.getByRole('checkbox').check();
+  expect(events('InitiateCheckout')).toHaveLength(0);
+  await page.getByRole('button', { name: 'Continue to payment' }).click();
+  await expect.poll(() => events('InitiateCheckout').length).toBe(1);
+  expect(events('InitiateCheckout')[0][2]).toEqual({ value: 12, currency: 'USD' });
+  expect(calls.filter((c) => c[0] === 'init')).toHaveLength(1);
+  await page.getByRole('textbox', { name: 'Card number' }).fill('4242424242424242');
+  await page.getByRole('button', { name: /^Pay / }).click();
+  await expect(page.getByText('Your card was declined. Try another payment method.')).toBeVisible();
+  expect(events('Purchase')).toHaveLength(0);
+  await page.getByRole('button', { name: 'Cookie settings', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: 'Cookie settings' })
+    .getByRole('button', { name: 'Reject optional', exact: true })
+    .click();
+  await expect.poll(() => calls.some((c) => c[0] === 'consent' && c[1] === 'revoke')).toBe(true);
+  const count = calls.filter((c) => c[0] === 'track').length;
+  await page.getByRole('link', { name: 'Shopping cart, 1 item' }).click();
+  await expect(page.getByRole('heading', { name: 'Your cart', exact: true })).toBeVisible();
+  expect(calls.filter((c) => c[0] === 'track')).toHaveLength(count);
+});
+test('Meta Purchase requires a server-confirmed live order and survives reload without duplicates', async ({
+  page,
+}) => {
+  const calls = await captureMeta(page);
+  await setup(page, true);
+  let paid = false;
+  await page.route('http://127.0.0.1:8189/v2/orders/**', (route) =>
+    route.fulfill({
+      json: {
+        id: orderId,
+        email: 'guest@example.com',
+        items: [{ plan, quantity: 1 }],
+        totalCents: 113,
+        currency: 'GBP',
+        status: paid ? 'paid' : 'pending_payment',
+        test: false,
+        ...(paid ? { paidAt: new Date().toISOString() } : {}),
+        createdAt: new Date().toISOString(),
+        allocations: [],
+      },
+      headers: {
+        'Access-Control-Allow-Origin': 'http://localhost:3100',
+        'Access-Control-Allow-Headers': 'content-type,x-order-access',
+      },
+    }),
+  );
+  await page.addInitScript(
+    ({ orderId }) => sessionStorage.setItem('alozuri-order-' + orderId, 'private-browser-fixture'),
+    { orderId },
+  );
+  await page.goto(
+    '/checkout/success?order=' +
+      orderId +
+      '&payment_intent_client_secret=secret&redirect_status=succeeded#access=private-browser-fixture',
+  );
+  await expect(page.getByText('Payment: pending payment', { exact: true })).toBeVisible();
+  expect(calls.filter((c) => c[0] === 'track' && c[1] === 'Purchase')).toHaveLength(0);
+  await expect(page).not.toHaveURL(/client_secret/);
+  paid = true;
+  await page.getByRole('button', { name: 'Refresh order status' }).click();
+  await expect
+    .poll(() => calls.filter((c) => c[0] === 'track' && c[1] === 'Purchase').length)
+    .toBe(1);
+  const purchase = calls.find((c) => c[0] === 'track' && c[1] === 'Purchase');
+  expect(purchase?.[2]).toEqual({ value: 1.13, currency: 'GBP' });
+  expect(purchase?.[3]).toMatchObject({ eventID: expect.stringMatching(/^alozuri_[a-f0-9]{64}$/) });
+  await page.reload();
+  await expect(page.getByText('Payment: paid', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Refresh order status' }).click();
+  await expect(page.getByText('Payment: paid', { exact: true })).toBeVisible();
+  expect(calls.filter((c) => c[0] === 'track' && c[1] === 'Purchase')).toHaveLength(1);
+});
+test('Meta never loads for refused consent or a private credential URL', async ({ page }) => {
+  let requests = 0;
+  await page.route('https://connect.facebook.net/**', (route) => {
+    requests++;
+    return route.abort();
+  });
+  await setup(page);
+  await page.goto('/plans/' + plan.id);
+  await expect(page.getByRole('button', { name: 'Add to cart', exact: true })).toBeVisible();
+  expect(requests).toBe(0);
+  await page.context().addCookies([
+    {
+      name: CONSENT_COOKIE,
+      value: encodeURIComponent(JSON.stringify(privacyChoice(false, Date.now(), true))),
+      domain: 'localhost',
+      path: '/',
+    },
+  ]);
+  await page.goto('/checkout?email=private@example.com');
+  await expect(
+    page.getByRole('heading', { name: 'Your cart is empty', exact: true }),
+  ).toBeVisible();
+  expect(requests).toBe(0);
+});

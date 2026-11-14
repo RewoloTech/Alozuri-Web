@@ -97,18 +97,7 @@ Examples:
 - US audience → `https://alozuri.com/destinations/gb?utm_source=instagram&utm_medium=paid_social&utm_campaign=us_to_uk`
 - US multi-country audience → `/destinations/europe` with the same explicit campaign convention.
 
-UTM parameters do not change the canonical URL. **Campaign attribution is not currently persisted to an order**, and there are no implemented ViewContent/AddToCart/InitiateCheckout/Purchase ad events. Do not assume Meta can attribute or optimize for purchases yet.
-
-Current consent authorizes optional support chat only. “Accept all” under that consent version must not be treated as historic permission for a new advertising purpose. Before enabling Meta:
-
-1. Supply/confirm the correct Meta dataset/Pixel and domain in Business Manager; avoid mixing Alozuri with other brands sharing Stripe.
-2. Add a separate marketing-consent category, update the cookie/vendor disclosure and consent version, and request the new choice. Default marketing off; check rejection and withdrawal.
-3. Fire ViewContent for an actually displayed plan, AddToCart after a successful cart change, and InitiateCheckout only at the defined checkout action. Do not send customer emails, order-access tokens, QR credentials or supplier installation identifiers in URLs/events.
-4. Authorize Purchase from a verified backend paid order, never merely a success-page visit. Use backend amounts/currencies and a stable event ID, shared between browser and server if both are used.
-5. If adding Conversions API, retain it in the existing backend with consent gating, idempotency and matching `event_name` / event ID; keep its token server-only. First validate the simpler consent-aware Pixel integration and demand before adding server tracking.
-6. Verify with Events Manager/Test Events that refreshes, wallet retries and webhook replays do not duplicate purchases, and that rejected consent generates no advertising calls.
-
-Meta's public developer documentation returned HTTP 429 during this audit; its current setup and deduplication requirements should be rechecked during that integration. No advertising script, credentials, data transmission, paid service or consent change was added here. Implementing order attribution/CAPI is a separate scope because this task prohibits modifying checkout and fulfilment.
+UTM parameters do not change the canonical URL. Campaign attribution is not persisted to an order. The later Meta integration adds consent-gated PageView, ViewContent, InitiateCheckout and server-confirmed Purchase, plus optional server-side Purchase verification in the existing Next.js server. Existing chat consent does not authorise advertising. See [Meta implementation and verification](meta-tracking.md) for exact eligibility, privacy limits, Secret Manager setup and the manual Events Manager checks required before purchase-optimised campaigns. No live Meta delivery or deployment is implied by this audit.
 
 ## 7. Performance and accessibility evidence
 

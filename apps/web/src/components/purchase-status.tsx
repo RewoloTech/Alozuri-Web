@@ -1,6 +1,9 @@
 'use client';
+import { trackMeta, marketingConsentNow, onPixelReady } from '@/lib/meta-pixel';
+import { confirmedMetaPurchase } from '@/lib/meta-events';
+import { useMarketingConsent } from './privacy-provider';
 import { AccountNavigation } from './account-navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useDispatch, useSelector } from 'react-redux';
@@ -41,6 +44,8 @@ export function PurchaseStatus() {
   return <PrivatePurchase key={`${id}:${user?.uid ?? 'guest'}`} id={id} />;
 }
 function PrivatePurchase({ id }: { id: string }) {
+  const marketing = useMarketingConsent();
+  const reported = useRef(new Set<string>());
   const { user } = useAuth(),
     dispatch = useDispatch(),
     cart = useSelector((s: RootState) => s.cart);
@@ -54,8 +59,13 @@ function PrivatePurchase({ id }: { id: string }) {
     const token = new URLSearchParams(window.location.hash.slice(1)).get('access');
     if (token) {
       sessionStorage.setItem('alozuri-order-' + id, token);
-      window.history.replaceState({}, '', window.location.pathname + window.location.search);
     }
+    // Stripe return credentials are not needed by this page. Keep only the order lookup.
+    const clean = new URL(location.href);
+    for (const key of ['payment_intent', 'payment_intent_client_secret', 'redirect_status'])
+      clean.searchParams.delete(key);
+    clean.hash = '';
+    window.history.replaceState(window.history.state, '', clean.pathname + clean.search);
     setAccess(token || sessionStorage.getItem('alozuri-order-' + id) || '');
   }, [id]);
   useEffect(() => {
@@ -123,6 +133,38 @@ function PrivatePurchase({ id }: { id: string }) {
       /* Cart content is never a payment authority. */
     }
   }, [order, cart.ready, cart.items, id, dispatch]);
+  useEffect(() => {
+    if (!marketing || !order) return;
+    const data = confirmedMetaPurchase(order);
+    if (!data) return;
+    void trackMeta('Purchase', data, order.id, true);
+    // Wait for the consented library to establish its browser identifier before CAPI.
+    return onPixelReady(() => {
+      if (
+        !marketingConsentNow() ||
+        reported.current.has(order.id) ||
+        !document.cookie.split('; ').some((cookie) => cookie.startsWith('_fbp='))
+      )
+        return;
+      reported.current.add(order.id);
+      void (async () => {
+        try {
+          const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+          if (access) headers['X-Order-Access'] = access;
+          else if (user?.emailVerified)
+            headers.Authorization = 'Bearer ' + (await user.getIdToken());
+          if (!marketingConsentNow()) return;
+          await fetch('/api/marketing/purchase', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ orderId: order.id }),
+          });
+        } catch {
+          /* Advertising failure never interrupts payment or delivery. */
+        }
+      })();
+    });
+  }, [marketing, order, access, user]);
   const ready = order?.allocations.length && order.allocations.every((a) => a.status === 'ready');
   return (
     <section className="container section">

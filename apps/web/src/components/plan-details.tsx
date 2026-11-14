@@ -1,7 +1,10 @@
 'use client';
+import { trackMeta } from '@/lib/meta-pixel';
+import { metaMoney } from '@/lib/meta-events';
+import { useMarketingConsent } from './privacy-provider';
 import { productStructuredData } from '@/lib/product-seo';
 import { jsonLd } from '@/lib/seo';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useDispatch, useSelector } from 'react-redux';
 import { dataLabel, countryName, money, coverageLabel, type Plan } from '@alozuri/shared';
@@ -17,6 +20,8 @@ export function PlanDetails({
   review?: boolean;
   initialPlan?: Plan | null;
 }) {
+  const marketing = useMarketingConsent();
+  const viewId = useRef<string | null>(null);
   const { currency, refresh, ready } = useCurrency();
   const dispatch = useDispatch(),
     cart = useSelector((s: RootState) => s.cart);
@@ -50,6 +55,27 @@ export function PlanDetails({
       active = false;
     };
   }, [id, currency, refresh, ready]);
+  useEffect(() => {
+    if (
+      !marketing ||
+      !ready ||
+      loading ||
+      error ||
+      !plan ||
+      plan.id !== id ||
+      plan.demo ||
+      plan.currency !== currency
+    )
+      return;
+    const data = metaMoney(plan.priceCents, plan.currency);
+    if (!data) return;
+    viewId.current ??= crypto.randomUUID();
+    void trackMeta(
+      'ViewContent',
+      { ...data, content_ids: [plan.id], content_type: 'product' },
+      viewId.current,
+    );
+  }, [marketing, ready, loading, error, plan, id, currency]);
   async function add() {
     if (!ready || !plan || plan.demo || plan.currency !== currency) return;
     setAdding(true);

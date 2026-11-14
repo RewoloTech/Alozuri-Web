@@ -1,3 +1,5 @@
+import { Suspense } from 'react';
+import { MetaTracking } from '@/components/meta-tracking';
 import type { Metadata } from 'next';
 import { PrivacyProvider } from '@/components/privacy-provider';
 import { BUSINESS } from '@alozuri/shared/legal';
@@ -35,6 +37,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en-GB" data-scroll-behavior="smooth">
       <body suppressHydrationWarning>
         <PrivacyProvider>
+          <Suspense fallback={null}>
+            <MetaTracking />
+          </Suspense>
           <StoreProvider>
             <AuthProvider>
               <CartSync />

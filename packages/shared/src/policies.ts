@@ -199,13 +199,13 @@ export const POLICIES: Record<string, Policy> = {
         title: 'Why we use it',
         paragraphs: [
           'We use account, order, delivery and necessary support information to perform your contract or take steps you request before buying. Required accounting and regulatory records are processed to meet legal obligations.',
-          'Security, fraud prevention, troubleshooting and proportionate business administration rely on legitimate interests, taking your rights into account. Optional support uses your consent, which you can withdraw. Buying or accepting our terms is not marketing consent. Alozuri has no separate audience-analytics or advertising tools. Optional chat may use its provider’s own service analytics and security technologies.',
+          'Security, fraud prevention, troubleshooting and proportionate business administration rely on legitimate interests, taking your rights into account. Optional support and advertising measurement use your separate consent choices, which you can withdraw. Buying or accepting our terms is not marketing consent. Advertising notice version 2026-11-14.1, effective 14 November 2026: with optional advertising consent, Meta Pixel measures page views, product views, checkout starts and confirmed purchases. Meta may also receive confirmed purchase measurements directly from Alozuri, using the same purchase event ID, value, currency, browser identifier and user agent. Meta also receives the page URL; a confirmation page can include its opaque order lookup reference. We remove private access fragments and Stripe return credentials before browser tracking. We do not send your email, installation credentials or card details to Meta. You can withdraw advertising consent in Cookie settings. Optional chat may use its provider’s own service analytics and security technologies.',
         ],
       },
       {
         title: 'Who receives it',
         paragraphs: [
-          'We share necessary information with providers of account sign-in (Google Firebase), payment processing (Stripe), optional live chat (Tawk.to and service providers including Cloudflare), secure cloud hosting and data storage, transactional and support email, and eSIM provisioning and mobile network services. These providers receive information needed for their role. Payment providers may use security partners such as hCaptcha and Cloudflare. Payment or network providers may also process information independently for legal or security purposes.',
+          'We share necessary information with providers of account sign-in (Google Firebase), payment processing (Stripe), optional advertising measurement (Meta), optional live chat (Tawk.to and service providers including Cloudflare), secure cloud hosting and data storage, transactional and support email, and eSIM provisioning and mobile network services. These providers receive information needed for their role. Payment providers may use security partners such as hCaptcha and Cloudflare. Payment or network providers may also process information independently for legal or security purposes.',
           'We may share information with professional advisers, authorities or a business successor where lawful and proportionate. We do not sell personal information. Contact us for details about recipients relevant to your data.',
         ],
       },
@@ -267,12 +267,12 @@ export const POLICIES: Record<string, Policy> = {
     path: '/cookies',
     title: 'Cookie Policy',
     description:
-      'Alozuri’s actual cookies and browser storage, necessary functions, optional support and how to change your choices.',
+      'Alozuri’s actual cookies and browser storage, necessary functions, optional support and advertising, and how to change your choices.',
     sections: [
       {
         title: 'How we use cookies and storage',
         paragraphs: [
-          'Cookies and similar browser storage help us run sign-in, your basket, checkout and requested preferences. Optional chat stays off until you allow it and choose to open it. You can shop and contact us by email without optional support.',
+          'Cookies and similar browser storage help us run sign-in, your basket, checkout and requested preferences. Optional chat stays off until you allow it and choose to open it. Optional Meta advertising measurement stays off until you separately allow advertising. You can shop and contact us by email without either optional category.',
         ],
       },
       {
@@ -351,6 +351,12 @@ export const POLICIES: Record<string, Policy> = {
               '30 minutes of inactivity.',
             ],
             [
+              '_fbp / _fbc and alozuri-meta-*',
+              'Meta and Alozuri — optional advertising',
+              'Advertising measurement, attribution and preventing repeated purchase events. Loaded only with advertising consent.',
+              'Meta cookie lifetimes vary by browser/provider; Alozuri duplicate markers remain until browser storage is cleared.',
+            ],
+            [
               'Chat cookies and storage',
               'Tawk.to — optional',
               'Provides chat and may remember the conversation when you enable and open it.',
@@ -359,6 +365,10 @@ export const POLICIES: Record<string, Policy> = {
           ],
         },
         links: [
+          {
+            label: 'Meta privacy information',
+            href: 'https://www.facebook.com/privacy/policy/',
+          },
           {
             label: 'Stripe cookie information',
             href: 'https://stripe.com/legal/cookies-policy',
@@ -381,7 +391,7 @@ export const POLICIES: Record<string, Policy> = {
         title: 'Payments, optional chat and tracking',
         paragraphs: [
           'Stripe payment and security technologies load when you request the payment step. Additional storage may depend on the payment or wallet method. Tawk.to is contacted only after optional support is allowed and you open chat; withdrawing permission closes it and prevents future loading until allowed again. To request deletion of earlier chat information, contact us or the provider.',
-          'Alozuri has no separate audience-analytics or advertising tools. Optional chat may contact its own service providers, including Cloudflare, for service analytics and security after you allow and open it. Any future change to our optional technologies will be explained with the required choices.',
+          'Advertising notice version 2026-11-14.1, effective 14 November 2026: with optional advertising consent, Meta Pixel measures page views, product views, checkout starts and confirmed purchases. Meta may also receive confirmed purchase measurements directly from Alozuri, using the same purchase event ID, value, currency, browser identifier and user agent. Meta also receives the page URL; a confirmation page can include its opaque order lookup reference. We remove private access fragments and Stripe return credentials before browser tracking. We do not send your email, installation credentials or card details to Meta. You can withdraw advertising consent in Cookie settings. Optional chat may contact its own service providers, including Cloudflare, for service analytics and security after you allow and open it. Any future change to our optional technologies will be explained with the required choices.',
         ],
       },
       {

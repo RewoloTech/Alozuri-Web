@@ -69,6 +69,9 @@ test.afterAll(async () => {
 test('optional providers stay unloaded before consent, after rejection, acceptance and withdrawal', async ({
   page,
 }) => {
+  await page.route('https://connect.facebook.net/**', (route) =>
+    route.fulfill({ contentType: 'application/javascript', body: '' }),
+  );
   const optional: string[] = [];
   page.on('request', (request) => {
     if (
@@ -86,7 +89,8 @@ test('optional providers stay unloaded before consent, after rejection, acceptan
   await expect(page.getByRole('region', { name: 'Privacy choices' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Cookie settings', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Cookie settings' });
-  await expect(dialog.getByRole('checkbox')).not.toBeChecked();
+  await expect(dialog.getByRole('checkbox', { name: /Optional support/ })).not.toBeChecked();
+  await expect(dialog.getByRole('checkbox', { name: /Optional advertising/ })).not.toBeChecked();
   await dialog.getByRole('button', { name: 'Accept all', exact: true }).click();
   await page.goto('/contact');
   expect(optional).toEqual([]);
@@ -128,6 +132,15 @@ test('privacy settings support keyboard dismissal, expired consent and mobile la
   await expect(page.getByRole('region', { name: 'Privacy choices' })).toBeVisible();
   await page.getByRole('button', { name: 'Customise choices' }).click();
   await expect(page.getByRole('dialog')).toBeVisible();
+  for (const width of [375, 390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 950 });
+    await expect(page.getByRole('checkbox', { name: /Optional advertising/ })).not.toBeChecked();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    if (width === 390 || width === 1440)
+      await page.screenshot({ path: `/tmp/alozuri-meta-consent-${width}.png` });
+  }
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Customise choices' })).toBeFocused();
@@ -256,7 +269,8 @@ test('legal pages have usable headings, a scrollable cookie inventory and groupe
     await expect(footer.locator(`a[href="${policy.path}"]`)).toHaveCount(1);
   await footer.getByRole('button', { name: 'Cookie settings', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Cookie settings' });
-  await expect(dialog.getByRole('checkbox')).not.toBeChecked();
+  await expect(dialog.getByRole('checkbox', { name: /Optional support/ })).not.toBeChecked();
+  await expect(dialog.getByRole('checkbox', { name: /Optional advertising/ })).not.toBeChecked();
   await page.keyboard.press('Escape');
   await expect(footer.getByRole('button', { name: 'Cookie settings', exact: true })).toBeFocused();
   await page.goto('/cookies');
@@ -267,7 +281,7 @@ test('legal pages have usable headings, a scrollable cookie inventory and groupe
     'Purpose',
     'Duration',
   ]);
-  await expect(table.getByRole('row')).toHaveCount(12);
+  await expect(table.getByRole('row')).toHaveCount(13);
   for (const width of [375, 390, 768, 1440]) {
     await page.setViewportSize({ width, height: 950 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(

@@ -1,17 +1,23 @@
-export const CONSENT_VERSION = '2026-11-11.1';
+export const CONSENT_VERSION = '2026-11-14.1';
 export const CONSENT_COOKIE = 'alozuri_consent';
 export const CONSENT_MAX_AGE = 180 * 24 * 60 * 60;
 export type PrivacyChoice = {
   version: typeof CONSENT_VERSION;
   necessary: true;
   support: boolean;
+  marketing: boolean;
   savedAt: string;
 };
-export function privacyChoice(support: boolean, now = Date.now()): PrivacyChoice {
+export function privacyChoice(
+  support: boolean,
+  now = Date.now(),
+  marketing = false,
+): PrivacyChoice {
   return {
     version: CONSENT_VERSION,
     necessary: true,
     support,
+    marketing,
     savedAt: new Date(now).toISOString(),
   };
 }
@@ -31,6 +37,8 @@ export function readPrivacyChoice(
       value.necessary !== true ||
       !('support' in value) ||
       typeof value.support !== 'boolean' ||
+      !('marketing' in value) ||
+      typeof value.marketing !== 'boolean' ||
       !('savedAt' in value) ||
       typeof value.savedAt !== 'string'
     )
@@ -41,6 +49,7 @@ export function readPrivacyChoice(
       version: CONSENT_VERSION,
       necessary: true,
       support: value.support,
+      marketing: value.marketing,
       savedAt: value.savedAt,
     };
   } catch {

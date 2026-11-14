@@ -11,12 +11,17 @@ import {
   type PrivacyChoice,
 } from '@alozuri/shared/privacy';
 import { BUSINESS } from '@alozuri/shared/legal';
-const PrivacyContext = createContext({ openChat: () => {}, openSettings: () => {} });
+const PrivacyContext = createContext({
+  openChat: () => {},
+  openSettings: () => {},
+  marketingAllowed: false,
+});
 export function PrivacyProvider({ children }: { children: React.ReactNode }) {
   const [choice, setChoice] = useState<PrivacyChoice | null>(null),
     [ready, setReady] = useState(false),
     [settings, setSettings] = useState(false),
     [support, setSupport] = useState(false),
+    [marketing, setMarketing] = useState(false),
     [storageError, setStorageError] = useState(''),
     [chatOpen, setChatOpen] = useState(false);
   const chatDialog = useRef<HTMLDialogElement>(null),
@@ -32,6 +37,7 @@ export function PrivacyProvider({ children }: { children: React.ReactNode }) {
       const value = readPrivacyChoice(raw);
       setChoice(value);
       setSupport(value?.support ?? false);
+      setMarketing(value?.marketing ?? false);
       setReady(true);
     };
     read();
@@ -45,6 +51,7 @@ export function PrivacyProvider({ children }: { children: React.ReactNode }) {
   function openSettings() {
     trigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setSupport(choice?.support ?? false);
+    setMarketing(choice?.marketing ?? false);
     setSettings(true);
   }
   useEffect(() => {
@@ -56,22 +63,28 @@ export function PrivacyProvider({ children }: { children: React.ReactNode }) {
     setSettings(false);
     trigger.current?.focus();
   }
-  function save(allowed: boolean) {
-    const value = privacyChoice(allowed);
+  function save(allowed: boolean, advertising = allowed) {
+    const value = privacyChoice(allowed, Date.now(), advertising);
     try {
       document.cookie = `${CONSENT_COOKIE}=${encodeURIComponent(JSON.stringify(value))}; Path=/; Max-Age=${CONSENT_MAX_AGE}; SameSite=Lax${location.protocol === 'https:' ? '; Secure' : ''}`;
-      const saved = document.cookie.split('; ').find((c) => c.startsWith(CONSENT_COOKIE + '='));
+      const stored = document.cookie
+        .split('; ')
+        .find((c) => c.startsWith(CONSENT_COOKIE + '='))
+        ?.slice(CONSENT_COOKIE.length + 1);
+      const saved = stored === encodeURIComponent(JSON.stringify(value));
       setStorageError(
         saved
           ? ''
-          : 'Your browser did not save this choice. Optional support remains off; email support is available.',
+          : 'Your browser did not save this choice. Optional technologies remain off; email support is available.',
       );
       setChoice(saved ? value : privacyChoice(false));
       setSupport(saved ? allowed : false);
+      setMarketing(saved ? advertising : false);
     } catch {
       setChoice(privacyChoice(false));
       setSupport(false);
-      setStorageError('Preferences could not be saved. Optional support remains off.');
+      setMarketing(false);
+      setStorageError('Preferences could not be saved. Optional technologies remain off.');
     }
     close();
   }
@@ -119,7 +132,9 @@ export function PrivacyProvider({ children }: { children: React.ReactNode }) {
     };
   }, [chatOpen]);
   return (
-    <PrivacyContext.Provider value={{ openChat, openSettings }}>
+    <PrivacyContext.Provider
+      value={{ openChat, openSettings, marketingAllowed: ready && choice?.marketing === true }}
+    >
       {children}
       {ready && !choice && (
         <section className="cookie-banner" aria-label="Privacy choices">
@@ -128,7 +143,8 @@ export function PrivacyProvider({ children }: { children: React.ReactNode }) {
             <p>
               Essential storage keeps sign-in, your basket and checkout working. Optional Tawk.to
               chat and its service providers, including Cloudflare, stay off until you allow and
-              open chat. <Link href="/cookies">Cookie Policy</Link>
+              open chat. Optional Meta advertising measurement stays off until you allow
+              advertising. <Link href="/cookies">Cookie Policy</Link>
             </p>
           </div>
           <div className="cookie-actions">
@@ -181,9 +197,21 @@ export function PrivacyProvider({ children }: { children: React.ReactNode }) {
               automatically share your account or order details with chat.
             </span>
           </label>
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={marketing}
+              onChange={(e) => setMarketing(e.target.checked)}
+            />
+            <span>
+              <strong>Optional advertising — Meta.</strong> Measure advertising and purchases using
+              Meta Pixel and confirmed purchase measurement.
+            </span>
+          </label>
           <p>
-            Alozuri has no separate advertising or audience-analytics tools. The optional chat
-            provider may use its own service analytics and security providers.{' '}
+            Meta measures page views, plan views, checkout starts and confirmed purchases only with
+            advertising consent. It receives browser identifiers, event IDs, purchase value and
+            currency, not installation credentials.{' '}
             <Link href="/cookies">Read the cookie inventory</Link>.
           </p>
           <div className="cookie-actions">
@@ -193,7 +221,7 @@ export function PrivacyProvider({ children }: { children: React.ReactNode }) {
             <button className="button" onClick={() => save(false)}>
               Reject optional
             </button>
-            <button className="button" onClick={() => save(support)}>
+            <button className="button" onClick={() => save(support, marketing)}>
               Save choices
             </button>
             <button className="button" onClick={close}>
@@ -234,7 +262,11 @@ export function PrivacyProvider({ children }: { children: React.ReactNode }) {
                 support to start. We do not share your account, order or installation details
                 automatically.
               </p>
-              <button type="button" className="button primary" onClick={() => save(true)}>
+              <button
+                type="button"
+                className="button primary"
+                onClick={() => save(true, choice?.marketing === true)}
+              >
                 Enable chat
               </button>
               <p>
@@ -291,4 +323,8 @@ export function SupportChoices() {
       </p>
     </div>
   );
+}
+
+export function useMarketingConsent() {
+  return useContext(PrivacyContext).marketingAllowed;
 }
