@@ -556,7 +556,7 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
     const headers = {
       'Access-Control-Allow-Origin': 'http://localhost:3100',
       'Access-Control-Allow-Headers': 'content-type,authorization',
-      'Access-Control-Allow-Methods': 'GET,POST,PUT,OPTIONS',
+      'Access-Control-Allow-Methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
     };
     if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
     const token = request.headers().authorization?.slice(7).split('.')[1];
@@ -568,6 +568,24 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
         json: { error: 'Administrator access required.' },
       });
     const url = new URL(request.url());
+    const promotionAction = url.pathname.match(/\/promotions\/([^/]+)(\/status)?$/);
+    if (promotionAction && ['PATCH', 'DELETE'].includes(request.method())) {
+      const index = savedPromotions.findIndex(
+        (promotion) => promotion.code === decodeURIComponent(promotionAction[1]),
+      );
+      if (index < 0)
+        return route.fulfill({ status: 404, headers, json: { error: 'Promotion not found.' } });
+      if (request.method() === 'DELETE') savedPromotions.splice(index, 1);
+      else
+        savedPromotions[index] = {
+          ...savedPromotions[index],
+          active: z.object({ active: z.boolean() }).strict().parse(request.postDataJSON()).active,
+        };
+      return route.fulfill({
+        headers,
+        json: { saved: true, deleted: request.method() === 'DELETE' },
+      });
+    }
     if (url.pathname.endsWith('/promotions/packages'))
       return route.fulfill({
         headers,
@@ -816,6 +834,8 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
       },
       { source: 'fixture', asOf: saleDate, numerator: '8', denominator: '10' },
     );
+    row.promotion = { id: 'SAVE20', code: 'SAVE20', discountPercent: 20 };
+    row.selling.discountMinor = 500;
     row.billingCountry = 'GB';
     row.supplier.purchasedUnits = 100000;
     row.supplier.verifiedUnits = provisional ? null : 100000;
@@ -1016,6 +1036,11 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
         fullPage: true,
       });
     }
+    const sales = page.getByRole('region', { name: 'Financial transactions' });
+    await expect(sales.getByRole('columnheader', { name: 'Promotion', exact: true })).toBeVisible();
+    await expect(sales.getByRole('cell').filter({ hasText: 'SAVE20' })).toContainText(
+      '20% · £5.00 discount',
+    );
     await page.getByRole('tab', { name: 'Trends', exact: true }).click();
     const trendsPanel = page.getByRole('tabpanel', { name: 'Trends', exact: true });
     await expect(trendsPanel.getByRole('heading', { name: 'Revenue over time' })).toBeVisible();
@@ -1172,9 +1197,7 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
       promotionsPanel.getByRole('heading', { name: 'SUMMER50 · 50% · Active', exact: true }),
     ).toBeVisible();
     expect(savedPromotions[0].startsAt).toBe(period.from + 'T00:00:00.000Z');
-    await promotionsPanel
-      .getByRole('button', { name: 'Edit / change status', exact: true })
-      .click();
+    await promotionsPanel.getByRole('button', { name: 'Edit code', exact: true }).click();
     await promotionsPanel.getByLabel('Active', { exact: true }).uncheck();
     await promotionsPanel.getByRole('button', { name: 'Preview impact', exact: true }).click();
     await expect(
@@ -1184,6 +1207,30 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
     await expect(
       promotionsPanel.getByRole('heading', { name: 'SUMMER50 · 50% · Inactive', exact: true }),
     ).toBeVisible();
+    await promotionsPanel.getByRole('button', { name: 'Activate code', exact: true }).click();
+    await expect(
+      promotionsPanel.getByRole('heading', { name: 'SUMMER50 · 50% · Active', exact: true }),
+    ).toBeVisible();
+    await promotionsPanel.getByRole('button', { name: 'Deactivate code', exact: true }).click();
+    await expect(
+      promotionsPanel.getByRole('heading', { name: 'SUMMER50 · 50% · Inactive', exact: true }),
+    ).toBeVisible();
+    for (const width of [375, 390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      if (width === 390 || width === 1440)
+        await promotionsPanel.screenshot({ path: `/tmp/alozuri-promotion-actions-${width}.png` });
+    }
+    page.once('dialog', (dialog) => dialog.dismiss());
+    await promotionsPanel.getByRole('button', { name: 'Delete unused code', exact: true }).click();
+    await expect(
+      promotionsPanel.getByRole('heading', { name: 'SUMMER50 · 50% · Inactive', exact: true }),
+    ).toBeVisible();
+    page.once('dialog', (dialog) => dialog.accept());
+    await promotionsPanel.getByRole('button', { name: 'Delete unused code', exact: true }).click();
+    await expect(promotionsPanel.getByText('No promotions found.', { exact: true })).toBeVisible();
     await promotionsPanel
       .getByRole('combobox', { name: 'Status', exact: true })
       .selectOption('true');

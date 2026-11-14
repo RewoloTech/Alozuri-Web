@@ -66,6 +66,20 @@ export function registerPromotionRoutes(
         return { saved: true };
       },
     });
+  app.patch('/v1/operations/promotions/:code/status', async (req) => {
+    await authorize(req.headers.authorization);
+    const params = z.object({ code: promoCode }).strict().parse(req.params);
+    const input = z.object({ active: z.boolean() }).strict().parse(req.body);
+    await new Promotions(database()).setActive(params.code, input.active);
+    return { saved: true };
+  });
+  app.delete('/v1/operations/promotions/:code', async (req) => {
+    await authorize(req.headers.authorization);
+    const params = z.object({ code: promoCode }).strict().parse(req.params);
+    z.object({}).strict().parse(req.query);
+    await new Promotions(database()).deleteUnused(params.code);
+    return { deleted: true };
+  });
   app.get('/v1/operations/promotions/packages', async (req) => {
     await authorize(req.headers.authorization);
     const q = z

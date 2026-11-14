@@ -33,6 +33,8 @@ export function PromotionsPanel({ uid }: { uid: string }) {
     [attempt, setAttempt] = useState(0);
   const [saveError, setSaveError] = useState('');
   const [saved, setSaved] = useState(false);
+  const [actionBusy, setActionBusy] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState('');
   const [q, setQ] = useState(''),
     [status, setStatus] = useState(''),
     [cursor, setCursor] = useState<string | undefined>(),
@@ -150,10 +152,45 @@ export function PromotionsPanel({ uid }: { uid: string }) {
       setBusy(false);
     }
   }
+  async function changePromotion(p: Promotion, remove = false) {
+    if (
+      remove &&
+      !window.confirm(`Permanently delete unused promotion ${p.code}? This cannot be undone.`)
+    )
+      return;
+    setActionBusy(p.code);
+    setActionMessage('');
+    setError('');
+    try {
+      await api(
+        '/v1/operations/promotions/' + encodeURIComponent(p.code) + (remove ? '' : '/status'),
+        {
+          method: remove ? 'DELETE' : 'PATCH',
+          ...(remove ? {} : { body: JSON.stringify({ active: !p.active }) }),
+        },
+        uid,
+      );
+      if (editing && code === p.code) {
+        if (remove) {
+          setEditing(false);
+          setCode('');
+          setPreview(null);
+        } else setActive(!p.active);
+      }
+      setActionMessage(`${p.code} ${remove ? 'deleted' : p.active ? 'deactivated' : 'activated'}.`);
+      setCursor(undefined);
+      setAttempt((value) => value + 1);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Promotion could not be updated.');
+    } finally {
+      setActionBusy(null);
+    }
+  }
   return (
     <section className="promotions-panel">
       <h2>Promotions</h2>
       <p>One code per order. Maximum discount 50%. Profitability warnings are advisory.</p>
+      {actionMessage && <p role="status">{actionMessage}</p>}
       {error && (
         <p role="alert" className="error-message">
           {error}
@@ -202,21 +239,45 @@ export function PromotionsPanel({ uid }: { uid: string }) {
                 {(t.discountMinor / 100).toFixed(2)}
               </p>
             ))}
-            <button
-              className="button"
-              onClick={() => {
-                setCode(p.code);
-                setPercent(p.discountPercent);
-                setActive(p.active);
-                setStart(p.startsAt.slice(0, 16));
-                setEnd(p.expiresAt.slice(0, 16));
-                setLimit(p.maxUses?.toString() ?? '');
-                setEditing(true);
-                setPreview(null);
-              }}
-            >
-              Edit / change status
-            </button>
+            <div className="operations-plan-search-actions">
+              <button
+                type="button"
+                className="button"
+                disabled={busy || Boolean(actionBusy)}
+                onClick={() => void changePromotion(p)}
+              >
+                {p.active ? 'Deactivate code' : 'Activate code'}
+              </button>
+              <button
+                type="button"
+                className="button"
+                disabled={
+                  busy || Boolean(actionBusy) || p.redemptionCount > 0 || p.reservedCount > 0
+                }
+                onClick={() => void changePromotion(p, true)}
+              >
+                Delete unused code
+              </button>
+              <button
+                className="button"
+                disabled={busy || Boolean(actionBusy)}
+                onClick={() => {
+                  setCode(p.code);
+                  setPercent(p.discountPercent);
+                  setActive(p.active);
+                  setStart(p.startsAt.slice(0, 16));
+                  setEnd(p.expiresAt.slice(0, 16));
+                  setLimit(p.maxUses?.toString() ?? '');
+                  setEditing(true);
+                  setPreview(null);
+                }}
+              >
+                Edit code
+              </button>
+            </div>
+            {(p.redemptionCount > 0 || p.reservedCount > 0) && (
+              <p className="fine-print">Used or reserved codes can be deactivated, not deleted.</p>
+            )}
           </div>
         ))}
         {!busy && !rows.length && <p>No promotions found.</p>}
@@ -392,7 +453,7 @@ export function PromotionsPanel({ uid }: { uid: string }) {
         )}
         <button
           className="button primary"
-          disabled={busy}
+          disabled={busy || Boolean(actionBusy)}
           onClick={save}
           aria-describedby={saveError ? 'promotion-save-error' : undefined}
         >

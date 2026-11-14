@@ -150,7 +150,7 @@ export async function createApp(
       : false,
   });
   await app.register(cors, {
-    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH'],
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'],
     origin:
       options.origins ??
       (process.env.CORS_ORIGINS || 'http://localhost:3000').split(',').map((s) => s.trim()),

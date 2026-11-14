@@ -107,6 +107,49 @@ export class Promotions {
       });
     });
   }
+  async setActive(code: string, active: boolean) {
+    const id = promoCode.parse(code);
+    z.boolean().parse(active);
+    const ref = this.db.doc('promotions/' + id);
+    await this.db.runTransaction(async (t) => {
+      const doc = await t.get(ref);
+      if (!doc.exists) throw new OperationsError('Promotion not found.', 404);
+      stored.parse(doc.data());
+      t.update(ref, { active, updatedAt: new Date().toISOString() });
+    });
+  }
+  async deleteUnused(code: string) {
+    const id = promoCode.parse(code),
+      ref = this.db.doc('promotions/' + id);
+    await this.db.runTransaction(async (t) => {
+      const doc = await t.get(ref);
+      if (!doc.exists) throw new OperationsError('Promotion not found.', 404);
+      const p = stored.parse(doc.data());
+      if (
+        p.redemptionCount ||
+        Object.keys(p.holds).length ||
+        Object.values(p.totals).some((total) => total.revenueMinor || total.discountMinor)
+      )
+        throw new OperationsError(
+          'Used or reserved codes cannot be deleted. Pause this code instead.',
+          409,
+        );
+      // Guard older/imported order snapshots as well as the promotion counters.
+      const references = await Promise.all(
+        ['purchases', 'orders'].flatMap((collection) =>
+          ['promotion.id', 'financial.promotion.id'].map((field) =>
+            t.get(this.db.collection(collection).where(field, '==', id).limit(1)),
+          ),
+        ),
+      );
+      if (references.some((page) => !page.empty))
+        throw new OperationsError(
+          'This code is referenced by an order. Pause it to preserve its history.',
+          409,
+        );
+      t.delete(ref);
+    });
+  }
   async validate(code: string, own?: string) {
     const p = await this.get(code);
     eligibility({

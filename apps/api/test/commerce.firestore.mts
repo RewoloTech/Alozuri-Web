@@ -2693,3 +2693,95 @@ test('refunding a promoted purchase keeps the historical paid redemption and ori
   assert.equal(p.totals.USD.discountMinor, q.discountCents);
   assert.equal((await db.doc('purchases/' + r.orderId).get()).get('status'), 'refunded');
 });
+
+test('promotion pause, resume and guarded deletion preserve checkout snapshots and block deletion of order-linked codes', async () => {
+  const unused = await promotionFixture();
+  await unused.promotions.setActive(unused.code, false);
+  await assert.rejects(unused.promotions.validate(unused.code), /inactive/);
+  await unused.promotions.setActive(unused.code, true);
+  assert.equal((await unused.promotions.validate(unused.code)).code, unused.code);
+  await unused.promotions.deleteUnused(unused.code);
+  assert.equal((await unused.ref.get()).exists, false);
+  const reserved = await promotionFixture();
+  await reserved.ref.update({ holds: { pending: { at: Date.now() } } });
+  await assert.rejects(reserved.promotions.deleteUnused(reserved.code), /reserved/);
+  const used = await promotionFixture();
+  const f = fixture();
+  const quote = await f.service.quote(f.input.items, 'USD', used.code);
+  const paid = await f.service.checkout(
+    { ...f.input, promotionCode: used.code, expectedTotalCents: quote.totalCents },
+    null,
+  );
+  await used.promotions.setActive(used.code, false);
+  f.intent.status = 'succeeded';
+  f.intent.amount_received = f.intent.amount;
+  await f.event();
+  await assert.rejects(used.promotions.deleteUnused(used.code), /cannot be deleted/);
+  const saved = await db.doc('purchases/' + paid.orderId).get();
+  assert.equal(saved.get('promotion.code'), used.code);
+  assert.equal(saved.get('financial.promotion.code'), used.code);
+  assert.equal(saved.get('financial.selling.discountMinor'), quote.discountCents);
+  for (const [index, collection] of ['purchases', 'orders'].entries()) {
+    const linked = await promotionFixture();
+    await db
+      .doc(`${collection}/legacy-promo-link-${index}`)
+      .set({ financial: { promotion: { id: linked.code } } });
+    await assert.rejects(linked.promotions.deleteUnused(linked.code), /referenced by an order/);
+    assert.equal((await linked.ref.get()).exists, true);
+  }
+});
+
+test('promotion action API pauses and deletes an unused code with administrator access', async () => {
+  const p = await promotionFixture();
+  const api = await createApp({
+    demo: true,
+    payments: null,
+    commerce: null,
+    fulfillment: null,
+    profiles: null,
+    financial: null,
+    verify: async (token) => ({ uid: token, verified: true, admin: token === 'admin' }),
+  });
+  const headers = { authorization: 'Bearer admin' };
+  try {
+    assert.equal(
+      (
+        await api.inject({
+          method: 'PATCH',
+          url: `/v1/operations/promotions/${p.code}/status`,
+          headers,
+          payload: { active: false },
+        })
+      ).statusCode,
+      200,
+    );
+    assert.equal((await p.promotions.get(p.code)).active, false);
+    assert.equal(
+      (await api.inject({ method: 'DELETE', url: `/v1/operations/promotions/${p.code}`, headers }))
+        .statusCode,
+      200,
+    );
+    assert.equal((await p.ref.get()).exists, false);
+  } finally {
+    await api.close();
+  }
+});
+
+test('deleting an unused promotion races safely with reserving checkout', async () => {
+  const promo = await promotionFixture();
+  const f = fixture();
+  const quote = await f.service.quote(f.input.items, 'USD', promo.code);
+  const results = await Promise.allSettled([
+    promo.promotions.deleteUnused(promo.code),
+    f.service.checkout(
+      { ...f.input, promotionCode: promo.code, expectedTotalCents: quote.totalCents },
+      null,
+    ),
+  ]);
+  assert.equal(results.filter((result) => result.status === 'fulfilled').length, 1);
+  const doc = await promo.ref.get();
+  if (results[1].status === 'fulfilled') {
+    assert.equal(doc.exists, true);
+    assert.equal(Object.keys((await promo.promotions.get(promo.code)).holds).length, 1);
+  } else assert.equal(doc.exists, false);
+});

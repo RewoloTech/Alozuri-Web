@@ -140,3 +140,70 @@ test('checkout estimates freeze original currencies, FX, one processing fee and 
   }
   assert.equal(promotionEstimate(900, 'EUR', 10000, null), null);
 });
+
+test('promotion pause and delete routes reject customers and malformed administrator input; DELETE preflight works', async () => {
+  const { createApp } = await import('../src/app.ts');
+  const app = await createApp({
+    demo: true,
+    payments: null,
+    commerce: null,
+    fulfillment: null,
+    profiles: null,
+    financial: null,
+    origins: ['https://alozuri.com'],
+    verify: async (token) => ({
+      uid: token,
+      verified: token !== 'unverified',
+      admin: token === 'admin',
+    }),
+  });
+  try {
+    for (const [token, expected] of [
+      [null, 401],
+      ['customer', 403],
+      ['unverified', 403],
+    ] as const) {
+      for (const method of ['PATCH', 'DELETE'] as const) {
+        const response = await app.inject({
+          method,
+          url: '/v1/operations/promotions/SAVE20' + (method === 'PATCH' ? '/status' : ''),
+          headers: token ? { authorization: 'Bearer ' + token } : {},
+          ...(method === 'PATCH' ? { payload: { active: false } } : {}),
+        });
+        assert.equal(response.statusCode, expected);
+      }
+    }
+    for (const payload of [{ active: 'false' }, { active: false, discountPercent: 50 }, {}]) {
+      const response = await app.inject({
+        method: 'PATCH',
+        url: '/v1/operations/promotions/SAVE20/status',
+        headers: { authorization: 'Bearer admin' },
+        payload,
+      });
+      assert.equal(response.statusCode, 400);
+    }
+    assert.equal(
+      (
+        await app.inject({
+          method: 'DELETE',
+          url: '/v1/operations/promotions/BAD!?force=true',
+          headers: { authorization: 'Bearer admin' },
+        })
+      ).statusCode,
+      400,
+    );
+    const preflight = await app.inject({
+      method: 'OPTIONS',
+      url: '/v1/operations/promotions/SAVE20',
+      headers: {
+        origin: 'https://alozuri.com',
+        'access-control-request-method': 'DELETE',
+        'access-control-request-headers': 'authorization',
+      },
+    });
+    assert.equal(preflight.statusCode, 204);
+    assert.match(String(preflight.headers['access-control-allow-methods']), /DELETE/);
+  } finally {
+    await app.close();
+  }
+});

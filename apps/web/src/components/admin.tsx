@@ -368,6 +368,7 @@ function OperationsAccount() {
                                   'Package',
                                   'Supplier Cost',
                                   'Selling Price',
+                                  'Promotion',
                                   'Stripe Fee',
                                   'Profit',
                                   'Margin',
@@ -461,6 +462,20 @@ function OperationsAccount() {
                                       )}
                                   </td>
                                   <td>
+                                    {r.promotion ? (
+                                      <>
+                                        <strong>{r.promotion.code}</strong>
+                                        <small>
+                                          {r.promotion.discountPercent}% ·{' '}
+                                          {original(r.selling.discountMinor, r.selling.currency)}{' '}
+                                          discount
+                                        </small>
+                                      </>
+                                    ) : (
+                                      '—'
+                                    )}
+                                  </td>
+                                  <td>
                                     {gbp(r.feesGbp)}
                                     {r.stripe.feeMinor !== null &&
                                       r.stripe.currency &&
@@ -486,12 +501,6 @@ function OperationsAccount() {
                                       r.supplier.verifiedUnits == null && <small>Estimated</small>}
                                   </td>
                                   <td>
-                                    {r.promotion && (
-                                      <small>
-                                        Promotion {r.promotion.code} · discount{' '}
-                                        {original(r.selling.discountMinor, r.selling.currency)}
-                                      </small>
-                                    )}
                                     {r.checkoutEstimate && (
                                       <details>
                                         <summary>Checkout estimate</summary>

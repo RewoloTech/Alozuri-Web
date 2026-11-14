@@ -86,3 +86,15 @@ During local implementation/testing, no production deployment, live database mut
 The frontend save action now lists missing or invalid code, dates, percentage, usage limit or package preview beside the button instead of silently disabling it. The button disables while a request is in progress. A successful save has an explicit confirmation. This refinement requires a frontend deployment; the backend and index are unchanged.
 
 The Operations quick-select buttons include 40% and 50%. The maximum discount is 50%, enforced for saving codes, previews, stored snapshots and checkout calculations. Deploy the API before the web update so the server accepts the higher discounts. Existing minimum payable amounts and advisory profitability warnings still apply.
+
+## Pause, resume and delete
+
+Each Operations promotion row now has clearly labelled **Deactivate code / Activate code** and **Delete unused code** actions. Deactivate is the pause action; activate resumes the code. Pause/Resume updates only `active` and its timestamp; it does not require editing dates, percentages or the package preview. Pausing stops new reservations. Existing Stripe payment sessions and already-recorded discounts remain valid; it does not cancel payments or refund orders.
+
+Delete requires an explicit browser confirmation and permanently deletes only an unused promotion document. The backend transaction rejects codes with paid redemptions, pending reservations, recorded totals, or references in purchase/order promotion snapshots (including financial-only historical snapshots). Used or reserved codes have deletion disabled in the UI and can be paused. The backend repeats these checks to handle stale UI state and checkout races. No customer orders, financial snapshots or Stripe records are deleted.
+
+The protected endpoints are `PATCH /v1/operations/promotions/:code/status` with `{ "active": false }` (or true), and `DELETE /v1/operations/promotions/:code`. Both require the existing verified current administrator permissions. Code and body inputs are validated; normal customers cannot use these routes. Existing configured CORS origins now permit authenticated DELETE preflight requests.
+
+## Promotion shown on sales
+
+Financial Overview's sales table has a dedicated **Promotion** column, showing the historical applied code, percentage and actual discount in the selling currency; orders without a recorded promotion show a dash. The code/percentage snapshot and exact discount were already recorded by server-side checkout and retained in `financial.promotion` and `financial.selling.discountMinor`. This display reads those historical values, never the promotion's current configuration. Pausing, editing or rejecting deletion of a used code does not change a past order's displayed discount. Existing records with no reliable promotion snapshot are not assigned invented codes. Deploy the API before the frontend; no deployment is performed by this implementation.
