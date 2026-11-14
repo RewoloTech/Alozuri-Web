@@ -10,7 +10,7 @@ export const promoCode = z
 export const promotionInput = z
   .object({
     code: promoCode,
-    discountPercent: z.number().int().min(1).max(30),
+    discountPercent: z.number().int().min(1).max(50),
     active: z.boolean(),
     startsAt: z.iso.datetime(),
     expiresAt: z.iso.datetime(),
@@ -24,7 +24,7 @@ export const promotionInput = z
 export const promotionSnapshot = z.object({
   id: promoCode,
   code: promoCode,
-  discountPercent: z.number().int().min(1).max(30),
+  discountPercent: z.number().int().min(1).max(50),
 });
 const holdSchema = z.object({
   at: z.number().int().nonnegative().safe(),
@@ -46,7 +46,7 @@ const stored = z.object({
 });
 export const discountUnit = (amount: number, percent: number) => {
   z.number().int().positive().safe().parse(amount);
-  z.number().int().min(1).max(30).parse(percent);
+  z.number().int().min(1).max(50).parse(percent);
   return Number((BigInt(amount) * BigInt(percent)) / 100n);
 };
 export function eligibility(p: z.infer<typeof stored>, now = new Date().toISOString()) {

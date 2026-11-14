@@ -105,8 +105,8 @@ export function PromotionsPanel({ uid }: { uid: string }) {
     const missing: string[] = [];
     if (!/^[A-Z0-9_-]{3,32}$/.test(code.trim()))
       missing.push('Enter a code of 3–32 letters, numbers, hyphens or underscores.');
-    if (!Number.isInteger(percent) || percent < 1 || percent > 30)
-      missing.push('Choose a whole-number discount between 1% and 30%.');
+    if (!Number.isInteger(percent) || percent < 1 || percent > 50)
+      missing.push('Choose a whole-number discount between 1% and 50%.');
     const starts = Date.parse(start + 'Z'),
       expires = Date.parse(end + 'Z');
     if (!Number.isFinite(starts)) missing.push('Set the start date and time (UTC).');
@@ -153,7 +153,7 @@ export function PromotionsPanel({ uid }: { uid: string }) {
   return (
     <section className="promotions-panel">
       <h2>Promotions</h2>
-      <p>One code per order. Maximum discount 30%. Profitability warnings are advisory.</p>
+      <p>One code per order. Maximum discount 50%. Profitability warnings are advisory.</p>
       {error && (
         <p role="alert" className="error-message">
           {error}
@@ -246,12 +246,12 @@ export function PromotionsPanel({ uid }: { uid: string }) {
           />
         </label>
         <label>
-          Discount % (1–30)
+          Discount % (1–50)
           <input
             className="commerce-input"
             type="number"
             min={1}
-            max={30}
+            max={50}
             step={1}
             value={percent}
             onChange={(e) => {
@@ -261,7 +261,7 @@ export function PromotionsPanel({ uid }: { uid: string }) {
           />
         </label>
         <div className="operations-esim-search">
-          {[5, 10, 15, 20, 25, 30].map((n) => (
+          {[5, 10, 15, 20, 25, 30, 40, 50].map((n) => (
             <button
               type="button"
               className="button small"
@@ -353,7 +353,7 @@ export function PromotionsPanel({ uid }: { uid: string }) {
         </label>
         <button
           className="button"
-          disabled={!packageId || percent < 1 || percent > 30}
+          disabled={!packageId || percent < 1 || percent > 50}
           onClick={check}
         >
           Preview impact

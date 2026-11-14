@@ -86,7 +86,7 @@ export function registerPromotionRoutes(
     const input = z
       .object({
         packageId: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/),
-        discountPercent: z.number().int().min(1).max(30),
+        discountPercent: z.number().int().min(1).max(50),
       })
       .strict()
       .parse(req.body);

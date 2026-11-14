@@ -5,7 +5,7 @@ Status: backend and promotions index deployed to production on 13 November 2026 
 ## Behaviour and architecture
 
 - Operations → Promotions uses existing verified Firebase administrator access. Every management, package lookup and preview request passes the existing server administrator check. Codes are uppercase, immutable identifiers (3–32 letters, digits, hyphens or underscores); edits preserve counters and reservations. Search is a code prefix, with active/inactive filtering and 20-code server pages.
-- One percentage code per purchase, whole numbers 1–30. The strict API schemas reject extra discount/price fields and stacking. Start/expiry fields in Operations are explicitly UTC. Previews use a selected active, current, provenance-validated live USD catalogue package and its supplier wholesale quote. Conservative estimated Stripe fees use existing pricing policy; warnings are advisory, including negative contribution.
+- One percentage code per purchase, whole numbers 1–50. The strict API schemas reject extra discount/price fields and stacking. Start/expiry fields in Operations are explicitly UTC. Previews use a selected active, current, provenance-validated live USD catalogue package and its supplier wholesale quote. Conservative estimated Stripe fees use existing pricing policy; warnings are advisory, including negative contribution.
 - The store already uses PaymentIntents and Stripe Payment/Express Checkout Elements. Native Stripe coupon/promotion-code flows are principally Checkout/Billing flows; Phase 1 keeps the embedded integration and calculates the PaymentIntent amount in the backend. No new Stripe coupons, subscriptions or payment configuration are needed. Account/domain/payment-method configuration remains existing configuration and needs sandbox verification before release.
 - Checkout revalidates catalogue, FX and code before creating an intent. Discounts round **down per unit in checkout currency**, then multiply by quantity. This never exceeds the chosen percentage and preserves exact per-eSIM refund allocation. Existing per-profile payment/fulfilment minimums still apply. Supplier wholesale cost, supplier SKU and canonical original USD retail remain unchanged.
 - Purchase records freeze `promotion`, `originalRetailCents`, `discountCents`, each item's `originalPriceCents`, discounted unit prices, original supplier quotes and FX. Existing `financial` records add the promotion, discount and a clearly labelled `checkoutEstimate` (native checkout currency, one estimated processing fee per payment, before refunds). Existing actual Stripe settlement/refund and supplier reconciliation remain authoritative. Later catalogue or promotion edits cannot rewrite an order.
@@ -32,7 +32,7 @@ The per-code reservation map is capped at 100 concurrent pending purchases to bo
 
 Automated tests cover:
 
-- [x] Whole-number ceiling/no stacking, 5/10/15/20/25/30% rounding, dates and invalid/exhausted/inactive codes.
+- [x] Whole-number ceiling/no stacking, 5/10/15/20/25/30/40/50% rounding, dates and invalid/exhausted/inactive codes.
 - [x] Package-specific normal/reduced/low/negative contribution warnings and explicit estimated fees.
 - [x] Guest/account checkout and GBP/EUR/USD; exact discounted Stripe amounts and frozen supplier costs.
 - [x] Concurrent one-use reservations, failed/cancelled/abandoned intents and duplicate success events.
@@ -84,3 +84,5 @@ During local implementation/testing, no production deployment, live database mut
 ## Save-button feedback refinement
 
 The frontend save action now lists missing or invalid code, dates, percentage, usage limit or package preview beside the button instead of silently disabling it. The button disables while a request is in progress. A successful save has an explicit confirmation. This refinement requires a frontend deployment; the backend and index are unchanged.
+
+The Operations quick-select buttons include 40% and 50%. The maximum discount is 50%, enforced for saving codes, previews, stored snapshots and checkout calculations. Deploy the API before the web update so the server accepts the higher discounts. Existing minimum payable amounts and advisory profitability warnings still apply.

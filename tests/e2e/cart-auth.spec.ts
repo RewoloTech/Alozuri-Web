@@ -1118,7 +1118,7 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
     await promotionsPanel.getByRole('button', { name: 'Save promotion', exact: true }).click();
     await expect(promotionsPanel.getByRole('alert')).toContainText('Set the start date');
     await expect(promotionsPanel.getByRole('alert')).toContainText('Preview impact');
-    await promotionsPanel.getByLabel('Code', { exact: true }).fill('SUMMER10');
+    await promotionsPanel.getByLabel('Code', { exact: true }).fill('SUMMER50');
     await promotionsPanel.getByLabel('Starts at (UTC)').fill(period.from + 'T00:00');
     await promotionsPanel.getByLabel('Expires at (UTC)').fill(period.to + 'T23:59');
     await promotionsPanel.getByLabel('Maximum paid uses (optional)').fill('5');
@@ -1126,6 +1126,10 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
     await promotionsPanel
       .getByRole('combobox', { name: 'Package', exact: true })
       .selectOption('plan-uk');
+    await promotionsPanel.getByRole('button', { name: '40%', exact: true }).click();
+    await expect(promotionsPanel.getByLabel('Discount % (1–50)')).toHaveValue('40');
+    await promotionsPanel.getByRole('button', { name: '50%', exact: true }).click();
+    await expect(promotionsPanel.getByLabel('Discount % (1–50)')).toHaveValue('50');
     await promotionsPanel.getByRole('button', { name: 'Preview impact', exact: true }).click();
     await expect(promotionsPanel.getByRole('status')).toContainText(
       'Critical: zero or negative contribution',
@@ -1143,7 +1147,7 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
     }
     await promotionsPanel.getByRole('button', { name: 'Save promotion', exact: true }).click();
     await expect(
-      promotionsPanel.getByRole('heading', { name: 'SUMMER10 · 10% · Active', exact: true }),
+      promotionsPanel.getByRole('heading', { name: 'SUMMER50 · 50% · Active', exact: true }),
     ).toBeVisible();
     expect(savedPromotions[0].startsAt).toBe(period.from + 'T00:00:00.000Z');
     await promotionsPanel
@@ -1156,7 +1160,7 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
     ).toBeEnabled();
     await promotionsPanel.getByRole('button', { name: 'Save promotion', exact: true }).click();
     await expect(
-      promotionsPanel.getByRole('heading', { name: 'SUMMER10 · 10% · Inactive', exact: true }),
+      promotionsPanel.getByRole('heading', { name: 'SUMMER50 · 50% · Inactive', exact: true }),
     ).toBeVisible();
     await promotionsPanel
       .getByRole('combobox', { name: 'Status', exact: true })

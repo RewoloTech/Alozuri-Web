@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { discountUnit, promotionInput, eligibility } from '../src/lib/promotions.ts';
+import {
+  discountUnit,
+  promotionInput,
+  promotionSnapshot,
+  eligibility,
+} from '../src/lib/promotions.ts';
 import { contributionPreview } from '../src/lib/promotion-routes.ts';
 import { initialFinancial } from '../src/lib/financial-calculations.ts';
 import { promotionReport } from '../src/lib/promotion-report.ts';
@@ -14,19 +19,38 @@ const base = {
 };
 test('whole percentage ceiling, canonical codes, dates, and no stacking or browser amounts', () => {
   assert.equal(promotionInput.parse(base).code, 'SAVE10');
-  for (const discountPercent of [0, -1, 30.1, 31, 100])
+  for (const discountPercent of [40, 50]) {
+    assert.equal(
+      promotionInput.parse({ ...base, discountPercent }).discountPercent,
+      discountPercent,
+    );
+    assert.equal(
+      promotionSnapshot.parse({ id: 'SAVE50', code: 'SAVE50', discountPercent }).discountPercent,
+      discountPercent,
+    );
+    assert.equal(
+      contributionPreview(1000, 40001, discountPercent).finalMinor,
+      1000 - discountPercent * 10,
+    );
+  }
+  assert.throws(() => discountUnit(1000, 51));
+  assert.equal(
+    promotionSnapshot.safeParse({ id: 'SAVE51', code: 'SAVE51', discountPercent: 51 }).success,
+    false,
+  );
+  for (const discountPercent of [0, -1, 40.1, 50.1, 51, 100])
     assert.equal(promotionInput.safeParse({ ...base, discountPercent }).success, false);
   assert.equal(promotionInput.safeParse({ ...base, amount: 1 }).success, false);
   assert.equal(promotionInput.safeParse({ ...base, code: ['ONE', 'TWO'] }).success, false);
   assert.equal(promotionInput.safeParse({ ...base, expiresAt: base.startsAt }).success, false);
   assert.equal(promotionInput.safeParse({ ...base, maxUses: 0 }).success, false);
 });
-for (const percent of [5, 10, 15, 20, 25, 30])
+for (const percent of [5, 10, 15, 20, 25, 30, 40, 50])
   test(`${percent}% discount rounds down per unit and cannot exceed ceiling`, () => {
     for (const price of [1, 101, 499, 12345, 99999999]) {
       const actual = discountUnit(price, percent);
       assert.equal(actual, Math.floor((price * percent) / 100));
-      assert.ok(BigInt(actual) * 100n <= BigInt(price) * 30n);
+      assert.ok(BigInt(actual) * 100n <= BigInt(price) * BigInt(percent));
     }
   });
 test('eligibility distinguishes inactive, future, expired, exhausted and reserved codes', () => {

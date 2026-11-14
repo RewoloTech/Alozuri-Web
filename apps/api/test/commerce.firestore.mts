@@ -2359,7 +2359,7 @@ async function promotionFixture(maxUses: number | null = null, percent = 10) {
   return { code, promotions, input, ref: db.doc('promotions/' + code) };
 }
 for (const currency of ['GBP', 'EUR', 'USD'] as const)
-  for (const percent of [5, 10, 15, 20, 30])
+  for (const percent of [5, 10, 15, 20, 30, 40, 50])
     test(`${currency} ${percent}% guest and account checkout freezes exact unit discounts; paid replay allocates once`, async () => {
       const f = fixture(false, undefined, currency),
         promo = await promotionFixture(1, percent);
@@ -2496,10 +2496,10 @@ test('canceled checkout releases reservation without redemption; forged totals c
 });
 test('backend promotion management rejects excessive discounts and preserves usage on edits; no margin veto', async () => {
   const promo = await promotionFixture();
-  await assert.rejects(promo.promotions.save({ ...promo.input, discountPercent: 31 }, false));
+  await assert.rejects(promo.promotions.save({ ...promo.input, discountPercent: 51 }, false));
   assert.equal(contributionPreview(1000, 100000, 30).warning, 'critical');
-  await promo.promotions.save({ ...promo.input, discountPercent: 30 }, false);
-  assert.equal((await promo.promotions.get(promo.code)).discountPercent, 30);
+  await promo.promotions.save({ ...promo.input, discountPercent: 50 }, false);
+  assert.equal((await promo.promotions.get(promo.code)).discountPercent, 50);
   await promo.promotions.save({ ...promo.input, active: false }, false);
   const f = fixture();
   await assert.rejects(f.service.quote(f.input.items, 'USD', promo.code), /inactive/);
@@ -2513,7 +2513,7 @@ test('backend promotion management rejects excessive discounts and preserves usa
 
 test('a discounted paid purchase uses existing supplier fulfilment exactly once with the frozen wholesale cost', async () => {
   const f = fixture(false, undefined, 'USD', undefined, undefined, undefined, null, false),
-    promo = await promotionFixture(null, 30);
+    promo = await promotionFixture(null, 50);
   const q = await f.service.quote(f.input.items, 'USD', promo.code);
   const purchase = await f.service.checkout(
     { ...f.input, promotionCode: promo.code, expectedTotalCents: q.totalCents },
@@ -2603,7 +2603,7 @@ test('promotion API validates admin changes, price-preview catalogue provenance 
           method: 'PUT',
           url: '/v1/operations/promotions',
           headers,
-          payload: { ...promo.input, discountPercent: 31 },
+          payload: { ...promo.input, discountPercent: 51 },
         })
       ).statusCode,
       400,
@@ -2632,7 +2632,7 @@ test('promotion API validates admin changes, price-preview catalogue provenance 
       method: 'POST',
       url: '/v1/operations/promotions/preview',
       headers,
-      payload: { packageId: plan.id, discountPercent: 30 },
+      payload: { packageId: plan.id, discountPercent: 50 },
     });
     assert.equal(response.statusCode, 200);
     assert.equal(response.json().supplierUnits, 1000);
@@ -2643,7 +2643,7 @@ test('promotion API validates admin changes, price-preview catalogue provenance 
           method: 'POST',
           url: '/v1/operations/promotions/preview',
           headers,
-          payload: { packageId: plan.id, discountPercent: 30 },
+          payload: { packageId: plan.id, discountPercent: 50 },
         })
       ).statusCode,
       400,
