@@ -1,0 +1,166 @@
+.page {
+  --muted: #687084;
+}
+.hero {
+  padding-block: 88px 56px;
+  text-align: center;
+}
+.hero h1 {
+  font-size: clamp(36px, 5vw, 60px);
+  margin: 18px 0 24px;
+}
+.hero p {
+  max-width: 620px;
+  margin: 0 auto 28px;
+  font-size: 18px;
+}
+.hero small {
+  display: block;
+  color: var(--muted);
+  margin-top: 16px;
+}
+.section {
+  padding-block: 64px;
+}
+.section h2 {
+  margin-bottom: 28px;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+}
+.card {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 28px;
+}
+.icon {
+  color: var(--blue);
+  margin-bottom: 24px;
+}
+.card h3,
+.steps h3 {
+  margin-bottom: 12px;
+}
+.card p,
+.steps p {
+  font-size: 15px;
+}
+.band {
+  background: var(--soft);
+  border-block: 1px solid var(--border);
+}
+.steps {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.number {
+  display: block;
+  color: var(--blue);
+  font-weight: 700;
+  margin-bottom: 20px;
+}
+.split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 72px;
+  align-items: start;
+}
+.split h2 {
+  max-width: 420px;
+  margin-bottom: 20px;
+}
+.split .eyebrow {
+  margin-bottom: 16px;
+}
+.audience {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.audience li {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+  font-weight: 500;
+}
+.audience li:first-child {
+  padding-top: 0;
+}
+.terms {
+  padding-left: 22px;
+  margin: 0;
+  color: var(--muted);
+}
+.terms li {
+  padding-left: 4px;
+  margin-bottom: 12px;
+}
+.terms li::marker {
+  color: var(--blue);
+}
+.final {
+  text-align: center;
+  border-top: 1px solid var(--border);
+  padding-block: 64px 80px;
+}
+.final p {
+  max-width: 580px;
+  margin: 20px auto 28px;
+}
+@media (max-width: 1000px) {
+  .split {
+    gap: 36px;
+  }
+  .grid {
+    gap: 16px;
+  }
+  .card {
+    padding: 24px;
+  }
+}
+@media (max-width: 760px) {
+  .hero {
+    padding-block: 56px 24px;
+  }
+  .hero p {
+    font-size: 16px;
+  }
+  .section {
+    padding-block: 40px;
+  }
+  .section h2,
+  .final h2 {
+    font-size: 28px;
+  }
+  .grid,
+  .split {
+    grid-template-columns: 1fr;
+    gap: 28px;
+  }
+  .icon {
+    margin-bottom: 16px;
+  }
+  .number {
+    margin-bottom: 10px;
+  }
+  .final {
+    padding-block: 40px 56px;
+  }
+  .final :global(.button) {
+    white-space: normal;
+  }
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}

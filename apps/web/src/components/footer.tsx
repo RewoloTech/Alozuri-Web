@@ -25,6 +25,7 @@ export function Footer() {
           <Link href="/#planner">Build your itinerary</Link>
           <Link href="/destinations/europe">Europe travel eSIMs</Link>
           <Link href="/guides">Travel eSIM guides</Link>
+          <Link href="/partners">Partners</Link>
         </nav>
         <nav className="footer-links footer-legal" aria-labelledby="footer-legal">
           <h2 className="eyebrow" id="footer-legal">

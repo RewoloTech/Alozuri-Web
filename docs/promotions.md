@@ -32,7 +32,7 @@ The per-code reservation map is capped at 100 concurrent pending purchases to bo
 
 Automated tests cover:
 
-- [x] Whole-number ceiling/no stacking, 5/10/15/20/25/30/40/50% rounding, dates and invalid/exhausted/inactive codes.
+- [x] Whole-number ceiling/no stacking, 5/10/15/20/25/30/35/40/50% rounding, dates and invalid/exhausted/inactive codes.
 - [x] Package-specific normal/reduced/low/negative contribution warnings and explicit estimated fees.
 - [x] Guest/account checkout and GBP/EUR/USD; exact discounted Stripe amounts and frozen supplier costs.
 - [x] Concurrent one-use reservations, failed/cancelled/abandoned intents and duplicate success events.
@@ -85,7 +85,7 @@ During local implementation/testing, no production deployment, live database mut
 
 The frontend save action now lists missing or invalid code, dates, percentage, usage limit or package preview beside the button instead of silently disabling it. The button disables while a request is in progress. A successful save has an explicit confirmation. This refinement requires a frontend deployment; the backend and index are unchanged.
 
-The Operations quick-select buttons include 40% and 50%. The maximum discount is 50%, enforced for saving codes, previews, stored snapshots and checkout calculations. Deploy the API before the web update so the server accepts the higher discounts. Existing minimum payable amounts and advisory profitability warnings still apply.
+The Operations quick-select buttons include 35%, 40% and 50%. The 35% preset uses the existing backend range; adding this preset requires only frontend deployment. The maximum discount is 50%, enforced for saving codes, previews, stored snapshots and checkout calculations. Deploy the API before the web update so the server accepts the higher discounts. Existing minimum payable amounts and advisory profitability warnings still apply.
 
 ## Pause, resume and delete
 

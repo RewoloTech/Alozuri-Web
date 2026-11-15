@@ -1173,6 +1173,8 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
     await promotionsPanel
       .getByRole('combobox', { name: 'Package', exact: true })
       .selectOption('plan-uk');
+    await promotionsPanel.getByRole('button', { name: '35%', exact: true }).click();
+    await expect(promotionsPanel.getByLabel('Discount % (1–50)')).toHaveValue('35');
     await promotionsPanel.getByRole('button', { name: '40%', exact: true }).click();
     await expect(promotionsPanel.getByLabel('Discount % (1–50)')).toHaveValue('40');
     await promotionsPanel.getByRole('button', { name: '50%', exact: true }).click();
