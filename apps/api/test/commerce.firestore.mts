@@ -212,10 +212,26 @@ test.before(async () => {
     { method: 'DELETE' },
   );
 });
+test('referral metadata is frozen on the purchase and preserved across checkout retries', async () => {
+  const f = fixture();
+  const referral = 'a635b2bf-c05b-450c-ab6c-b0babb3ed446';
+  await assert.rejects(f.service.checkout({ ...f.input, endorselyReferral: 'invalid' }, null));
+  assert.equal(f.getCreates(), 0);
+  const first = await f.service.checkout({ ...f.input, endorselyReferral: referral }, null);
+  await f.service.checkout({ ...f.input, endorselyReferral: crypto.randomUUID() }, null);
+  assert.equal(f.getCreates(), 1);
+  assert.equal(f.intent.metadata.endorsely_referral, referral);
+  assert.equal(
+    (await db.doc('purchases/' + first.orderId).get()).data()?.endorselyReferral,
+    referral,
+  );
+});
+
 test('guest multi-item checkout retries one intent, paid webhook allocates one eSIM per unit, and delivery is private', async () => {
   const f = fixture(),
     first = await f.service.checkout(f.input, null),
     second = await f.service.checkout(f.input, null);
+  assert.equal(f.intent.metadata.endorsely_referral, undefined);
   assert.equal(first.orderId, second.orderId);
   assert.equal(first.accessToken, second.accessToken);
   assert.equal(f.getCreates(), 1);

@@ -68,6 +68,7 @@ export function registerCommerceRoutes(
           currency: currencySchema,
           promotionCode: promoCode.optional(),
           expectedTotalCents: z.number().int().positive(),
+          endorselyReferral: z.uuid().optional(),
         })
         .strict()
         .parse(req.body);

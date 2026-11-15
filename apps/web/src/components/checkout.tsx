@@ -1,4 +1,5 @@
 'use client';
+import { endorselyReferral } from '@/lib/endorsely';
 import { trackMeta } from '@/lib/meta-pixel';
 import { metaMoney } from '@/lib/meta-events';
 import { LEGAL_VERSION, CHECKOUT_LEGAL_ACCEPTANCE } from '@alozuri/shared/legal';
@@ -400,6 +401,7 @@ function CheckoutForIdentity() {
             legal: CHECKOUT_LEGAL_ACCEPTANCE,
             requestId: request.current,
             expectedTotalCents: quote.totalCents,
+            endorselyReferral: endorselyReferral(),
             ...(promotionCode ? { promotionCode } : {}),
           }),
         },

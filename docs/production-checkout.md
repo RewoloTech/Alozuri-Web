@@ -183,3 +183,21 @@ The owner subsequently approved the live pricing migration and API/frontend roll
 ## Payment-triggered queue migration
 
 The replacement for the minute fulfilment poll is implemented but has not been activated. Follow [the order-processing runbook](order-processing.md) for queue configuration, service identity/IAM, pending-order migration, verification and rollback. The default remains scheduler mode to preserve the existing live flow until approval. Do not deploy queue mode with an unconfigured queue or disable the existing scheduler before the replacement is validated. No additional application service is required.
+
+### Endorsely affiliate attribution
+
+The shared layout loads the Endorsely tracking script. At checkout submission, the
+browser reads `window.endorsely_referral` and sends a valid UUID as the optional
+`endorselyReferral` field to `/v2/checkout`. Missing or malformed browser values
+are omitted; the API rejects malformed supplied IDs. Deploy the API change before
+the web change because checkout request validation is strict.
+
+The first purchase snapshot freezes the referral. Stripe PaymentIntent creation
+includes it as `metadata.endorsely_referral` alongside the existing order metadata;
+retries use the saved referral. The active Payment Element flow does not create a
+Checkout Session (the legacy session checkout endpoint is disabled).
+
+Verify affiliate conversion attribution in Endorsely using a Stripe test payment
+before relying on reporting. PaymentIntent metadata support in the connected
+Endorsely integration has not been verified; the supplied installation example
+only documents Checkout Sessions. This adds attribution, not fulfilment authority.

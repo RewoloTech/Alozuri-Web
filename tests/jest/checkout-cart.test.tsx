@@ -14,12 +14,15 @@ const quote = {
   currency: 'USD',
 };
 const mockLock = jest.fn();
-const mockCheckout = jest.fn(() => ({
-  clientSecret: 'pi_fixture_secret',
-  orderId: 'purchase_fixture',
-  accessToken: 'fixture',
-  quote,
-}));
+const mockCheckout = jest.fn((options?: { body?: string }) => {
+  void options;
+  return {
+    clientSecret: 'pi_fixture_secret',
+    orderId: 'purchase_fixture',
+    accessToken: 'fixture',
+    quote,
+  };
+});
 jest.mock('@/components/auth-provider', () => ({
   useAuth: () => ({ user: null, loading: false }),
 }));
@@ -45,19 +48,23 @@ jest.mock('@stripe/react-stripe-js', () => ({
   useElements: () => ({}),
 }));
 jest.mock('@/lib/api', () => ({
-  api: async (path: string) =>
+  api: async (path: string, options?: { body?: string }) =>
     path === '/v1/config'
       ? { cartCheckoutMode: 'test' }
       : path === '/v2/quote'
         ? { quote }
-        : mockCheckout(),
+        : mockCheckout(options),
 }));
 const { Checkout } = jest.requireActual<typeof import('../../apps/web/src/components/checkout')>(
   '../../apps/web/src/components/checkout',
 );
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  delete window.endorsely_referral;
+});
 
 test('account/cart changes after payment preparation cannot double the reviewed payment summary', async () => {
+  window.endorsely_referral = 'a635b2bf-c05b-450c-ab6c-b0babb3ed446';
   const store = makeStore();
   store.dispatch(restoreCart(quote.items));
   const view = render(
@@ -73,6 +80,9 @@ test('account/cart changes after payment preparation cannot double the reviewed 
   await waitFor(() => expect(button.hasAttribute('disabled')).toBe(false));
   fireEvent.submit(button.closest('form')!);
   await screen.findByText('Card details');
+  expect(JSON.parse(mockCheckout.mock.calls.at(-1)?.[0]?.body || '{}').endorselyReferral).toBe(
+    window.endorsely_referral,
+  );
   await act(async () => {
     store.dispatch(restoreCart([{ plan, quantity: 2 }]));
   });

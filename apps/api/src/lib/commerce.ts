@@ -112,6 +112,7 @@ const purchaseSchema = z
     taxCents: z.number().int().nonnegative().optional(),
     confirmationVersion: confirmationVersionSchema.optional(),
     stripeAttribution: stripeAttributionSchema.optional(),
+    endorselyReferral: z.uuid().optional(),
     orderReference: z.string().optional(),
     status: z.enum([
       'pending_payment',
@@ -305,6 +306,7 @@ export class CommerceService {
       currency: Currency;
       expectedTotalCents: number;
       promotionCode?: string;
+      endorselyReferral?: string;
     },
     user: Principal | null,
   ) {
@@ -353,6 +355,9 @@ export class CommerceService {
       confirmationVersion: CONFIRMATION_VERSION,
       orderReference: orderReference(id),
       stripeAttribution: newStripeAttribution(id),
+      ...(input.endorselyReferral
+        ? { endorselyReferral: z.uuid().parse(input.endorselyReferral) }
+        : {}),
       status: 'pending_payment' as const,
       test: this.mode === 'test',
       createdAt: new Date().toISOString(),
@@ -428,6 +433,12 @@ export class CommerceService {
             // Alozuri sends the complete confirmation; do not force a second Stripe receipt.
             automatic_payment_methods: { enabled: true, allow_redirects: 'never' },
             ...stripeReference,
+            metadata: {
+              ...stripeReference.metadata,
+              ...(purchase.endorselyReferral
+                ? { endorsely_referral: purchase.endorselyReferral }
+                : {}),
+            },
           },
           { idempotencyKey: id + ':payment:v1' },
         );

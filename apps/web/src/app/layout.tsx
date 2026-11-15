@@ -35,6 +35,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   // Suppression is limited to this element; descendant checks stay enabled.
   return (
     <html lang="en-GB" data-scroll-behavior="smooth">
+      <head>
+        <script
+          async
+          src="https://assets.endorsely.com/endorsely.js"
+          data-endorsely="fee2398b-3a49-474c-b549-4e770fc0b679"
+        />
+      </head>
       <body suppressHydrationWarning>
         <PrivacyProvider>
           <Suspense fallback={null}>
