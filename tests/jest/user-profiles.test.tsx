@@ -1,7 +1,16 @@
 import { beforeEach, afterEach, test, expect, jest } from '@jest/globals';
 import { render, screen, waitFor, act, cleanup, fireEvent } from '@testing-library/react';
 import type { UserProfile } from '../../packages/shared/src/user-profile';
-type FakeUser = { uid: string; emailVerified: boolean };
+type FakeUser = {
+  uid: string;
+  emailVerified: boolean;
+  getIdTokenResult: () => Promise<{ claims: { admin?: boolean } }>;
+};
+const fakeUser = (uid: string, emailVerified: boolean): FakeUser => ({
+  uid,
+  emailVerified,
+  getIdTokenResult: async () => ({ claims: {} }),
+});
 let mockUser: FakeUser | null = null;
 let mockListener: ((user: FakeUser | null) => void) | null = null;
 const mockApi =
@@ -61,7 +70,7 @@ const mount = () =>
     </AuthProvider>,
   );
 beforeEach(() => {
-  mockUser = { uid: 'alice', emailVerified: false };
+  mockUser = fakeUser('alice', false);
   mockApi.mockReset();
 });
 afterEach(cleanup);
@@ -76,7 +85,7 @@ test('late profile responses cannot leak across accounts and signout immediately
   mount();
   await waitFor(() => expect(mockApi).toHaveBeenCalledTimes(1));
   await act(async () => {
-    mockUser = { uid: 'bob', emailVerified: true };
+    mockUser = fakeUser('bob', true);
     mockListener?.(mockUser);
   });
   await waitFor(() => expect(screen.getByTestId('profile').textContent).toBe('bob'));

@@ -159,3 +159,11 @@ Before release / manual external checks:
 - [ ] Review Search Console/CrUX after enough traffic exists; record a genuine field-performance baseline.
 
 There is no evidence here that Google/Bing have indexed these new pages, that Alozuri ranks for a candidate keyword, or that an AI search product recommends it. Those outcomes require external verification and ongoing measurement.
+
+### Server-rendered plan prices
+
+Plan pages display the server-verified plan price before the browser finishes
+resolving its currency preference, matching the initial Product offer schema.
+After currency resolution, mismatched prices show a loading state until repriced.
+Purchase controls still require currency readiness and current pricing; the
+server remains authoritative for checkout totals.

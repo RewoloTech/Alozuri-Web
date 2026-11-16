@@ -984,7 +984,7 @@ test('a stalled total check stops waiting and offers a safe retry', async ({ pag
   release();
 });
 
-test('the entire data allowance field opens its native picker, including the label and arrow', async ({
+test('the entire compact data allowance field opens its native picker, including the value and arrow', async ({
   page,
 }) => {
   await setup(page);
@@ -994,7 +994,9 @@ test('the entire data allowance field opens its native picker, including the lab
   for (const width of [320, 375, 390, 430, 768, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
     await field.scrollIntoViewIfNeeded();
-    for (const target of ['label', 'value', 'arrow', 'padding']) {
+    // The simplified homepage uses an accessible name instead of a separate visible label.
+    const targets = ['value', 'arrow', 'padding'];
+    for (const target of targets) {
       const point = await field.evaluate((element, target) => {
         const rect = element.getBoundingClientRect();
         const child =

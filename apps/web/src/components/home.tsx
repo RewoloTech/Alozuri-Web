@@ -10,8 +10,6 @@ import {
   ShieldCheck,
   Signal,
   Smartphone,
-  Wifi,
-  Zap,
 } from 'lucide-react';
 import { Planner } from './planner';
 import { SeasonalDestinations } from './seasonal-destinations';
@@ -23,35 +21,14 @@ export function Home({ featuredBundles }: { featuredBundles?: React.ReactNode })
         <div className="container">
           <div className="hero-grid">
             <div className="hero-copy">
-              <span className="eyebrow hero-eyebrow">
-                <span className="status-dot" /> BUILT FOR THE WAY YOU TRAVEL
-              </span>
               <h1>
                 One eSIM.
                 <br />
                 <span>Every stop.</span>
               </h1>
-              <p className="hero-description">
-                Your whole itinerary. One simple connection.
-                <span className="hero-detail">
-                  <br />
-                  Find travel data that works in every country on your list.
-                </span>
-              </p>
               <div className="hero-benefits">
-                <span>
-                  <Zap size={15} />
-                  <span className="hero-desktop-delivery">Digital delivery</span>
-                  <span className="hero-mobile-delivery">Instant delivery</span>
-                </span>
-                <span>
-                  <Wifi size={15} />
-                  No roaming surprises
-                </span>
-                <span className="hero-number-benefit">
-                  <Check size={15} />
-                  Keep your number
-                </span>
+                <span>Instant delivery</span>
+                <span>No roaming surprises</span>
               </div>
             </div>
             <div className="journey-card">
@@ -88,7 +65,7 @@ export function Home({ featuredBundles }: { featuredBundles?: React.ReactNode })
               </div>
             </div>
           </div>
-          <Planner initialCountries={['FR', 'CH', 'IT']} />
+          <Planner initialCountries={['FR', 'CH', 'IT']} simplified />
         </div>
       </section>
       <section className="promise-strip">

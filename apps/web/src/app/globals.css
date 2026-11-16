@@ -4154,3 +4154,134 @@ body:has(.operations-page) .support-shortcut {
 .operations-top-plans .operations-pagination {
   flex-wrap: wrap;
 }
+
+/* Shared homepage hierarchy; spacious desktop, compact mobile. */
+.hero .hero-benefits {
+  gap: 10px;
+  margin-top: 18px;
+}
+.hero .hero-benefits > span:nth-child(2)::before {
+  content: '·';
+  color: var(--muted);
+  margin-right: 4px;
+}
+.hero .data-field {
+  display: block;
+  min-height: 52px;
+  height: 52px;
+  align-self: center;
+  padding: 0;
+}
+.hero .data-field > .field-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.hero .select-wrap {
+  height: 50px;
+}
+.hero .select-wrap select {
+  padding: 12px 36px 12px 13px;
+}
+.hero .select-wrap > svg {
+  top: 50%;
+}
+.hero .country-field {
+  display: flex;
+  align-items: center;
+  min-height: 52px;
+  padding: 8px 12px;
+}
+.hero .country-chips {
+  width: 100%;
+}
+.hero .search-button {
+  min-height: 52px;
+}
+@media (min-width: 601px) {
+  .hero {
+    padding-block: 48px 40px;
+  }
+  .hero h1 {
+    margin-block: 0;
+  }
+  .hero .hero-grid {
+    gap: 48px;
+    margin-bottom: 32px;
+  }
+  .hero .journey-card {
+    margin-top: 0;
+  }
+}
+@media (max-width: 1000px) and (min-width: 601px) {
+  .hero {
+    padding-block: 36px 32px;
+  }
+}
+@media (max-width: 600px) {
+  .hero {
+    padding-block: 16px;
+  }
+  .hero h1 {
+    margin-block: 0 10px;
+  }
+  .hero .hero-grid {
+    margin-bottom: 16px;
+  }
+  .hero .hero-benefits {
+    margin-top: 0;
+    gap: 8px;
+  }
+  .hero .planner-inner {
+    padding: 12px;
+  }
+  .hero .country-field {
+    min-height: 0;
+    padding: 8px;
+  }
+  .hero .data-field {
+    min-height: 48px;
+    height: 48px;
+  }
+  .hero .select-wrap {
+    height: 46px;
+  }
+  .hero .select-wrap select {
+    padding: 10px 36px 10px 12px;
+  }
+  .hero .search-button {
+    min-height: 48px;
+  }
+}
+
+/* Keep account access in the collapsed navigation on smaller screens. */
+.mobile-menu-auth {
+  display: none;
+}
+@media (max-width: 1000px) {
+  .nav-actions > .header-login,
+  .nav-actions > .nav-signup {
+    display: none;
+  }
+  .mobile-menu-auth {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    border-top: 1px solid var(--border);
+    margin-top: 12px;
+    padding-top: 16px;
+  }
+  .mobile-menu-auth .button {
+    min-width: 0;
+    min-height: 48px;
+    padding: 12px;
+  }
+}
+.promise-strip span {
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.35;
+  color: var(--muted);
+}

@@ -51,10 +51,12 @@ export function Planner({
   initialCountries = [],
   compact = false,
   destinationMode = false,
+  simplified = false,
 }: {
   initialCountries?: string[];
   compact?: boolean;
   destinationMode?: boolean;
+  simplified?: boolean;
 }) {
   const dispatch = useDispatch();
   const { currency, refresh, ready } = useCurrency();
@@ -327,7 +329,8 @@ export function Planner({
             className={mode === 'trip' ? 'active' : ''}
           >
             <Globe2 size={16} />
-            Multi-country trip<span className="small-badge">TRIP MATCHER</span>
+            {simplified ? 'Multi-country' : 'Multi-country trip'}
+            {!simplified && <span className="small-badge">TRIP MATCHER</span>}
           </button>
           <button
             onClick={() => {
@@ -343,19 +346,21 @@ export function Planner({
           </button>
         </div>
         <div className="planner-inner">
-          <div className="planner-heading">
-            <div>
-              <h2>{mode === 'trip' ? 'Where are you travelling?' : 'Where are you heading?'}</h2>
-              <p>
-                {mode === 'trip'
-                  ? 'Add every stop. Find one eSIM that covers them all.'
-                  : 'Find a data plan for your next destination.'}
-              </p>
+          {!simplified && (
+            <div className="planner-heading">
+              <div>
+                <h2>{mode === 'trip' ? 'Where are you travelling?' : 'Where are you heading?'}</h2>
+                <p>
+                  {mode === 'trip'
+                    ? 'Add every stop. Find one eSIM that covers them all.'
+                    : 'Find a data plan for your next destination.'}
+                </p>
+              </div>
+              <span className="planner-doodle">
+                <ShieldCheck size={16} /> Every stop. Covered.
+              </span>
             </div>
-            <span className="planner-doodle">
-              <ShieldCheck size={16} /> Every stop. Covered.
-            </span>
-          </div>
+          )}
           {saved.chooseTrip && (
             <p className="notice" role="status">
               {selected.length
@@ -371,9 +376,11 @@ export function Planner({
           )}
           <div className="planner-controls">
             <div className="country-field" ref={picker}>
-              <span className="field-label">
-                {mode === 'trip' ? 'YOUR DESTINATIONS' : 'YOUR DESTINATION'}
-              </span>
+              {!simplified && (
+                <span className="field-label">
+                  {mode === 'trip' ? 'YOUR DESTINATIONS' : 'YOUR DESTINATION'}
+                </span>
+              )}
               <div className="country-chips">
                 {selected.map((code) => (
                   <span className="country-chip" key={code}>
@@ -397,7 +404,7 @@ export function Planner({
                   aria-controls={open ? pickerId : undefined}
                   onClick={() => setOpen(!open)}
                 >
-                  <Plus size={16} />
+                  {simplified ? <MapPin size={16} aria-hidden="true" /> : <Plus size={16} />}
                   {saved.chooseTrip
                     ? 'Add destination'
                     : selected.length
@@ -490,6 +497,7 @@ export function Planner({
               <span className="field-label">DATA ALLOWANCE</span>
               <span className="select-wrap">
                 <select
+                  aria-label="Data allowance"
                   value={allowance}
                   onChange={(e) => {
                     const value = e.target.value as DataAllowance;
@@ -525,13 +533,17 @@ export function Planner({
               <ArrowRight size={18} />
             </button>
           </div>
-          <div className="planner-note">
-            <span>
-              <ShieldCheck size={14} />
-              Coverage checked for every selected country
-            </span>
-            {demoMode && <span>Preview · sample plans · purchases disabled</span>}
-          </div>
+          {(!simplified || demoMode) && (
+            <div className="planner-note">
+              {!simplified && (
+                <span>
+                  <ShieldCheck size={14} />
+                  Coverage checked for every selected country
+                </span>
+              )}
+              {demoMode && <span>Preview · sample plans · purchases disabled</span>}
+            </div>
+          )}
           {loading && <p role="status">Searching current plans…</p>}
           {refreshRequired && (
             <button className="button" onClick={() => void search()}>

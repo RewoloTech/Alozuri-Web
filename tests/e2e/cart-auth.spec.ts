@@ -278,7 +278,11 @@ async function signup(page: Page) {
 async function logout(page: Page) {
   await page.getByRole('button', { name: 'My account', exact: true }).click();
   await page.getByRole('button', { name: 'Log out', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'My account', exact: true })).toHaveCount(0);
+  const mobile = (page.viewportSize()?.width ?? 1440) <= 1000;
+  if (mobile) await page.getByRole('button', { name: 'Open menu', exact: true }).click();
   await expect(page.getByRole('link', { name: /^Log in/ })).toBeVisible();
+  if (mobile) await page.getByRole('button', { name: 'Close menu', exact: true }).click();
 }
 async function login(page: Page, email: string, password: string) {
   await page.goto('/login?next=%2Fcart');

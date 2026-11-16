@@ -61,6 +61,13 @@ test('mobile hierarchy, navigation targets, footer columns and disclosures fit e
 }) => {
   await page.goto('/');
   await expect(page.getByRole('combobox', { name: 'Currency', exact: true })).toHaveValue('USD');
+  await expect(page.locator('.hero h1')).toHaveText('One eSIM.Every stop.');
+  await expect(page.locator('.hero-benefits')).toHaveText('Instant deliveryNo roaming surprises');
+  await expect(page.getByText('BUILT FOR THE WAY YOU TRAVEL')).toHaveCount(0);
+  await expect(page.locator('.hero-description')).toHaveCount(0);
+  await expect(page.locator('.planner-heading')).toHaveCount(0);
+  await expect(page.locator('.country-field > .field-label')).toHaveCount(0);
+  await expect(page.getByText('Coverage checked for every selected country')).toHaveCount(0);
   const footer = page.locator('.site-footer');
   const hrefs = await footer
     .locator('.footer-links a')
@@ -68,6 +75,9 @@ test('mobile hierarchy, navigation targets, footer columns and disclosures fit e
   expect(hrefs).toEqual([
     '/destinations',
     '/#planner',
+    '/destinations/europe',
+    '/guides',
+    '/partners',
     ...['terms', 'privacy', 'cookies', 'refunds', 'acceptable-use'].map((s) => POLICIES[s].path),
     '/help',
     POLICIES.compatibility.path,
@@ -87,20 +97,48 @@ test('mobile hierarchy, navigation targets, footer columns and disclosures fit e
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
-    const secondary = page.locator('.hero-detail');
+    if (width <= 1000) {
+      await expect(page.locator('.nav-actions > .header-login')).toBeHidden();
+      await page.getByRole('button', { name: 'Open menu', exact: true }).click();
+      const login = page
+        .getByRole('navigation', { name: 'Main navigation' })
+        .getByRole('link', { name: 'Log in', exact: true });
+      await expect(login).toBeVisible();
+      await expect(login).toHaveAttribute('href', '/login');
+      expect((await login.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      const signup = page
+        .getByRole('navigation', { name: 'Main navigation' })
+        .getByRole('link', { name: 'Sign up', exact: true });
+      await expect(signup).toBeVisible();
+      await expect(signup).toHaveAttribute('href', '/register');
+      expect((await signup.boundingBox())!.y).toBe((await login.boundingBox())!.y);
+      expect((await signup.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      await expect(page.locator('.nav-actions > .nav-signup')).toBeHidden();
+      if (width === 390)
+        await page.locator('.main-nav').screenshot({ path: '/tmp/alozuri-mobile-menu-signup.png' });
+      await page.getByRole('button', { name: 'Close menu', exact: true }).click();
+    } else {
+      await expect(page.locator('.nav-actions > .header-login')).toBeVisible();
+      await expect(page.locator('.mobile-menu-login')).toBeHidden();
+    }
+    await expect(page.getByRole('button', { name: 'Multi-country trip', exact: true })).toHaveText(
+      'Multi-country',
+    );
+    const benefit = page.locator('.promise-strip span').first();
+    expect(await benefit.evaluate((el) => getComputedStyle(el).fontSize)).toBe('16px');
     if (width <= 600) {
-      await expect(secondary).toBeHidden();
+      expect((await page.locator('.promise-strip').boundingBox())!.height).toBeLessThanOrEqual(139);
       await expect(page.locator('.hero-benefits > span:visible')).toHaveCount(2);
       await expect(page.locator('.hero-benefits')).toContainText('Instant delivery');
-      await expect(page.locator('.hero-number-benefit')).toBeHidden();
       await expect(page.locator('.mobile-number-benefit')).toBeVisible();
-      await expect(page.locator('.planner-heading p')).toBeHidden();
+      const allowance = page.getByRole('combobox', { name: 'Data allowance', exact: true });
+      await expect(allowance).toBeVisible();
+      expect((await allowance.boundingBox())!.height).toBeLessThanOrEqual(50);
       const heading = await page.locator('.hero h1').evaluate((x) => getComputedStyle(x).fontSize);
       expect(heading).toBe('54px');
       for (const target of [
         page.locator('.header-cart'),
         page.getByRole('combobox', { name: 'Currency', exact: true }),
-        page.getByRole('link', { name: /^Log in/ }),
         page.getByRole('button', { name: 'Open menu', exact: true }),
         page.locator('.add-country'),
         page.locator('.search-button'),
@@ -113,14 +151,13 @@ test('mobile hierarchy, navigation targets, footer columns and disclosures fit e
       if (width === 390) {
         const planner = await page.locator('#planner').boundingBox(),
           cta = await page.locator('.search-button').boundingBox();
-        expect(planner!.y).toBeLessThan(365);
-        expect(cta!.y + cta!.height).toBeLessThan(760);
+        expect(planner!.y).toBeLessThan(280);
+        expect(cta!.y + cta!.height).toBeLessThan(620);
         await page.screenshot({ path: '/tmp/alozuri-mobile-after-390.png' });
         await footer.screenshot({ path: '/tmp/alozuri-footer-after-390.png' });
       }
     } else {
-      await expect(secondary).toBeVisible();
-      await expect(page.locator('.hero-number-benefit')).toBeVisible();
+      await expect(page.locator('.hero-benefits > span')).toHaveCount(2);
     }
     if (width >= 360 && width <= 768) {
       const explore = await page.locator('.footer-explore').boundingBox(),
@@ -155,6 +192,18 @@ test('mobile search retains both modes, complete trip selection, currency and lo
       .click();
   }
   await expect(page.locator('.country-chip')).toHaveCount(3);
+  for (const width of [375, 390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 950 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    for (const chip of await page.locator('.country-chip').all()) await expect(chip).toBeVisible();
+    await page
+      .locator('#planner')
+      .screenshot({ path: `/tmp/alozuri-planner-selected-${width}.png` });
+  }
+  await page.setViewportSize({ width: 320, height: 812 });
+
   await page.getByRole('button', { name: 'Find my eSIM', exact: true }).click();
   await expect(page.locator('.plan-card')).toHaveCount(1);
   await page.getByRole('button', { name: 'Single destination' }).click();
@@ -179,6 +228,22 @@ test('mobile search retains both modes, complete trip selection, currency and lo
     .getByRole('link', { name: 'Help centre' })
     .click();
   await expect(page).toHaveURL(/\/help$/);
+  await page.getByRole('button', { name: 'Open menu', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('link', { name: 'Log in', exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/login$/);
+  await page.getByRole('button', { name: 'Open menu', exact: true }).click();
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('link', { name: 'Sign up', exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/register$/);
+  await expect(page.getByRole('button', { name: 'Open menu', exact: true })).toHaveAttribute(
+    'aria-expanded',
+    'false',
+  );
 });
 
 test('mobile floating chat opens accessibly and returns keyboard focus', async ({ page }) => {

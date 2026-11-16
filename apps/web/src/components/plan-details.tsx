@@ -204,7 +204,7 @@ export function PlanDetails({
         <aside className="surface purchase-summary">
           <span className="eyebrow">{plan.demo ? 'SAMPLE PLAN' : 'PLAN SUMMARY'}</span>
           <h2>
-            {ready && plan.currency === currency && !loading && !error
+            {(!ready || plan.currency === currency) && !loading && !error
               ? money(plan.priceCents, plan.currency)
               : error
                 ? 'Price unavailable'

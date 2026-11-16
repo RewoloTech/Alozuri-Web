@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { ArrowUpRight, Globe2, Menu, X, ShoppingBag } from 'lucide-react';
 import { useSelector } from 'react-redux';
 import type { RootState } from '@/lib/store';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AccountMenu } from './account-menu';
 import { SUPPORTED_CURRENCIES } from '@alozuri/shared';
@@ -25,11 +25,16 @@ export function Header() {
   const { currency, ready, setCurrency, available, locked } = useCurrency();
   const quantity = useSelector((s: RootState) => s.cart.items.reduce((n, i) => n + i.quantity, 0));
   const [open, setOpen] = useState(false);
+  const navigationId = useId();
   return (
     <header className="site-header">
       <div className="container nav-wrap">
         <Brand />
-        <nav className={open ? 'main-nav is-open' : 'main-nav'} aria-label="Main navigation">
+        <nav
+          id={navigationId}
+          className={open ? 'main-nav is-open' : 'main-nav'}
+          aria-label="Main navigation"
+        >
           <Link href="/destinations" onClick={() => setOpen(false)}>
             Destinations
           </Link>
@@ -39,6 +44,20 @@ export function Header() {
           <Link href="/help" onClick={() => setOpen(false)}>
             Help centre
           </Link>
+          {!user && (
+            <div className="mobile-menu-auth">
+              <Link
+                href="/login"
+                className="button mobile-menu-login"
+                onClick={() => setOpen(false)}
+              >
+                Log in
+              </Link>
+              <Link href="/register" className="button primary" onClick={() => setOpen(false)}>
+                Sign up
+              </Link>
+            </div>
+          )}
         </nav>
         <div className="nav-actions">
           <Link
@@ -83,7 +102,7 @@ export function Header() {
               }}
             />
           ) : (
-            <Link href="/login" className="nav-login">
+            <Link href="/login" className="nav-login header-login">
               Log in <ArrowUpRight size={16} />
             </Link>
           )}
@@ -96,6 +115,7 @@ export function Header() {
             className="mobile-toggle"
             aria-label={open ? 'Close menu' : 'Open menu'}
             aria-expanded={open}
+            aria-controls={navigationId}
             onClick={() => setOpen(!open)}
           >
             {open ? <X /> : <Menu />}
