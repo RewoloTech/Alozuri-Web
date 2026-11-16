@@ -4,7 +4,7 @@ import { confirmedMetaPurchase } from '@/lib/meta-events';
 import { useMarketingConsent } from './privacy-provider';
 import { AccountNavigation } from './account-navigation';
 import { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
+import Link from '@/components/localized-link';
 import { useSearchParams } from 'next/navigation';
 import { useDispatch, useSelector } from 'react-redux';
 import { money, dataLabel, type CartLine, type CartItem, type Plan } from '@alozuri/shared';
@@ -20,6 +20,7 @@ import { InstallationDetails } from './installation-details';
 import { EsimUsagePanel } from './esim-usage';
 import { LineDescription } from './cart';
 export type Purchase = {
+  locale?: import('@alozuri/shared/i18n').Locale;
   id: string;
   reference?: string;
   confirmationNeedsSupport?: boolean;

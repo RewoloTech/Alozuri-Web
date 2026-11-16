@@ -1,6 +1,6 @@
 'use client';
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useLocalizedRouter as useRouter } from '@/lib/localized-router';
 export function LegacyCheckout({ id }: { id: string }) {
   const router = useRouter();
   useEffect(() => {

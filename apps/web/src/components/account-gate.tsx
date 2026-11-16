@@ -1,6 +1,6 @@
 'use client';
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useLocalizedRouter as useRouter } from '@/lib/localized-router';
 import { useAuth } from './auth-provider';
 export function AccountGate({
   children,

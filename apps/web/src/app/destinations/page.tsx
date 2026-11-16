@@ -1,12 +1,14 @@
 import { getPublicCountries } from '@/lib/catalogue-server';
-import { publicMetadata } from '@/lib/seo';
-import Link from 'next/link';
+import { localizedMetadata as publicMetadata } from '@/lib/localized-metadata';
+import Link from '@/components/localized-link';
 import { DestinationDirectory } from '@/components/destination-directory';
-export const metadata = publicMetadata(
-  'eSIM destinations',
-  'Find travel eSIM coverage by country or compare one plan for a multi-country itinerary.',
-  '/destinations',
-);
+export async function generateMetadata() {
+  return await publicMetadata(
+    'eSIM destinations',
+    'Find travel eSIM coverage by country or compare one plan for a multi-country itinerary.',
+    '/destinations',
+  );
+}
 export default async function Destinations() {
   const initial = await getPublicCountries();
   return (

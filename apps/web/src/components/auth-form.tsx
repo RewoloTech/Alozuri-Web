@@ -2,8 +2,9 @@
 import { useState } from 'react';
 import { authErrorMessage } from '@/lib/auth-errors';
 import { GoogleIcon } from './google-icon';
-import Link from 'next/link';
-import { useSearchParams, useRouter } from 'next/navigation';
+import Link from '@/components/localized-link';
+import { useSearchParams } from 'next/navigation';
+import { useLocalizedRouter as useRouter } from '@/lib/localized-router';
 import { ArrowRight, Eye, EyeOff, Globe2, ShieldCheck } from 'lucide-react';
 import {
   createUserWithEmailAndPassword,

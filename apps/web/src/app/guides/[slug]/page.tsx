@@ -1,7 +1,8 @@
-import Link from 'next/link';
+import Link from '@/components/localized-link';
 import { notFound } from 'next/navigation';
 import { guides } from '@/lib/guides';
-import { publicMetadata, breadcrumbs, jsonLd } from '@/lib/seo';
+import { breadcrumbs, jsonLd } from '@/lib/seo';
+import { localizedMetadata as publicMetadata } from '@/lib/localized-metadata';
 export function generateStaticParams() {
   return guides.map((g) => ({ slug: g.slug }));
 }
@@ -9,7 +10,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const { slug } = await params,
     guide = guides.find((g) => g.slug === slug);
   return guide
-    ? publicMetadata(guide.title, guide.description, '/guides/' + guide.slug)
+    ? await publicMetadata(guide.title, guide.description, '/guides/' + guide.slug)
     : { title: 'Guide not found', robots: { index: false } };
 }
 export default async function Guide({ params }: { params: Promise<{ slug: string }> }) {

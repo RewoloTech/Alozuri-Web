@@ -1,7 +1,7 @@
 'use client';
 
 import { useId, useRef, useState } from 'react';
-import Link from 'next/link';
+import Link from '@/components/localized-link';
 import { Eye, EyeOff } from 'lucide-react';
 import { authErrorMessage } from '@/lib/auth-errors';
 import { firebaseConfigured } from '@/lib/firebase';

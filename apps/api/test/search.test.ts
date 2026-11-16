@@ -92,6 +92,33 @@ test('pagination returns every match exactly once with stable global ordering an
   assert.throws(() => parseSearchCursor('eyJiYWQiOiJwYWdlIn0'), /Invalid search page/);
   assert.equal(searchCatalogue(plans), searchCatalogue(plans));
 });
+
+test('stale and invalid search cursors expose stable codes without relying on their English messages', async () => {
+  let current = plans;
+  const app = await createApp({
+    payments: null,
+    commerce: null,
+    fulfillment: null,
+    repository: { plans: async () => current, orders: async () => [], order: async () => null },
+  });
+  try {
+    const url = '/v2/search/plans?countries=FR,CH,IT&coverage=all&pageSize=12&sort=price';
+    const headers = { 'x-alozuri-error-format': '2' };
+    const first = await app.inject({ url, headers });
+    assert.equal(first.statusCode, 200);
+    assert.ok(first.json().nextCursor);
+    current = plans.map((plan) => ({ ...plan, priceCents: plan.priceCents + 1 }));
+    const stale = await app.inject({ url: url + '&cursor=' + first.json().nextCursor, headers });
+    assert.equal(stale.statusCode, 409);
+    assert.equal(stale.json().error.code, 'CATALOGUE_CHANGED');
+    assert.equal(typeof stale.json().error.requestId, 'string');
+    const invalid = await app.inject({ url: url + '&cursor=eyJiYWQiOiJwYWdlIn0', headers });
+    assert.equal(invalid.statusCode, 400);
+    assert.equal(invalid.json().error.code, 'SEARCH_PAGE_INVALID');
+  } finally {
+    await app.close();
+  }
+});
 test('recommended results never hide products sharing a GB size and do not leak private provider data', () => {
   const two = [
     { ...base, id: 'a', supplierCode: 'private', wholesaleUnits: 1 },

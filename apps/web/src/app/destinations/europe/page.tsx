@@ -1,16 +1,19 @@
-import Link from 'next/link';
+import Link from '@/components/localized-link';
 import { Planner } from '@/components/planner';
 import { CountryOffers } from '@/components/country-offers';
 import { DestinationAdvice } from '@/components/destination-advice';
 import { getItineraryPlans } from '@/lib/catalogue-server';
-import { publicMetadata, breadcrumbs, jsonLd } from '@/lib/seo';
+import { breadcrumbs, jsonLd } from '@/lib/seo';
+import { localizedMetadata as publicMetadata } from '@/lib/localized-metadata';
 export const revalidate = 300;
 const itinerary = ['FR', 'DE', 'IT'];
-export const metadata = publicMetadata(
-  'Europe multi-country travel eSIMs',
-  'Compare Europe travel eSIM data plans for a multi-country trip. Check each plan’s countries, current price, validity and activation; regional coverage varies.',
-  '/destinations/europe',
-);
+export async function generateMetadata() {
+  return await publicMetadata(
+    'Europe multi-country travel eSIMs',
+    'Compare Europe travel eSIM data plans for a multi-country trip. Check each plan’s countries, current price, validity and activation; regional coverage varies.',
+    '/destinations/europe',
+  );
+}
 export default async function Europe() {
   const plans = await getItineraryPlans(itinerary);
   return (

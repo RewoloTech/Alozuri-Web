@@ -1,3 +1,10 @@
+import { createHash } from 'node:crypto';
+import { legalDocuments } from '../../../../packages/shared/src/i18n/legal-documents.ts';
+import {
+  LOCALES,
+  requirePublishedLocale,
+  type Locale,
+} from '../../../../packages/shared/src/i18n/locales.ts';
 import { z } from 'zod';
 import {
   BUSINESS,
@@ -23,6 +30,11 @@ const previousCheckoutSchema = z
   .strict();
 export const checkoutLegalSchema = z.union([noticeSchema, previousCheckoutSchema]);
 export const legalSnapshotSchema = z.object({
+  locale: z.enum(LOCALES).optional(),
+  contentHash: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional(),
   version: z.string().max(40),
   effectiveDate: z.string(),
   termsVersion: z.string().max(40).optional(),
@@ -52,7 +64,7 @@ export const legalSnapshotSchema = z.object({
     .optional(),
 });
 export type LegalSnapshot = z.infer<typeof legalSnapshotSchema>;
-export function legalSnapshot(
+function englishLegalSnapshot(
   input: CheckoutLegalInput,
   now = new Date().toISOString(),
 ): LegalSnapshot {
@@ -89,4 +101,33 @@ export function legalSnapshot(
     termsText: policyText(POLICY_VERSIONS[accepted.version].terms, accepted.version),
     refundText: policyText(POLICY_VERSIONS[accepted.version].refunds, accepted.version),
   };
+}
+
+export function legalSnapshot(
+  input: CheckoutLegalInput,
+  now = new Date().toISOString(),
+  locale: Locale = 'en',
+): LegalSnapshot {
+  requirePublishedLocale(locale);
+  // A status change alone cannot turn English legal text into another language.
+  legalDocuments(locale, input.version);
+  const snapshot = englishLegalSnapshot(input, now);
+  const contentHash = createHash('sha256')
+    .update(
+      JSON.stringify({
+        locale,
+        version: snapshot.version,
+        business: snapshot.business ?? BUSINESS,
+        termsVersion: snapshot.termsVersion ?? snapshot.version,
+        refundVersion: snapshot.refundVersion ?? snapshot.version,
+        effectiveDate: snapshot.effectiveDate,
+        terms: snapshot.termsText,
+        refunds: snapshot.refundText,
+        notice: snapshot.noticeText ?? '',
+        request: snapshot.requestText,
+        acknowledgement: snapshot.acknowledgementText,
+      }),
+    )
+    .digest('hex');
+  return { ...snapshot, locale, contentHash };
 }

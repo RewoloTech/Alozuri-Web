@@ -1,17 +1,19 @@
 'use client';
-import Link from 'next/link';
+import Link from '@/components/localized-link';
+import { useTranslations } from 'next-intl';
+import { LanguageSelector } from './language-provider';
 import { ArrowUpRight, Globe2, Menu, X, ShoppingBag } from 'lucide-react';
 import { useSelector } from 'react-redux';
 import type { RootState } from '@/lib/store';
 import { useId, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useLocalizedRouter as useRouter } from '@/lib/localized-router';
 import { AccountMenu } from './account-menu';
 import { SUPPORTED_CURRENCIES } from '@alozuri/shared';
 import { useCurrency } from './currency-provider';
 import { useAuth } from './auth-provider';
 export function Brand() {
   return (
-    <Link href="/" className="brand" aria-label="Alozuri home">
+    <Link href="/" className="brand" aria-label="Alozuri home" dir="ltr">
       <span className="brand-icon">
         <Globe2 size={22} />
       </span>
@@ -20,6 +22,7 @@ export function Brand() {
   );
 }
 export function Header() {
+  const t = useTranslations('navigation');
   const { user, logout, admin } = useAuth();
   const router = useRouter();
   const { currency, ready, setCurrency, available, locked } = useCurrency();
@@ -36,13 +39,13 @@ export function Header() {
           aria-label="Main navigation"
         >
           <Link href="/destinations" onClick={() => setOpen(false)}>
-            Destinations
+            {t('destinations')}
           </Link>
           <Link href="/#how-it-works" onClick={() => setOpen(false)}>
-            How it works
+            {t('howItWorks')}
           </Link>
           <Link href="/help" onClick={() => setOpen(false)}>
-            Help centre
+            {t('help')}
           </Link>
           {!user && (
             <div className="mobile-menu-auth">
@@ -74,6 +77,7 @@ export function Header() {
           </Link>
           <select
             className="currency-select"
+            dir="ltr"
             aria-label="Currency"
             disabled={locked}
             value={ready ? currency : ''}
@@ -90,6 +94,7 @@ export function Header() {
               </option>
             ))}
           </select>
+          <LanguageSelector compact />
           {user ? (
             <AccountMenu
               key={user.uid}

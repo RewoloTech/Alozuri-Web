@@ -163,7 +163,13 @@ async function setup(page: Page, delayed = false, interrupted = false) {
         return route.fulfill({
           status: 400,
           headers,
-          json: { error: 'Controlled test stopped before creating a payment.' },
+          json: {
+            error: {
+              code: 'INTERNAL_ERROR',
+              message: 'Controlled test stopped before creating a payment.',
+              requestId: 'checkout-fixture',
+            },
+          },
         });
       }
       data = {
@@ -207,7 +213,13 @@ async function setup(page: Page, delayed = false, interrupted = false) {
           return route.fulfill({
             status: 503,
             headers,
-            json: { error: 'Merge response interrupted.' },
+            json: {
+              error: {
+                code: 'INTERNAL_ERROR',
+                message: 'Merge response interrupted.',
+                requestId: 'merge-fixture',
+              },
+            },
           });
         }
         if (delayed && !firstHeld) {
@@ -298,7 +310,9 @@ async function checkout(
   await page.getByRole('link', { name: 'Secure checkout →', exact: true }).click();
   await page.getByRole('checkbox').check();
   await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
-  await expect(page.getByRole('main').getByRole('alert')).toContainText('Controlled test stopped');
+  await expect(page.getByRole('main').getByRole('alert')).toContainText(
+    'Something went wrong. Please try again.',
+  );
   expect(checkouts.at(-1)?.expectedTotalCents).toBe(1200);
   expect(checkouts.at(-1)?.items).toEqual([{ planId: plan.id, quantity: 1 }]);
 }
@@ -345,7 +359,9 @@ test('choosing the saved account cart after an interrupted guest merge does not 
 }) => {
   const state = await setup(page, false, true);
   await signup(page);
-  await expect(page.locator('main [role="alert"]')).toContainText('Merge response interrupted.');
+  await expect(page.locator('main [role="alert"]')).toContainText(
+    'Something went wrong. Please try again.',
+  );
   await expect(page.getByRole('link', { name: 'Secure checkout →', exact: true })).toHaveAttribute(
     'aria-disabled',
     'true',
@@ -381,13 +397,23 @@ test('verified customers can navigate usage, orders and profile, update names an
     'aria-current',
     'page',
   );
-  for (const width of [320, 390, 768, 1440]) {
+  for (const width of [320, 375, 390, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
     const links = await navigation.getByRole('link').all();
     for (const link of links) expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    await expect(page.getByRole('combobox', { name: 'Language', exact: true })).toHaveValue('en');
+    const headerControls = page.locator(
+      '.site-header .header-cart, .site-header .currency-select, .site-header .language-selector-control, .site-header .account-menu > button, .site-header .mobile-toggle:visible',
+    );
+    expect(await headerControls.count()).toBe(width < 1000 ? 5 : 4);
+    for (const control of await headerControls.all())
+      expect((await control.boundingBox())!.height).toBe(44);
+    await page
+      .locator('.site-header')
+      .screenshot({ path: `/tmp/alozuri-language-account-header-${width}.png` });
     await navigation.screenshot({ path: `/tmp/alozuri-account-sections-${width}.png` });
   }
   await navigation.getByRole('link', { name: 'Orders', exact: true }).click();
@@ -572,6 +598,14 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
         json: { error: 'Administrator access required.' },
       });
     const url = new URL(request.url());
+    if (url.pathname.endsWith('/localization/preview')) {
+      const { isLocale } = await import('../../packages/shared/src/i18n/locales');
+      const { localizationPreview } = await import('../../apps/api/src/lib/localization-preview');
+      const locale = url.searchParams.get('locale');
+      if (!isLocale(locale))
+        return route.fulfill({ status: 400, headers, json: { error: 'Invalid locale.' } });
+      return route.fulfill({ headers, json: await localizationPreview(locale) });
+    }
     const promotionAction = url.pathname.match(/\/promotions\/([^/]+)(\/status)?$/);
     if (promotionAction && ['PATCH', 'DELETE'].includes(request.method())) {
       const index = savedPromotions.findIndex(
@@ -1248,6 +1282,31 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
     await expect(
       page.getByRole('tab', { name: 'Financial Overview', exact: true }),
     ).toHaveAttribute('aria-selected', 'true');
+    await page.getByRole('link', { name: 'Language review and previews', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Language review', exact: true })).toBeVisible();
+    const { LOCALES } = await import('../../packages/shared/src/i18n/locales');
+    for (const locale of LOCALES) {
+      await page
+        .getByRole('combobox', { name: 'Preview language', exact: true })
+        .selectOption(locale);
+      const frame = page.frameLocator('iframe[title="Draft language email preview"]');
+      await expect(frame.locator('html')).toHaveAttribute('lang', locale);
+      await expect(frame.locator('html')).toHaveAttribute('dir', locale === 'ar' ? 'rtl' : 'ltr');
+      if (locale !== 'en')
+        await expect(page.getByText('Unpublished draft', { exact: true })).toBeVisible();
+      if (locale === 'ar') {
+        for (const width of [375, 390, 768, 1440]) {
+          await page.setViewportSize({ width, height: 900 });
+          expect(
+            await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+          ).toBe(true);
+          await page.screenshot({ path: `/tmp/alozuri-language-ar-${width}.png`, fullPage: true });
+        }
+      }
+    }
+    await page.locator('main').getByRole('link', { name: 'Operations', exact: true }).click();
+    await expect(page).toHaveURL(/\/operations$/);
+    await expect(page.getByRole('heading', { name: 'Total Sales', exact: true })).toBeVisible();
     await auth.setCustomUserClaims(account.uid, {});
     await page.reload();
     await expect(page.locator('.operations-page').getByRole('alert')).toContainText(

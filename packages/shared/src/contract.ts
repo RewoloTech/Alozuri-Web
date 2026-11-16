@@ -1,6 +1,9 @@
+import type { Locale } from './i18n/locales.ts';
 import type { Plan } from './index.ts';
 export const CONTRACT_PDF_FILENAME = 'Alozuri-Order-Confirmation.pdf';
 export type ContractLegal = {
+  locale?: Locale;
+  contentHash?: string;
   version: string;
   effectiveDate: string;
   acceptedAt: string;
@@ -14,6 +17,7 @@ export type ContractLegal = {
   business?: { company: string; identity: string; address: string; email: string };
 };
 export type ContractOrder = {
+  locale?: Locale;
   id: string;
   email: string;
   customerName?: string;

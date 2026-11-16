@@ -1,3 +1,4 @@
+import { LOCALES, requireInterfaceLocale } from '../../../../packages/shared/src/i18n/locales.ts';
 import { z } from 'zod';
 import { FieldPath, type Firestore } from 'firebase-admin/firestore';
 import {
@@ -33,6 +34,7 @@ export const profileNamesSchema = z
     return { ...names, displayName };
   });
 const profileSchema = z.object({
+  locale: z.enum(LOCALES).optional(),
   uid: z
     .string()
     .min(1)
@@ -105,6 +107,7 @@ export class UserProfiles {
       if (doc.exists && doc.get('uid') !== user.uid)
         throw new ProfileError('Profile ownership requires review.', 409);
       const previous = profileSchema.safeParse(doc.data());
+      if (previous.success && previous.data.locale) fields.locale = previous.data.locale;
       if (names) {
         fields.firstName = names.firstName;
         fields.lastName = names.lastName;
@@ -138,6 +141,20 @@ export class UserProfiles {
     return this.sync(user, {
       firstName: names.firstName.replace(/\s+/g, ' '),
       lastName: names.lastName.replace(/\s+/g, ' '),
+    });
+  }
+  async saveLocale(user: Principal, input: unknown): Promise<UserProfile> {
+    const locale = requireInterfaceLocale(input);
+    await this.sync(user, undefined, false);
+    return this.db.runTransaction(async (transaction) => {
+      const ref = this.db.collection('users').doc(user.uid);
+      const doc = await transaction.get(ref);
+      const profile = profileSchema.parse(doc.data());
+      if (profile.uid !== user.uid)
+        throw new ProfileError('Profile ownership requires review.', 409);
+      const updated = { ...profile, locale, updatedAt: new Date().toISOString() };
+      transaction.update(ref, { locale, updatedAt: updated.updatedAt });
+      return updated;
     });
   }
   private async claimGuests(uid: string, email: string) {

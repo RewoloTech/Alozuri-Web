@@ -83,6 +83,14 @@ test('private pages and credentials never initialise or emit pixel events', () =
   ])
     assert.equal(metaSafeUrl('https://alozuri.com' + path), true, path);
 });
+test('locale prefixes preserve marketing consent privacy boundaries', () => {
+  assert.equal(metaSafeUrl('https://alozuri.com/fr/plans/gb-plan'), true);
+  assert.equal(metaSafeUrl('https://alozuri.com/ar/cart?currency=GBP'), true);
+  assert.equal(metaSafeUrl('https://alozuri.com/de/checkout/success?order=x#access=secret'), false);
+  assert.equal(metaSafeUrl('https://alozuri.com/ja/account/orders'), false);
+  assert.equal(metaSafeUrl('https://alozuri.com/ro/checkout?email=private@example.test'), false);
+  assert.equal(metaSafeUrl('https://alozuri.com/xx/plans/gb-plan'), false);
+});
 test('CAPI verifies consent and order authority, sends actual amounts and the same ID without credentials', async () => {
   const keys = ['META_CONVERSIONS_API_TOKEN', 'META_GRAPH_API_VERSION', 'NEXT_PUBLIC_API_URL'];
   const before = keys.map((k) => process.env[k]);

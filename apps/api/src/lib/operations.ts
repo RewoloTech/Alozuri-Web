@@ -1,3 +1,5 @@
+import { LOCALES } from '../../../../packages/shared/src/i18n/locales.ts';
+import { localizationPreview } from './localization-preview.js';
 import { recordSupplierCredit } from './supplier-credit.js';
 import { refreshSupplierFinancial } from './financial-ledger.js';
 import { promotionReport } from './promotion-report.js';
@@ -175,6 +177,14 @@ export function registerOperations(
     const ref = await recordSupplierCredit(database(), id, req.body, actor.uid);
     await refreshSupplierFinancial(database(), ref);
     return { saved: true };
+  });
+  app.get('/v1/operations/localization/preview', async (request) => {
+    await requireAdmin(request.headers.authorization);
+    const input = z
+      .object({ locale: z.enum(LOCALES).default('en') })
+      .strict()
+      .parse(request.query);
+    return localizationPreview(input.locale);
   });
   registerPromotionRoutes(app, async (header) => {
     await requireAdmin(header);

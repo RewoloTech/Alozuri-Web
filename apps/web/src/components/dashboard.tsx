@@ -1,7 +1,8 @@
 'use client';
-import Link from 'next/link';
+import Link from '@/components/localized-link';
 import { AccountGate } from './account-gate';
 import { AccountNavigation } from './account-navigation';
+import { LanguageSelector } from './language-provider';
 import { useEffect, useState } from 'react';
 import { sendEmailVerification, updateProfile } from 'firebase/auth';
 import { Globe2, ShieldCheck, Receipt, ArrowRight } from 'lucide-react';
@@ -94,6 +95,7 @@ function AccountDashboard() {
         )}
       </div>
       <AccountNavigation active="profile" />
+      <LanguageSelector />
       {profileError && (
         <div className="error-message" role="alert">
           {profileError}{' '}

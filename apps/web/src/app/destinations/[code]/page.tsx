@@ -2,7 +2,9 @@ import { destinationContent } from '@/lib/destination-content';
 import { DestinationAdvice } from '@/components/destination-advice';
 import { CountryOffers } from '@/components/country-offers';
 import { getPublicCountries, getCountryPlans } from '@/lib/catalogue-server';
-import { publicMetadata, INDEXABLE, breadcrumbs, jsonLd } from '@/lib/seo';
+import { breadcrumbs, jsonLd } from '@/lib/seo';
+import { localizedMetadata as publicMetadata, requestLocale } from '@/lib/localized-metadata';
+import { localePath } from '@alozuri/shared/i18n';
 import { notFound, permanentRedirect } from 'next/navigation';
 import { countries, countryName, countryFlag, isCountryCode } from '@alozuri/shared';
 import { Planner } from '@/components/planner';
@@ -15,7 +17,7 @@ export async function generateMetadata({ params }: { params: Promise<{ code: str
   const name = countryName(iso),
     path = '/destinations/' + iso.toLowerCase();
   const advice = destinationContent[iso];
-  const metadata = publicMetadata(
+  const metadata = await publicMetadata(
     advice?.title ?? `${name} travel eSIM`,
     advice?.description ??
       `Compare ${name} travel data plans, allowance, validity and activation rules. Find local coverage or build a multi-country itinerary.`,
@@ -23,7 +25,7 @@ export async function generateMetadata({ params }: { params: Promise<{ code: str
   );
   return {
     ...metadata,
-    robots: { index: INDEXABLE && (verified || Boolean(advice)), follow: true },
+    robots: { index: metadata.robots.index && (verified || Boolean(advice)), follow: true },
   };
 }
 export default async function Destination({ params }: { params: Promise<{ code: string }> }) {
@@ -38,7 +40,8 @@ export default async function Destination({ params }: { params: Promise<{ code: 
       })
     : undefined;
   if (!country) notFound();
-  if (code !== code.toLowerCase()) permanentRedirect('/destinations/' + code.toLowerCase());
+  if (code !== code.toLowerCase())
+    permanentRedirect(localePath('/destinations/' + code.toLowerCase(), await requestLocale()));
   const advice = destinationContent[iso];
   const initialPlans = await getCountryPlans(iso);
   return (

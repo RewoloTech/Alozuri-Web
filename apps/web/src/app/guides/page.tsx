@@ -1,11 +1,14 @@
-import Link from 'next/link';
+import Link from '@/components/localized-link';
 import { guides } from '@/lib/guides';
-import { publicMetadata, breadcrumbs, jsonLd } from '@/lib/seo';
-export const metadata = publicMetadata(
-  'Travel eSIM guides',
-  'Practical guides to choosing travel eSIM data, budgeting for your trip, checking compatibility and installing safely.',
-  '/guides',
-);
+import { breadcrumbs, jsonLd } from '@/lib/seo';
+import { localizedMetadata as publicMetadata } from '@/lib/localized-metadata';
+export async function generateMetadata() {
+  return await publicMetadata(
+    'Travel eSIM guides',
+    'Practical guides to choosing travel eSIM data, budgeting for your trip, checking compatibility and installing safely.',
+    '/guides',
+  );
+}
 export default function Guides() {
   return (
     <section className="container section">

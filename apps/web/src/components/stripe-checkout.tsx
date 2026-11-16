@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useLocalizedRouter as useRouter } from '@/lib/localized-router';
 import { loadStripe } from '@stripe/stripe-js/pure';
 import type { StripeEmbeddedCheckout } from '@stripe/stripe-js';
 

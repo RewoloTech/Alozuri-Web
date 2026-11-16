@@ -2562,6 +2562,73 @@ h1 {
   font-size: 0.875rem;
   padding: 4px;
 }
+.language-selector {
+  position: relative;
+}
+.language-selector-control {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.language-selector-compact .language-selector-control {
+  width: 44px;
+  min-height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: white;
+  color: var(--navy);
+  gap: 2px;
+}
+.language-selector-compact select {
+  position: absolute;
+  inset: -1px;
+  width: calc(100% + 2px);
+  height: calc(100% + 2px);
+  opacity: 0;
+  cursor: pointer;
+  font: inherit;
+  font-size: 1rem;
+}
+.language-selector-control:focus-within {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+}
+.language-selector-error {
+  position: absolute;
+  inset-block-start: calc(100% + 8px);
+  inset-inline-end: 0;
+  width: min(280px, 85vw);
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: white;
+  color: var(--navy);
+  font-size: 0.875rem;
+}
+.site-header .nav-actions > .header-cart,
+.site-header .nav-actions > .currency-select,
+.site-header .nav-actions .language-selector-control,
+.site-header .nav-actions .account-menu > button,
+.site-header .nav-actions > .mobile-toggle {
+  box-sizing: border-box;
+  height: 44px;
+  min-height: 44px;
+}
+@media (max-width: 420px) {
+  .nav-wrap:has(.account-menu) {
+    width: calc(100% - 16px);
+    gap: 4px;
+  }
+  .nav-wrap:has(.account-menu) .brand {
+    font-size: 20px;
+  }
+  .nav-wrap:has(.account-menu) .brand-icon {
+    width: 26px;
+    height: 26px;
+    margin-inline-end: 6px;
+  }
+}
 @media (max-width: 600px) {
   .nav-actions {
     gap: 6px;
@@ -3294,7 +3361,7 @@ h1 {
     width: calc(100% - 24px);
   }
   .site-header .brand {
-    font-size: 20px;
+    font-size: 0;
   }
   .site-header .brand-icon {
     width: 26px;
@@ -3312,6 +3379,9 @@ h1 {
   }
   .currency-select {
     width: 60px;
+  }
+  .nav-wrap:has(.account-menu) .brand {
+    font-size: 0;
   }
 }
 @media (max-width: 359px) {

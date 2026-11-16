@@ -1,12 +1,17 @@
 'use client';
+import { StoreApiError } from '@/lib/api-error';
 import { endorselyReferral } from '@/lib/endorsely';
 import { trackMeta } from '@/lib/meta-pixel';
 import { metaMoney } from '@/lib/meta-events';
 import { LEGAL_VERSION, CHECKOUT_LEGAL_ACCEPTANCE } from '@alozuri/shared/legal';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
+import Link from '@/components/localized-link';
+import { useLocale, useTranslations } from 'next-intl';
+import { stripeElementsLocale, isPublishedLocale, type Locale } from '@alozuri/shared/i18n';
+import { useLanguage } from './language-provider';
 import { LoaderCircle } from 'lucide-react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
+import { useLocalizedRouter as useRouter } from '@/lib/localized-router';
 import { useSelector } from 'react-redux';
 import {
   Elements,
@@ -203,6 +208,9 @@ export function Checkout() {
   return <CheckoutForIdentity key={(user?.uid ?? 'guest') + currency} />;
 }
 function CheckoutForIdentity() {
+  const locale = useLocale();
+  const { changeLanguage } = useLanguage();
+  const t = useTranslations('checkout');
   const { currency, refresh, lock } = useCurrency();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -219,6 +227,7 @@ function CheckoutForIdentity() {
     [accountBusy, setAccountBusy] = useState(false),
     [compatible, setCompatible] = useState(false),
     [session, setSession] = useState<{
+      locale: Locale;
       clientSecret: string;
       orderId: string;
       quote: Quote;
@@ -375,6 +384,7 @@ function CheckoutForIdentity() {
     e.preventDefault();
     if (
       submitting.current ||
+      !isPublishedLocale(locale) ||
       accountBusy ||
       cart.syncing ||
       (!buy && cart.syncFailed) ||
@@ -396,6 +406,7 @@ function CheckoutForIdentity() {
     setError('');
     try {
       const fingerprint = JSON.stringify({
+        locale,
         legalVersion: LEGAL_VERSION,
         currency,
         items: JSON.parse(signature),
@@ -418,6 +429,7 @@ function CheckoutForIdentity() {
       const result = await api<{
         clientSecret: string;
         orderId: string;
+        locale?: Locale;
         accessToken: string;
         quote: Quote;
       }>(
@@ -436,6 +448,7 @@ function CheckoutForIdentity() {
             requestId: request.current,
             expectedTotalCents: quote.totalCents,
             endorselyReferral: endorselyReferral(),
+            locale,
             ...(promotionCode ? { promotionCode } : {}),
           }),
         },
@@ -462,18 +475,25 @@ function CheckoutForIdentity() {
         stripePromise = undefined;
         throw new Error('Stripe could not load. Check your connection and try again.');
       }
-      setSession({ ...result, deliveryEmail: email.trim().toLowerCase() });
+      setSession({
+        ...result,
+        locale: result.locale ?? 'en',
+        deliveryEmail: email.trim().toLowerCase(),
+      });
       const trackingValue = metaMoney(result.quote.totalCents, result.quote.currency);
       if (trackingValue) void trackMeta('InitiateCheckout', trackingValue, result.orderId, true);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Checkout could not start.');
-      if (e instanceof Error && /reservation expired|payment is closed/i.test(e.message)) {
+      if (
+        e instanceof StoreApiError &&
+        ['PROMO_RESERVATION_EXPIRED', 'CHECKOUT_CLOSED'].includes(e.code)
+      ) {
         request.current = crypto.randomUUID();
         try {
           sessionStorage.removeItem('alozuri-checkout-attempt');
         } catch {}
       }
-      if (e instanceof Error && /price changed|Checkout changed/i.test(e.message)) {
+      if (e instanceof StoreApiError && ['PRICE_CHANGED', 'CHECKOUT_CHANGED'].includes(e.code)) {
         request.current = crypto.randomUUID();
         const fresh = await api<{ quote: Quote }>('/v2/quote', {
           method: 'POST',
@@ -553,14 +573,22 @@ function CheckoutForIdentity() {
         ← Edit cart
       </Link>
       <div className="page-intro">
-        <h1>Checkout</h1>
+        <h1>{t('title')}</h1>
       </div>
+      {!session && !isPublishedLocale(locale) && (
+        <div className="notice checkout-language-notice" role="status">
+          <p>{t('legalUnavailable')}</p>
+          <button type="button" className="button" onClick={() => void changeLanguage('en')}>
+            {t('useEnglish')}
+          </button>
+        </div>
+      )}
       <div className={`commerce-layout${session ? '' : ' checkout-review'}`}>
         <div className="surface stack">
           {session ? (
             <>
               <h2 ref={paymentHeading} tabIndex={-1}>
-                Secure payment
+                {t('securePayment')}
               </h2>
               <p>Delivery email: {session.deliveryEmail}</p>
               {mode === 'test' && (
@@ -576,6 +604,7 @@ function CheckoutForIdentity() {
                 key={walletFallback ? 'card-fallback' : 'wallets'}
                 stripe={stripePromise!}
                 options={{
+                  locale: stripeElementsLocale(session.locale),
                   clientSecret: session.clientSecret,
                   appearance: {
                     theme: 'stripe',
@@ -600,8 +629,8 @@ function CheckoutForIdentity() {
             </>
           ) : (
             <form ref={reviewForm} className="stack" onSubmit={start}>
-              <h2>Delivery email</h2>
-              <p>We&apos;ll send your eSIM installation instructions here.</p>
+              <h2>{t('deliveryEmail')}</h2>
+              <p>{t('emailHint')}</p>
               <CheckoutAccount
                 email={email}
                 onEmailChange={setEmail}
@@ -646,7 +675,7 @@ function CheckoutForIdentity() {
                     disabled={loading || starting || !promotionInput.trim()}
                     onClick={() => setPromotionCode(promotionInput.trim().toUpperCase())}
                   >
-                    Apply code
+                    {t('apply')}
                   </button>
                   {promotionCode && (
                     <button
@@ -657,7 +686,7 @@ function CheckoutForIdentity() {
                         setPromotionInput('');
                       }}
                     >
-                      Remove code
+                      {t('remove')}
                     </button>
                   )}
                 </div>
@@ -692,6 +721,7 @@ function CheckoutForIdentity() {
                 aria-busy={Boolean(progressLabel)}
                 aria-describedby="checkout-next-step"
                 disabled={
+                  !isPublishedLocale(locale) ||
                   starting ||
                   accountBusy ||
                   cart.syncing ||
@@ -707,7 +737,7 @@ function CheckoutForIdentity() {
                 {progressLabel && (
                   <LoaderCircle size={18} className="checkout-spinner" aria-hidden="true" />
                 )}
-                {progressLabel || 'Continue to payment'}
+                {progressLabel || t('continue')}
               </button>
               <p id="checkout-next-step" className="fine-print checkout-next-step" role="status">
                 {checkoutHint}

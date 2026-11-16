@@ -50,11 +50,12 @@ export const discountUnit = (amount: number, percent: number) => {
   return Number((BigInt(amount) * BigInt(percent)) / 100n);
 };
 export function eligibility(p: z.infer<typeof stored>, now = new Date().toISOString()) {
-  if (!p.active) throw new OperationsError('Promotion is inactive.');
+  if (!p.active)
+    throw new OperationsError('Promotion is inactive.', 400, 'PROMO_CODE_NOT_APPLICABLE');
   if (Date.parse(now) < Date.parse(p.startsAt))
-    throw new OperationsError('Promotion has not started.');
+    throw new OperationsError('Promotion has not started.', 400, 'PROMO_CODE_NOT_APPLICABLE');
   if (Date.parse(now) >= Date.parse(p.expiresAt))
-    throw new OperationsError('Promotion has expired.');
+    throw new OperationsError('Promotion has expired.', 400, 'PROMO_CODE_EXPIRED');
   if (p.maxUses !== null && p.redemptionCount + Object.keys(p.holds).length >= p.maxUses)
     throw new OperationsError('Promotion usage limit reached or reserved by another checkout.');
 }
@@ -63,7 +64,8 @@ export class Promotions {
   async get(code: string) {
     const id = promoCode.parse(code),
       doc = await this.db.doc('promotions/' + id).get();
-    if (!doc.exists) throw new OperationsError('Invalid promotion code.');
+    if (!doc.exists)
+      throw new OperationsError('Invalid promotion code.', 400, 'PROMO_CODE_INVALID');
     return stored.parse(doc.data());
   }
   async list(after?: string, prefix = '', active?: boolean) {
@@ -161,7 +163,8 @@ export class Promotions {
   async reserve(t: Transaction, id: string, snapshot: z.infer<typeof promotionSnapshot>) {
     const ref = this.db.doc('promotions/' + snapshot.id),
       doc = await t.get(ref);
-    if (!doc.exists) throw new OperationsError('Promotion is unavailable.');
+    if (!doc.exists)
+      throw new OperationsError('Promotion is unavailable.', 400, 'PROMO_CODE_INVALID');
     const p = stored.parse(doc.data());
     eligibility(p);
     if (p.discountPercent !== snapshot.discountPercent)
@@ -176,7 +179,11 @@ export class Promotions {
         d = await t.get(ref),
         p = stored.parse(d.data());
       if (!p.holds[id])
-        throw new OperationsError('Promotion reservation expired. Start a new checkout.', 409);
+        throw new OperationsError(
+          'Promotion reservation expired. Start a new checkout.',
+          409,
+          'PROMO_RESERVATION_EXPIRED',
+        );
       t.update(ref, { holds: { ...p.holds, [id]: { ...p.holds[id], intent } } });
     });
   }

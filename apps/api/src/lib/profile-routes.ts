@@ -21,6 +21,14 @@ export function registerProfileRoutes(
     if (!profiles) throw new ProfileError('Profiles are not configured.', 503);
     return { user, profiles };
   }
+  app.patch('/v2/profile/language', async (request) => {
+    const { user, profiles } = await identity(request);
+    const input = z
+      .object({ locale: z.string().max(20) })
+      .strict()
+      .parse(request.body);
+    return { profile: await profiles.saveLocale(user, input.locale) };
+  });
   app.get(
     '/v2/profile',
     { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } },

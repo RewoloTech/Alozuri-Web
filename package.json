@@ -26,7 +26,7 @@
     "build:apphosting": "turbo run build --filter=@alozuri/web",
     "test:e2e": "playwright test",
     "test:stripe": "firebase emulators:exec --only firestore --project demo-alozuri --config infra/production-emulator.json \"node --import tsx scripts/run-stripe-e2e.mts\"",
-    "test:unit": "node --experimental-strip-types --test packages/shared/test/*.test.ts && npm test -w @alozuri/api",
+    "test:unit": "node --experimental-strip-types --test packages/shared/test/*.test.ts && npm test -w @alozuri/api && npm run test:i18n",
     "typecheck:tests": "tsc -p tests/tsconfig.json",
     "test:stripe:deployed": "node --import tsx scripts/run-deployed-stripe-test.mts",
     "featured:generate": "node --import tsx scripts/run-featured-bundles.mts",
@@ -38,7 +38,9 @@
     "operations:backfill": "node --import tsx scripts/backfill-financials.mts",
     "operations:supplier-cost": "node --import tsx scripts/reconcile-supplier-cost.mts",
     "test:seo": "node --import tsx --test tests/unit/seo.test.ts && node --import tsx tests/seo-production.mts && playwright test tests/e2e/seo.spec.ts",
-    "test:meta": "node --import tsx --test tests/unit/meta-events.test.ts && playwright test tests/e2e/shopping.spec.ts --grep Meta"
+    "test:meta": "node --import tsx --test tests/unit/meta-events.test.ts && playwright test tests/e2e/shopping.spec.ts --grep Meta",
+    "test:i18n": "node --import tsx --test tests/unit/i18n.test.ts tests/unit/language-release.test.ts",
+    "i18n:check-release": "node --import tsx scripts/check-language-release.mts"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.0",

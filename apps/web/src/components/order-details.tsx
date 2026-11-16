@@ -1,5 +1,5 @@
 'use client';
-import Link from 'next/link';
+import Link from '@/components/localized-link';
 import { AccountGate } from './account-gate';
 import { useCallback, useEffect, useState } from 'react';
 import { StripeCheckout } from './stripe-checkout';

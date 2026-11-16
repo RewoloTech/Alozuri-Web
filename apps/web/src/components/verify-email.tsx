@@ -1,7 +1,8 @@
 'use client';
 import { safeAccountDestination } from '@alozuri/shared';
 import { useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
+import { useLocalizedRouter as useRouter } from '@/lib/localized-router';
 import { sendEmailVerification } from 'firebase/auth';
 import { useAuth } from './auth-provider';
 export function VerifyEmail() {

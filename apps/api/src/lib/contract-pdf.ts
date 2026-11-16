@@ -1,3 +1,4 @@
+import { transactionLocale } from './transaction-locale.js';
 import PDFDocument from 'pdfkit';
 import { fileURLToPath } from 'node:url';
 import { confirmationOrderSchema, type ConfirmationOrder } from './confirmation-order.js';
@@ -10,6 +11,7 @@ import { drawContractPdf } from '../../../../packages/shared/src/contract-docume
 // Storage objects or email attachments are created by this renderer.
 export async function renderContractPdf(input: ConfirmationOrder): Promise<Buffer> {
   const order = confirmationOrderSchema.parse(input);
+  transactionLocale(order);
   const doc = new PDFDocument({
     size: 'A4',
     margins: { top: 80, right: 44, bottom: 54, left: 44 },

@@ -1,3 +1,5 @@
+import { LocaleUnavailableError } from '../../../packages/shared/src/i18n/locales.ts';
+import { isErrorCode, type ErrorCode } from '../../../packages/shared/src/i18n/errors.ts';
 import { OperationsEsims } from './lib/operations-esims.js';
 import { PricingHistoryReports } from './lib/pricing-history.js';
 import { OperationsReports, OperationsError, registerOperations } from './lib/operations.js';
@@ -160,18 +162,90 @@ export async function createApp(
     reply.header('X-Content-Type-Options', 'nosniff');
     reply.header('Cache-Control', 'no-store');
   });
+  app.addHook('onSend', async (request, reply, payload) => {
+    if (
+      reply.statusCode < 400 ||
+      typeof payload !== 'string' ||
+      !reply.getHeader('content-type')?.toString().includes('application/json')
+    )
+      return payload;
+    try {
+      const body: unknown = JSON.parse(payload);
+      if (!body || typeof body !== 'object' || !('error' in body)) return payload;
+      const defaultCode: ErrorCode =
+        reply.statusCode === 401
+          ? 'AUTHENTICATION_REQUIRED'
+          : reply.statusCode === 429
+            ? 'RATE_LIMITED'
+            : reply.statusCode === 400
+              ? 'VALIDATION_FAILED'
+              : 'INTERNAL_ERROR';
+      const existing: unknown = 'errorDetails' in body ? body.errorDetails : null;
+      const code =
+        existing && typeof existing === 'object' && 'code' in existing && isErrorCode(existing.code)
+          ? existing.code
+          : defaultCode;
+      const field =
+        existing &&
+        typeof existing === 'object' &&
+        'field' in existing &&
+        typeof existing.field === 'string' &&
+        /^[a-zA-Z0-9_.]{1,100}$/.test(existing.field)
+          ? existing.field
+          : undefined;
+      const details = { code, params: {}, requestId: request.id, ...(field ? { field } : {}) };
+      return request.headers['x-alozuri-error-format'] === '2'
+        ? JSON.stringify({ error: details })
+        : JSON.stringify({ ...body, errorDetails: details });
+    } catch {
+      return payload;
+    }
+  });
   app.setErrorHandler((error, _request, reply) => {
+    if (error instanceof LocaleUnavailableError)
+      return reply
+        .code(error.statusCode)
+        .send({ error: error.message, errorDetails: { code: error.code } });
     if (error instanceof OperationsError)
-      return reply.code(error.statusCode).send({ error: error.message });
+      return reply.code(error.statusCode).send({
+        error: error.message,
+        ...('code' in error && isErrorCode(error.code)
+          ? { errorDetails: { code: error.code } }
+          : {}),
+      });
     if (error instanceof ProfileError)
-      return reply.code(error.statusCode).send({ error: error.message });
+      return reply.code(error.statusCode).send({
+        error: error.message,
+        ...('code' in error && isErrorCode(error.code)
+          ? { errorDetails: { code: error.code } }
+          : {}),
+      });
     if (error instanceof SearchError)
-      return reply.code(error.statusCode).send({ error: error.message });
+      return reply.code(error.statusCode).send({
+        error: error.message,
+        ...('code' in error && isErrorCode(error.code)
+          ? { errorDetails: { code: error.code } }
+          : {}),
+      });
     if (error instanceof CommerceError)
-      return reply.code(error.statusCode).send({ error: error.message });
-    if (error instanceof CheckoutError) return reply.code(400).send({ error: error.message });
+      return reply.code(error.statusCode).send({
+        error: error.message,
+        ...('code' in error && isErrorCode(error.code)
+          ? { errorDetails: { code: error.code } }
+          : {}),
+      });
+    if (error instanceof CheckoutError)
+      return reply.code(400).send({
+        error: error.message,
+        ...('code' in error && isErrorCode(error.code)
+          ? { errorDetails: { code: error.code } }
+          : {}),
+      });
     if (error instanceof z.ZodError)
-      return reply.code(400).send({ error: 'Invalid request parameters.' });
+      return reply.code(400).send({
+        error: 'Invalid request parameters.',
+        errorDetails: { code: 'VALIDATION_FAILED', field: error.issues[0]?.path.join('.') },
+      });
     if (error instanceof Error && 'statusCode' in error) {
       if (error.statusCode === 429)
         return reply.code(429).send({ error: 'Too many requests. Please wait and try again.' });

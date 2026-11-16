@@ -1,6 +1,8 @@
 'use client';
+import { useTranslations } from 'next-intl';
+import { StoreApiError } from '@/lib/api-error';
 import { useEffect, useEffectEvent, useId, useRef, useState } from 'react';
-import Link from 'next/link';
+import Link from '@/components/localized-link';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   setCountries,
@@ -58,6 +60,7 @@ export function Planner({
   destinationMode?: boolean;
   simplified?: boolean;
 }) {
+  const errorMessage = useTranslations('errors');
   const dispatch = useDispatch();
   const { currency, refresh, ready } = useCurrency();
   const currencyKey = currency + refresh + ready;
@@ -270,7 +273,7 @@ export function Planner({
       }
       if (version !== requestVersion.current) return;
       if (cursor && previous && response.revision !== previous.revision)
-        throw new Error('The catalogue changed. Refresh your search.');
+        throw new StoreApiError(errorMessage('catalogueChanged'), 'CATALOGUE_CHANGED', 409);
       setPage(
         cursor && previous
           ? { ...response, plans: [...previous.plans, ...response.plans] }
@@ -291,7 +294,11 @@ export function Planner({
       if (version === requestVersion.current && !abort.signal.aborted) {
         const message = e instanceof Error ? e.message : 'Could not find plans. Please try again.';
         setError(message);
-        if (cursor && /catalogue changed|search page/i.test(message)) {
+        if (
+          cursor &&
+          e instanceof StoreApiError &&
+          ['CATALOGUE_CHANGED', 'SEARCH_PAGE_INVALID'].includes(e.code)
+        ) {
           setRefreshRequired(true);
           setPage(null);
         }
@@ -642,6 +649,7 @@ export function Planner({
   );
 }
 export function PlanCard({ plan, highlight = false }: { plan: PlanSummary; highlight?: boolean }) {
+  const t = useTranslations('plans');
   const { currency, ready } = useCurrency();
   return (
     <article className={`plan-card ${highlight ? 'featured' : ''}`}>
@@ -664,9 +672,7 @@ export function PlanCard({ plan, highlight = false }: { plan: PlanSummary; highl
         ) : (
           <span className="plan-allowance">{dataLabel(plan)}</span>
         )}
-        <span className="plan-days">
-          {plan.days} {plan.days === 1 ? 'day' : 'days'}
-        </span>
+        <span className="plan-days">{t('days', { count: plan.days })}</span>
       </div>
       {plan.dataType !== 'fixed' && <p className="muted">{plan.fairUse}</p>}
       <div className="plan-coverage">
@@ -684,7 +690,7 @@ export function PlanCard({ plan, highlight = false }: { plan: PlanSummary; highl
           </span>
         </div>
         <Link href={`/plans/${plan.id}`} className="button small">
-          View plan <ArrowRight size={16} />
+          {t('view')} <ArrowRight size={16} />
         </Link>
       </div>
     </article>

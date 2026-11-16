@@ -1,3 +1,9 @@
+import type { ErrorCode } from '../../../../packages/shared/src/i18n/errors.ts';
+import {
+  LOCALES,
+  requirePublishedLocale,
+  type Locale,
+} from '../../../../packages/shared/src/i18n/locales.ts';
 import { Promotions, promotionSnapshot, discountUnit } from './promotions.js';
 import { initialFinancial, financialSchema } from './financial-calculations.js';
 import {
@@ -58,6 +64,7 @@ export class CommerceError extends Error {
   constructor(
     message: string,
     readonly statusCode = 400,
+    readonly code: ErrorCode = statusCode >= 500 ? 'INTERNAL_ERROR' : 'VALIDATION_FAILED',
   ) {
     super(message);
   }
@@ -100,6 +107,7 @@ const snapshotSchema = z.object({
 });
 const purchaseSchema = z
   .object({
+    locale: z.enum(LOCALES).default('en'),
     uid: z.string().nullable(),
     email: z.email(),
     items: z.array(snapshotSchema).min(1).max(10),
@@ -299,6 +307,7 @@ export class CommerceService {
     input: {
       items: CartItem[];
       email: string;
+      locale?: Locale;
       emailConfirmation?: string;
       requestId: string;
       compatible: true;
@@ -317,7 +326,8 @@ export class CommerceService {
       input.email.toLowerCase() !== input.emailConfirmation.toLowerCase()
     )
       throw new CommerceError('Email addresses do not match.');
-    const acceptance = legalSnapshot(input.legal);
+    const locale = requirePublishedLocale(input.locale ?? 'en');
+    const acceptance = legalSnapshot(input.legal, new Date().toISOString(), locale);
     const email = input.email.toLowerCase(),
       owner = user?.verified ? user.uid : 'guest',
       id = 'purchase_' + hash(this.mode + ':' + owner + ':' + input.requestId).slice(0, 48),
@@ -331,13 +341,18 @@ export class CommerceService {
     );
     await this.capacity?.(snapshots);
     if (input.expectedTotalCents !== quote.totalCents)
-      throw new CommerceError('The price changed. Review the updated total before paying.', 409);
+      throw new CommerceError(
+        'The price changed. Review the updated total before paying.',
+        409,
+        'PRICE_CHANGED',
+      );
     const reportingRates =
       input.currency === 'GBP' ? null : await this.rates.current().catch(() => null);
     const reportingExchange = reportingRates
       ? { ...reportingRates.rates.GBP, source: reportingRates.source, asOf: reportingRates.asOf }
       : null;
     const proposed = {
+      locale,
       uid: user?.verified ? user.uid : null,
       email,
       items: snapshots,
@@ -369,6 +384,7 @@ export class CommerceService {
       if (doc.exists) {
         const p = purchaseSchema.parse(doc.data());
         if (
+          p.locale !== locale ||
           p.promotion?.code !== quote.promotion?.code ||
           p.promotion?.discountPercent !== quote.promotion?.discountPercent ||
           p.originalRetailCents !== proposed.originalRetailCents ||
@@ -404,7 +420,11 @@ export class CommerceService {
             ) ||
           p.uid !== proposed.uid
         )
-          throw new CommerceError('Checkout changed. Start a new checkout.', 409);
+          throw new CommerceError(
+            'Checkout changed. Start a new checkout.',
+            409,
+            'CHECKOUT_CHANGED',
+          );
         return p;
       }
       if (quote.promotion) await new Promotions(this.db).reserve(t, id, quote.promotion);
@@ -435,6 +455,7 @@ export class CommerceService {
             ...stripeReference,
             metadata: {
               ...stripeReference.metadata,
+              alozuriLocale: purchase.locale,
               ...(purchase.endorselyReferral
                 ? { endorsely_referral: purchase.endorselyReferral }
                 : {}),
@@ -453,7 +474,7 @@ export class CommerceService {
     }
     this.assertIntent(id, purchase, intent);
     if (!intent.client_secret || intent.status === 'canceled' || intent.status === 'succeeded')
-      throw new CommerceError('This payment is closed. Check your order.');
+      throw new CommerceError('This payment is closed. Check your order.', 400, 'CHECKOUT_CLOSED');
     await this.db.runTransaction(async (t) => {
       const doc = await t.get(ref);
       const p = purchaseSchema.parse(doc.data());
@@ -463,6 +484,7 @@ export class CommerceService {
     });
     return {
       orderId: id,
+      locale: purchase.locale,
       accessToken,
       clientSecret: intent.client_secret,
       quote,
@@ -628,6 +650,7 @@ export class CommerceService {
             const childId = 'order_' + hash(id + ':' + index++).slice(0, 48),
               childRef = this.db.collection('orders').doc(childId);
             t.create(childRef, {
+              locale: p.locale,
               uid: purchaseOwnerUid(id, p.uid),
               plan: line.plan,
               amountCents: line.plan.priceCents,
@@ -712,6 +735,7 @@ export class CommerceService {
     }));
     return {
       id,
+      locale: p.locale,
       reference: p.orderReference ?? orderReference(id),
       ...(doc.get('confirmationStatus') === 'attention' ||
       doc.get('confirmationDeliveryStatus') === 'failed'

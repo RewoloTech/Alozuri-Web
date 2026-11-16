@@ -1,16 +1,18 @@
 import { ArrowUpRight, ChartNoAxesCombined, ChevronDown, Clock3, Percent } from 'lucide-react';
-import { publicMetadata } from '@/lib/seo';
+import { localizedMetadata as publicMetadata } from '@/lib/localized-metadata';
 import styles from './partners.module.css';
 
 const applicationUrl = 'https://alozuricom-1c30.endorsely.com';
-export const metadata = {
-  ...publicMetadata(
-    'Alozuri Affiliate Programme | Become a Partner',
-    'Join the Alozuri Affiliate Programme. Earn 10% commission on qualifying eSIM referrals with 30-day tracking and a dedicated partner dashboard.',
-    '/partners',
-  ),
-  title: { absolute: 'Alozuri Affiliate Programme | Become a Partner' },
-};
+export async function generateMetadata() {
+  return {
+    ...(await publicMetadata(
+      'Alozuri Affiliate Programme | Become a Partner',
+      'Join the Alozuri Affiliate Programme. Earn 10% commission on qualifying eSIM referrals with 30-day tracking and a dedicated partner dashboard.',
+      '/partners',
+    )),
+    title: { absolute: 'Alozuri Affiliate Programme | Become a Partner' },
+  };
+}
 const benefits = [
   {
     icon: Percent,

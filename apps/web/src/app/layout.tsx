@@ -1,3 +1,4 @@
+import { LanguageProvider } from '@/components/language-provider';
 import { Suspense } from 'react';
 import { MetaTracking } from '@/components/meta-tracking';
 import type { Metadata } from 'next';
@@ -10,6 +11,9 @@ import { Footer } from '@/components/footer';
 import { CartSync } from '@/components/cart-sync';
 import { StoreProvider } from '@/components/store-provider';
 import './globals.css';
+import { headers } from 'next/headers';
+import { isLocale, localeDirection } from '@alozuri/shared/i18n';
+import { loadMessages } from '@alozuri/shared/i18n/catalogs';
 export const metadata: Metadata = {
   metadataBase: new URL(BUSINESS.site),
   title: { default: 'Alozuri — One eSIM. Every stop.', template: '%s | Alozuri' },
@@ -30,11 +34,18 @@ export const metadata: Metadata = {
       : {},
   },
 };
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const requestLocale = (await headers()).get('x-alozuri-locale');
+  const locale = isLocale(requestLocale) ? requestLocale : 'en';
+  const messages = await loadMessages(locale);
   // Extensions such as ColorZilla can add body attributes before React hydrates.
   // Suppression is limited to this element; descendant checks stay enabled.
   return (
-    <html lang="en-GB" data-scroll-behavior="smooth">
+    <html
+      lang={locale === 'en' ? 'en-GB' : locale}
+      dir={localeDirection(locale)}
+      data-scroll-behavior="smooth"
+    >
       <head>
         <script
           async
@@ -49,13 +60,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </Suspense>
           <StoreProvider>
             <AuthProvider>
-              <CartSync />
-              <a className="skip-link" href="#main">
-                Skip to content
-              </a>
-              <Header />
-              <main id="main">{children}</main>
-              <Footer />
+              <LanguageProvider initialLocale={locale} initialMessages={messages}>
+                <CartSync />
+                <a className="skip-link" href="#main">
+                  Skip to content
+                </a>
+                <Header />
+                <main id="main">{children}</main>
+                <Footer />
+              </LanguageProvider>
             </AuthProvider>
           </StoreProvider>
         </PrivacyProvider>

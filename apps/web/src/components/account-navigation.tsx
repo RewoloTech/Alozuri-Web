@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/localized-link';
 export type AccountSection = 'esims' | 'usage' | 'orders' | 'profile';
 const sections: { id: AccountSection; label: string; href: string }[] = [
   { id: 'esims', label: 'My eSIMs', href: '/account/esims' },

@@ -1,4 +1,5 @@
 // No personal information or payment/supplier credentials belong in these payloads.
+import { unlocalizedPath } from '@alozuri/shared/i18n';
 export const META_PIXEL_ID = '1814512106538733';
 export type MetaEventName = 'PageView' | 'ViewContent' | 'InitiateCheckout' | 'Purchase';
 export type MetaData = {
@@ -45,16 +46,17 @@ export async function metaEventId(name: MetaEventName, key: string) {
 }
 export function metaSafeUrl(value: string) {
   const url = new URL(value);
+  const pathname = unlocalizedPath(url.pathname);
   // Never load on account, sign-in, operations, private links or unrecognised queries.
   if (
     (url.hash !== '' && !['#planner', '#how-it-works'].includes(url.hash)) ||
     !/^\/(?:$|plans\/[^/]+$|destinations(?:\/[^/]+)?$|cart$|checkout$|checkout\/success$|help$|guides(?:\/[^/]+)?$|contact$|cookies$|privacy$|terms$|refund-policy$|acceptable-use$|esim-compatibility$)/.test(
-      url.pathname,
+      pathname,
     )
   )
     return false;
   const allowed =
-    url.pathname === '/checkout/success'
+    pathname === '/checkout/success'
       ? ['order']
       : [
           'countries',

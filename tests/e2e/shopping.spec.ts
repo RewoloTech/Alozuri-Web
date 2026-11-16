@@ -627,7 +627,17 @@ test('promotional code apply, remove, invalid feedback and final Stripe amount s
     const input = route.request().postDataJSON();
     const headers = { 'Access-Control-Allow-Origin': 'http://localhost:3100' };
     if (input.promotionCode && input.promotionCode !== 'SAVE20')
-      return route.fulfill({ status: 400, headers, json: { error: 'Promotion has expired.' } });
+      return route.fulfill({
+        status: 400,
+        headers,
+        json: {
+          error: {
+            code: 'PROMO_CODE_EXPIRED',
+            message: 'Promotion has expired.',
+            requestId: 'promotion-fixture',
+          },
+        },
+      });
     const applied = Boolean(input.promotionCode);
     const price = applied ? 960 : 1200;
     return route.fulfill({
@@ -694,7 +704,9 @@ test('promotional code apply, remove, invalid feedback and final Stripe amount s
   await expect(page.getByLabel('Promotional code', { exact: true })).toBeVisible();
   await page.getByLabel('Promotional code', { exact: true }).fill('EXPIRED');
   await page.getByRole('button', { name: 'Apply code', exact: true }).click();
-  await expect(page.locator('main').getByRole('alert')).toContainText('Promotion has expired');
+  await expect(page.locator('main').getByRole('alert')).toContainText(
+    'This promotional code has expired',
+  );
   await expect(page.getByRole('button', { name: 'Continue to payment' })).toBeDisabled();
   await page.getByLabel('Promotional code', { exact: true }).fill('save20');
   await page.getByRole('button', { name: 'Apply code', exact: true }).click();
@@ -933,12 +945,24 @@ test('failed price verification provides a retry and never starts payment with a
   });
   await page.route('http://127.0.0.1:8189/v2/quote', async (route) => {
     if (++attempts === 1)
-      await route.fulfill({ status: 503, json: { error: 'Prices temporarily unavailable.' } });
+      await route.fulfill({
+        status: 503,
+        json: {
+          error: {
+            code: 'INTERNAL_ERROR',
+            message: 'Private provider diagnostic.',
+            requestId: 'price-fixture',
+          },
+        },
+      });
     else await route.fallback();
   });
   await page.goto('/checkout?buy=' + plan.id);
   await expect(page.getByRole('main').getByRole('alert')).toContainText(
-    'Prices temporarily unavailable.',
+    'Something went wrong. Please try again.',
+  );
+  await expect(page.getByRole('main').getByRole('alert')).not.toContainText(
+    'Private provider diagnostic',
   );
   await expect(
     page.getByRole('button', { name: 'Continue to payment', exact: true }),
@@ -1206,7 +1230,13 @@ test('catalogue revision changes clear old pages and require a fresh search', as
       refreshed = true;
       await route.fulfill({
         status: 409,
-        json: { error: 'The catalogue changed. Refresh your search.' },
+        json: {
+          error: {
+            code: 'CATALOGUE_CHANGED',
+            message: 'The catalogue changed. Refresh your search.',
+            requestId: 'catalogue-fixture',
+          },
+        },
       });
       return;
     }
@@ -1677,7 +1707,17 @@ for (const width of [390, 1440])
       const { promotionCode } = route.request().postDataJSON();
       const headers = { 'Access-Control-Allow-Origin': 'http://localhost:3100' };
       if (promotionCode && promotionCode !== 'SAVE45')
-        return route.fulfill({ status: 400, headers, json: { error: 'Promotion has expired.' } });
+        return route.fulfill({
+          status: 400,
+          headers,
+          json: {
+            error: {
+              code: 'PROMO_CODE_EXPIRED',
+              message: 'Promotion has expired.',
+              requestId: 'promotion-fixture',
+            },
+          },
+        });
       const discounted = promotionCode === 'SAVE45';
       const totalCents = discounted ? 660 : 1200;
       return route.fulfill({
@@ -1731,7 +1771,9 @@ for (const width of [390, 1440])
     await page.locator('.checkout-promo-entry summary').click();
     await page.getByLabel('Promotional code', { exact: true }).fill('EXPIRED');
     await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
-    await expect(page.locator('main').getByRole('alert')).toContainText('Promotion has expired');
+    await expect(page.locator('main').getByRole('alert')).toContainText(
+      'This promotional code has expired',
+    );
     expect(checkouts).toBe(0);
     await expect(page.getByRole('heading', { name: 'Secure payment', exact: true })).toHaveCount(0);
     await page.getByLabel('Promotional code', { exact: true }).fill(' save45 ');

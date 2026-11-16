@@ -1,3 +1,4 @@
+import { transactionLocale } from './transaction-locale.js';
 import { z } from 'zod';
 import { countryName, dataLabel } from '../../../../packages/shared/src/index.ts';
 import { BUSINESS } from '../../../../packages/shared/src/legal.ts';
@@ -29,6 +30,9 @@ export type ConfirmationEmail = {
   url: string;
   text: string;
   html: string;
+  subject?: string;
+  from?: string;
+  replyTo?: string;
   attachments?: InlineEmailImage[];
 };
 export interface OrderMailer {
@@ -83,6 +87,7 @@ export function confirmationEmail(
   version: z.infer<typeof confirmationVersionSchema> = 'email-v1',
   installation?: InstallationEmailSection,
 ): ConfirmationEmail {
+  transactionLocale(order);
   if (installation && version !== CONFIRMATION_VERSION)
     throw new Error('Installation details require a ready confirmation.');
   const steps = installation
@@ -186,10 +191,10 @@ export function confirmationEmail(
 }
 export function confirmationPayload(input: ConfirmationEmail) {
   return {
-    from: ORDER_EMAIL_FROM,
+    from: input.from ?? ORDER_EMAIL_FROM,
     to: [input.email],
-    reply_to: 'support@alozuri.com',
-    subject: 'Your Alozuri eSIM order confirmation',
+    reply_to: input.replyTo ?? 'support@alozuri.com',
+    subject: input.subject ?? 'Your Alozuri eSIM order confirmation',
     text: input.text,
     html: input.html,
     ...(input.attachments?.length

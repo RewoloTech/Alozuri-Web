@@ -1034,6 +1034,12 @@ test('confirmation provider failures retry with the same payload and never blind
   const first = await ref.get();
   assert.equal(first.get('confirmationStatus'), 'retry');
   assert.equal(first.get('confirmationError'), 'email_failed');
+  const snapshot = await ref.collection('notifications').doc('order-confirmation').get();
+  assert.equal(snapshot.get('locale'), 'en');
+  assert.equal(snapshot.get('status'), 'retry');
+  assert.equal(snapshot.get('event'), 'order-confirmation');
+  assert.equal(snapshot.get('payloadHash'), first.get('confirmationPayloadHash'));
+  assert.equal(snapshot.get('rendered.subject'), 'Your Alozuri eSIM order confirmation');
   blocked = false;
   await ref.update({ confirmationDueAt: Date.now() });
   await f.service.notify();
@@ -1041,6 +1047,14 @@ test('confirmation provider failures retry with the same payload and never blind
   assert.equal(sent.get('confirmationFirstSendAt'), first.get('confirmationFirstSendAt'));
   assert.equal(sent.get('confirmationPayloadHash'), first.get('confirmationPayloadHash'));
   assert.equal(f.emails.filter((email) => email.id === result.orderId).length, 1);
+  assert.deepEqual(
+    f.emails.find((email) => email.id === result.orderId),
+    snapshot.get('rendered'),
+  );
+  const delivered = await ref.collection('notifications').doc('order-confirmation').get();
+  assert.equal(delivered.get('status'), 'sent');
+  assert.equal(typeof delivered.get('providerMessageId'), 'string');
+  assert.equal(delivered.get('diagnostic'), undefined);
 
   blocked = true;
   f.intent.status = 'requires_payment_method';
@@ -1095,6 +1109,31 @@ test('pending or bounced email delivery cannot begin supply, and delivery reconc
   );
   await f.service.notify();
   assert.equal(f.emails.filter((email) => email.id === bounced.orderId).length, 1);
+});
+
+test('delivery status lookup failures retain the notification and recover without sending it again', async () => {
+  let unavailable = true;
+  const f = fixture(false, undefined, 'GBP', undefined, undefined, () => {
+    if (unavailable) throw new Error('Synthetic delivery lookup failure');
+    return 'delivered';
+  });
+  const result = await f.service.checkout(f.input, null);
+  f.intent.status = 'succeeded';
+  f.intent.amount_received = f.intent.amount;
+  await f.event();
+  const first = await f.service.notify(result.orderId);
+  assert.equal(first.sent, 1);
+  assert.equal(first.failed, 1);
+  const ref = db.doc('purchases/' + result.orderId);
+  const notification = ref.collection('notifications').doc('order-confirmation');
+  assert.equal((await notification.get()).get('deliveryDiagnostic'), 'status_unavailable');
+  assert.equal((await notification.get()).get('status'), 'sent');
+  unavailable = false;
+  await ref.update({ confirmationDeliveryDueAt: Date.now() });
+  await f.service.notify(result.orderId);
+  assert.equal((await notification.get()).get('deliveryStatus'), 'delivered');
+  assert.equal((await notification.get()).get('deliveryDiagnostic'), undefined);
+  assert.equal(f.emails.length, 1);
 });
 
 test('legacy already-confirmed or ambiguous orders cannot receive another routine email', async () => {
@@ -1769,6 +1808,53 @@ function profileDirectory(uid: string, email: string, verified = true) {
   };
   return { current, directory, updates: () => updates };
 }
+test('interface language preferences persist independently from transaction publication', async () => {
+  const source = profileDirectory('locale-owner', 'locale-owner@example.test');
+  const profiles = new UserProfiles(db, source.directory);
+  const principal = {
+    uid: source.current.uid,
+    email: source.current.email,
+    verified: true,
+    admin: false,
+  };
+  await profiles.saveLocale(principal, 'en');
+  assert.equal((await profiles.sync(principal)).locale, 'en');
+  await profiles.saveLocale(principal, 'de');
+  assert.equal((await profiles.sync(principal)).locale, 'de');
+  await assert.rejects(profiles.saveLocale(principal, 'xx'), /language/);
+  assert.equal((await profiles.read(principal))?.locale, 'de');
+  const server = await createApp({
+    profiles,
+    payments: null,
+    commerce: null,
+    fulfillment: null,
+    verify: async () => principal,
+  });
+  try {
+    const url = '/v2/profile/language';
+    assert.equal(
+      (await server.inject({ method: 'PATCH', url, payload: { locale: 'en' } })).statusCode,
+      401,
+    );
+    const saved = await server.inject({
+      method: 'PATCH',
+      url,
+      payload: { locale: 'en' },
+      headers: { authorization: 'Bearer owner' },
+    });
+    assert.equal(saved.statusCode, 200);
+    assert.equal(saved.json().profile.uid, principal.uid);
+    const forged = await server.inject({
+      method: 'PATCH',
+      url,
+      payload: { locale: 'en', uid: 'another-user' },
+      headers: { authorization: 'Bearer owner' },
+    });
+    assert.equal(forged.statusCode, 400);
+  } finally {
+    await server.close();
+  }
+});
 test('user profile sync creates private validated records and only accepts names from the authenticated customer', async () => {
   const source = profileDirectory('profile-owner', 'Profile.Owner@example.test');
   const profiles = new UserProfiles(db, source.directory);
@@ -2800,4 +2886,93 @@ test('deleting an unused promotion races safely with reserving checkout', async 
     assert.equal(doc.exists, true);
     assert.equal(Object.keys((await promo.promotions.get(promo.code)).holds).length, 1);
   } else assert.equal(doc.exists, false);
+});
+
+test('checkout freezes order and legal locale independently of the existing currency snapshot', async () => {
+  for (const currency of ['USD', 'GBP', 'EUR'] as const) {
+    const f = fixture(false, undefined, currency);
+    const result = await f.service.checkout({ ...f.input, locale: 'en' }, null);
+    const ref = db.doc('purchases/' + result.orderId);
+    const before = await ref.get();
+    assert.equal(result.locale, 'en');
+    assert.equal(f.paymentRequests[0].params.metadata?.alozuriLocale, 'en');
+    assert.equal(before.get('locale'), 'en');
+    assert.equal(before.get('legal.locale'), 'en');
+    assert.match(before.get('legal.contentHash'), /^[a-f0-9]{64}$/);
+    assert.equal(before.get('currency'), currency);
+    assert.equal(before.get('totalCents'), f.input.expectedTotalCents);
+    // A new browser/account preference cannot change an already-created request.
+    await assert.rejects(f.service.checkout({ ...f.input, locale: 'de' }, null), /language/);
+    assert.equal(f.getCreates(), 1);
+    assert.deepEqual((await ref.get()).data(), before.data());
+    f.intent.status = 'succeeded';
+    f.intent.amount_received = f.intent.amount;
+    await f.event();
+    const children = await db
+      .collection('orders')
+      .where('parentOrderId', '==', result.orderId)
+      .get();
+    assert.ok(children.docs.every((unit) => unit.get('locale') === 'en'));
+  }
+  const draft = fixture();
+  await assert.rejects(draft.service.checkout({ ...draft.input, locale: 'ar' }, null), /language/);
+  assert.equal(draft.getCreates(), 0);
+  const server = await createApp({ commerce: draft.service, payments: null, fulfillment: null });
+  try {
+    const response = await server.inject({
+      method: 'POST',
+      url: '/v2/checkout',
+      headers: { 'x-alozuri-error-format': '2' },
+      payload: { ...draft.input, locale: 'de' },
+    });
+    assert.equal(response.statusCode, 409);
+    assert.equal(response.json().error.code, 'LOCALE_NOT_READY');
+    assert.equal(draft.getCreates(), 0);
+  } finally {
+    await server.close();
+  }
+});
+
+test('locale-less historical confirmations remain English and unsupported transaction locales never send', async () => {
+  const historical = fixture();
+  const result = await historical.service.checkout(historical.input, null);
+  const ref = db.doc('purchases/' + result.orderId);
+  historical.intent.status = 'succeeded';
+  historical.intent.amount_received = historical.intent.amount;
+  await historical.event();
+  await ref.update({ locale: FieldValue.delete(), 'legal.locale': FieldValue.delete() });
+  await historical.service.notify(result.orderId);
+  assert.equal(historical.emails.length, 1);
+  assert.equal((await ref.get()).get('confirmationLocale'), 'en');
+
+  const imported = fixture();
+  const blocked = await imported.service.checkout(imported.input, null);
+  imported.intent.status = 'succeeded';
+  imported.intent.amount_received = imported.intent.amount;
+  await imported.event();
+  const importedRef = db.doc('purchases/' + blocked.orderId);
+  await importedRef.update({ locale: 'de', 'legal.locale': 'de' });
+  await imported.service.notify(blocked.orderId);
+  assert.equal(imported.emails.length, 0);
+  assert.equal((await importedRef.get()).get('confirmationStatus'), 'attention');
+  assert.equal((await importedRef.get()).get('confirmationError'), 'translation_review_required');
+});
+
+test('an invalid locale on a queued notification is quarantined without blocking the worker batch', async () => {
+  const f = fixture(false, undefined, 'EUR', () => true);
+  const result = await f.service.checkout(f.input, null);
+  f.intent.status = 'succeeded';
+  f.intent.amount_received = f.intent.amount;
+  await f.event();
+  await f.service.notify(result.orderId);
+  const ref = db.doc('purchases/' + result.orderId);
+  const notification = ref.collection('notifications').doc('order-confirmation');
+  const snapshot = (await notification.get()).get('rendered');
+  await ref.update({ locale: 'invalid-locale', confirmationDueAt: Date.now() });
+  const outcome = await f.service.notify(result.orderId);
+  assert.equal(outcome.attention, 1);
+  assert.equal(f.emails.length, 0);
+  assert.equal((await ref.get()).get('confirmationError'), 'translation_review_required');
+  assert.equal((await notification.get()).get('status'), 'attention');
+  assert.deepEqual((await notification.get()).get('rendered'), snapshot);
 });

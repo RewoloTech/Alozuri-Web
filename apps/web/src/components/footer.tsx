@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/localized-link';
 import { ArrowUpRight } from 'lucide-react';
 import { BUSINESS } from '@alozuri/shared/legal';
 import { POLICIES } from '@alozuri/shared/policies';

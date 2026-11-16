@@ -1,5 +1,6 @@
 'use client';
 import { PromotionPerformance, PromotionsPanel } from './promotions';
+import Link from '@/components/localized-link';
 import { useEffect, useRef, useState } from 'react';
 import { OperationsEsimDisclosure, OperationsEsimLookup } from './operations-esims';
 import { OperationsTrendCharts } from './operations-trends';
@@ -162,6 +163,9 @@ function OperationsAccount() {
         <p role="status">Checking administrator access…</p>
       ) : (
         <>
+          <p>
+            <Link href="/operations/languages">Language review and previews</Link>
+          </p>
           <div
             className="operations-tabs"
             role="tablist"

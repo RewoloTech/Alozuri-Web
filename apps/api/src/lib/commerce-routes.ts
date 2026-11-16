@@ -1,3 +1,4 @@
+import { LOCALES } from '../../../../packages/shared/src/i18n/locales.ts';
 import { promoCode } from './promotions.js';
 import type { UserProfiles } from './user-profiles.js';
 import { checkoutLegalSchema } from './legal.js';
@@ -60,6 +61,7 @@ export function registerCommerceRoutes(
       const input = z
         .object({
           items: itemsSchema,
+          locale: z.enum(LOCALES).optional(),
           email: z.email().max(254),
           emailConfirmation: z.email().max(254).optional(),
           requestId: z.uuid(),

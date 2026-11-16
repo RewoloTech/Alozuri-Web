@@ -1,3 +1,4 @@
+import { orderLocale, requirePublishedLocale, LocaleUnavailableError } from './i18n/locales.ts';
 import type PDFDocument from 'pdfkit';
 import { BUSINESS } from './legal.ts';
 import { countryName, dataLabel } from './index.ts';
@@ -13,6 +14,8 @@ const navy = '#1b2035',
 // One document layout for the authorised browser download and optional API endpoint.
 export function drawContractPdf(doc: InstanceType<typeof PDFDocument>, order: ContractOrder): void {
   validateContractOrder(order);
+  const locale = requirePublishedLocale(orderLocale(order.locale));
+  if (orderLocale(order.legal.locale) !== locale) throw new LocaleUnavailableError();
   const business = order.legal.business ?? BUSINESS;
   const width = doc.page.width - 88;
   const room = (height = 48) => {

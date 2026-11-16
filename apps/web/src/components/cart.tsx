@@ -1,5 +1,5 @@
 'use client';
-import Link from 'next/link';
+import Link from '@/components/localized-link';
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector, useStore } from 'react-redux';
 import { ShoppingBag, Trash2, Minus, Plus, LockKeyhole } from 'lucide-react';

@@ -4,6 +4,8 @@ import { act, render, screen, fireEvent, waitFor, cleanup } from '@testing-libra
 import { Provider } from 'react-redux';
 import { makeStore, restoreCart, cartSyncFailure } from '../../apps/web/src/lib/store';
 import { demoPlans } from '../../packages/shared/src/demo';
+import { NextIntlClientProvider } from 'next-intl';
+import { englishMessages } from '../../packages/shared/src/i18n/messages';
 
 const plan = { ...demoPlans[0], id: 'reviewed-cart-plan', demo: false, priceCents: 1200 };
 const quote = {
@@ -58,6 +60,13 @@ jest.mock('@/lib/api', () => ({
 const { Checkout } = jest.requireActual<typeof import('../../apps/web/src/components/checkout')>(
   '../../apps/web/src/components/checkout',
 );
+function LocalizedCheckout() {
+  return (
+    <NextIntlClientProvider locale="en" messages={englishMessages} timeZone="Europe/London">
+      <Checkout />
+    </NextIntlClientProvider>
+  );
+}
 afterEach(() => {
   cleanup();
   delete window.endorsely_referral;
@@ -69,7 +78,7 @@ test('account/cart changes after payment preparation cannot double the reviewed 
   store.dispatch(restoreCart(quote.items));
   const view = render(
     <Provider store={store}>
-      <Checkout />
+      <LocalizedCheckout />
     </Provider>,
   );
   fireEvent.change(screen.getByRole('textbox', { name: 'Email address' }), {
@@ -96,7 +105,7 @@ test('an unresolved account cart sync failure blocks payment creation even on fo
   store.dispatch(restoreCart(quote.items));
   render(
     <Provider store={store}>
-      <Checkout />
+      <LocalizedCheckout />
     </Provider>,
   );
   fireEvent.change(screen.getByRole('textbox', { name: 'Email address' }), {

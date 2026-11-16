@@ -1,11 +1,13 @@
-import { publicMetadata } from '@/lib/seo';
-import Link from 'next/link';
+import { localizedMetadata as publicMetadata } from '@/lib/localized-metadata';
+import Link from '@/components/localized-link';
 import { BUSINESS } from '@alozuri/shared/legal';
-export const metadata = publicMetadata(
-  'Help and eSIM installation',
-  'Get help checking device compatibility, installing your travel eSIM, understanding activation and contacting Alozuri.',
-  '/help',
-);
+export async function generateMetadata() {
+  return await publicMetadata(
+    'Help and eSIM installation',
+    'Get help checking device compatibility, installing your travel eSIM, understanding activation and contacting Alozuri.',
+    '/help',
+  );
+}
 export default function Help() {
   return (
     <section className="container section help-page">

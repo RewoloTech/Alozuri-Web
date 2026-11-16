@@ -1,6 +1,6 @@
 'use client';
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
+import Link from '@/components/localized-link';
 import { MessageCircle, X } from 'lucide-react';
 import {
   CONSENT_COOKIE,

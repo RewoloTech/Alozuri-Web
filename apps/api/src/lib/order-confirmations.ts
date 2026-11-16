@@ -1,3 +1,11 @@
+import { transactionLocale } from './transaction-locale.js';
+import { LocaleUnavailableError } from '../../../../packages/shared/src/i18n/locales.ts';
+import {
+  freezeNotification,
+  installationSnapshotHash,
+  readNotification,
+  NotificationSnapshotError,
+} from './notification-snapshot.js';
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
 import { FieldValue, type Firestore, type DocumentReference } from 'firebase-admin/firestore';
@@ -49,6 +57,29 @@ export class OrderConfirmations {
           current.get('confirmationDueAt') > this.now()
         )
           return null;
+        try {
+          transactionLocale({
+            locale: current.get('locale'),
+            legal: { locale: current.get('legal.locale') },
+          });
+        } catch (error) {
+          if (!(error instanceof LocaleUnavailableError)) throw error;
+          const notificationRef = doc.ref.collection('notifications').doc('order-confirmation');
+          const notification = await t.get(notificationRef);
+          t.update(doc.ref, {
+            confirmationStatus: 'attention',
+            confirmationError: 'translation_review_required',
+            confirmationDueAt: FieldValue.delete(),
+            confirmationLeaseUntil: 0,
+          });
+          if (notification.exists)
+            t.update(notificationRef, {
+              status: 'attention',
+              diagnostic: 'translation_review_required',
+              updatedAt: this.now(),
+            });
+          return { blocked: true as const };
+        }
         let installations: EmailInstallation[] | undefined;
         if (current.get('confirmationVersion') === CONFIRMATION_VERSION) {
           if (current.get('status') !== 'paid') return null;
@@ -105,23 +136,44 @@ export class OrderConfirmations {
         return { data: current.data(), attempts, installations };
       });
       if (!claimed) continue;
+      if ('blocked' in claimed) {
+        attention++;
+        failed++;
+        continue;
+      }
       try {
         const order = confirmationOrderSchema.parse({ ...claimed.data, id: doc.id });
+        const locale = transactionLocale(order);
+        if (
+          claimed.data?.confirmationLocale !== undefined &&
+          claimed.data.confirmationLocale !== locale
+        )
+          throw new LocaleUnavailableError();
+        const notificationRef = doc.ref.collection('notifications').doc('order-confirmation');
+        const stored = await notificationRef.get();
+        const installationHash = installationSnapshotHash(claimed.installations);
         const url = `${this.site}/checkout/success?order=${doc.id}#access=${this.token(doc.id)}`;
-        const email = claimed.installations
-          ? await installationConfirmationEmail(order, url, claimed.installations)
-          : confirmationEmail(
-              order,
-              url,
-              claimed.data?.confirmationVersion === CONFIRMATION_VERSION
-                ? CONFIRMATION_VERSION
-                : 'email-v1',
+        const email = stored.exists
+          ? readNotification(stored.data(), doc.id, locale, installationHash)
+          : freezeNotification(
+              claimed.installations
+                ? await installationConfirmationEmail(order, url, claimed.installations)
+                : confirmationEmail(
+                    order,
+                    url,
+                    claimed.data?.confirmationVersion === CONFIRMATION_VERSION
+                      ? CONFIRMATION_VERSION
+                      : 'email-v1',
+                  ),
             );
         const payloadHash = confirmationPayloadHash(email);
         const canSend = await this.db.runTransaction(async (t) => {
           const current = await t.get(doc.ref);
+          const notification = await t.get(notificationRef);
           if (current.get('confirmationLease') !== lease || current.get('confirmationSentAt'))
             return false;
+          if (notification.exists && notification.get('payloadHash') !== payloadHash)
+            throw new NotificationSnapshotError();
           const firstAttemptAt = z
             .number()
             .finite()
@@ -139,10 +191,42 @@ export class OrderConfirmations {
               confirmationLeaseUntil: 0,
               confirmationDueAt: FieldValue.delete(),
             });
+            if (notification.exists)
+              t.update(notificationRef, {
+                status: 'attention',
+                diagnostic: 'send_reconciliation_required',
+                updatedAt: this.now(),
+              });
             return false;
           }
+          t.set(
+            notificationRef,
+            {
+              ...(!notification.exists
+                ? {
+                    event: 'order-confirmation',
+                    notificationId: 'order-confirmation/' + doc.id,
+                    orderId: doc.id,
+                    locale,
+                    templateVersion: email.version ?? 'email-v1',
+                    payloadHash,
+                    installationHash,
+                    rendered: email,
+                    createdAt: this.now(),
+                  }
+                : {}),
+              status: 'sending',
+              attempts: claimed.attempts,
+              firstSendAt: firstAttemptAt ?? this.now(),
+              updatedAt: this.now(),
+            },
+            { merge: true },
+          );
           t.update(doc.ref, {
             confirmationStatus: 'sending',
+            confirmationLocale: locale,
+            confirmationTemplateVersion: email.version ?? 'email-v1',
+            confirmationNotificationId: 'order-confirmation/' + doc.id,
             confirmationFirstSendAt: firstAttemptAt ?? this.now(),
             confirmationPayloadHash: payloadHash,
           });
@@ -172,6 +256,8 @@ export class OrderConfirmations {
       } catch (error) {
         failed++;
         const needsAttention =
+          error instanceof LocaleUnavailableError ||
+          error instanceof NotificationSnapshotError ||
           error instanceof z.ZodError ||
           (error instanceof EmailSendError && error.reason === 'idempotency_conflict');
         if (needsAttention) attention++;
@@ -179,13 +265,15 @@ export class OrderConfirmations {
           confirmationStatus: needsAttention ? 'attention' : 'retry',
           confirmationLeaseUntil: 0,
           confirmationError:
-            error instanceof z.ZodError
-              ? 'snapshot_review_required'
-              : needsAttention
-                ? 'send_reconciliation_required'
-                : error instanceof EmailSendError
-                  ? error.reason
-                  : 'email_failed',
+            error instanceof LocaleUnavailableError
+              ? 'translation_review_required'
+              : error instanceof z.ZodError
+                ? 'snapshot_review_required'
+                : needsAttention
+                  ? 'send_reconciliation_required'
+                  : error instanceof EmailSendError
+                    ? error.reason
+                    : 'email_failed',
           confirmationDueAt: needsAttention
             ? FieldValue.delete()
             : this.now() + retryDelay(claimed.attempts),
@@ -258,8 +346,30 @@ export class OrderConfirmations {
   ) {
     await this.db.runTransaction(async (t) => {
       const current = await t.get(ref);
+      const notificationRef = ref.collection('notifications').doc('order-confirmation');
+      const notification = await t.get(notificationRef);
       if (current.get('confirmationLease') !== lease) throw new Error('Confirmation lease lost.');
       t.update(ref, fields);
+      // Same transaction as the purchase marker: no successful send can leave a
+      // contradictory outbox status. Customer APIs never expose this subcollection.
+      if (notification.exists)
+        t.set(
+          notificationRef,
+          {
+            status: fields.confirmationStatus,
+            updatedAt: this.now(),
+            ...(fields.confirmationProviderId
+              ? { providerMessageId: fields.confirmationProviderId }
+              : {}),
+            ...(fields.confirmationSentAt ? { sentAt: fields.confirmationSentAt } : {}),
+            ...(typeof fields.confirmationError === 'string'
+              ? { diagnostic: fields.confirmationError }
+              : fields.confirmationStatus === 'sent'
+                ? { diagnostic: FieldValue.delete() }
+                : {}),
+          },
+          { merge: true },
+        );
     });
   }
   private async reconcileDelivery(purchaseId?: string) {
@@ -303,9 +413,27 @@ export class OrderConfirmations {
   private async updateDelivery(ref: DocumentReference, fields: Record<string, unknown>) {
     await this.db.runTransaction(async (t) => {
       const current = await t.get(ref);
+      const notificationRef = ref.collection('notifications').doc('order-confirmation');
+      const notification = await t.get(notificationRef);
       // A slower poll must not undo a terminal result written by another worker.
       if (['delivered', 'failed'].includes(current.get('confirmationDeliveryStatus'))) return;
       t.update(ref, fields);
+      if (notification.exists)
+        t.update(notificationRef, {
+          ...(typeof fields.confirmationDeliveryStatus === 'string'
+            ? { deliveryStatus: fields.confirmationDeliveryStatus }
+            : {}),
+          updatedAt: this.now(),
+          ...(fields.confirmationDeliveryEvent
+            ? { deliveryEvent: fields.confirmationDeliveryEvent }
+            : {}),
+          ...(fields.confirmationStatus ? { status: fields.confirmationStatus } : {}),
+          ...(typeof fields.confirmationDeliveryError === 'string'
+            ? { deliveryDiagnostic: fields.confirmationDeliveryError }
+            : fields.confirmationDeliveryError
+              ? { deliveryDiagnostic: FieldValue.delete() }
+              : {}),
+        });
     });
   }
 }

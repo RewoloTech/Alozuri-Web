@@ -1,8 +1,9 @@
 import { notFound } from 'next/navigation';
 import { POLICY_VERSIONS } from '@alozuri/shared/policies';
 import { BUSINESS, LEGAL_VERSION } from '@alozuri/shared/legal';
-import Link from 'next/link';
+import Link from '@/components/localized-link';
 import { LegalDocument } from '@/components/legal-document';
+import { requestLocale } from '@/lib/localized-metadata';
 export const metadata = {
   title: 'Archived policy version',
   robots: { index: false, follow: true },
@@ -18,6 +19,7 @@ export default async function Page({
       ? POLICY_VERSIONS[version][slug]
       : undefined;
   if (!policy) notFound();
+  if ((await requestLocale()) !== 'en') return <LegalDocument policy={policy} version={version} />;
   if (version !== LEGAL_VERSION)
     return (
       <article className="container section policy-page">

@@ -1,14 +1,32 @@
-import Link from 'next/link';
+import Link from '@/components/localized-link';
 import { BUSINESS, LEGAL_EFFECTIVE_DATE, LEGAL_VERSION } from '@alozuri/shared/legal';
 import { POLICIES, type Policy } from '@alozuri/shared/policies';
 import { SupportChoices, CookieSettingsButton } from './privacy-provider';
-export function LegalDocument({
+import { requestLocale } from '@/lib/localized-metadata';
+import { legalDocuments } from '@alozuri/shared/i18n/legal-documents';
+import { LocaleUnavailableError } from '@alozuri/shared/i18n';
+import { LegalLanguageNotice } from './legal-language-notice';
+export async function LegalDocument({
   policy,
   version = LEGAL_VERSION,
 }: {
   policy: Policy;
   version?: string;
 }) {
+  const locale = await requestLocale();
+  if (locale !== 'en') {
+    try {
+      const document = legalDocuments(locale, version).find((entry) => entry.slug === policy.slug);
+      if (!document) return <LegalLanguageNotice />;
+      return <article className="container section policy-page" lang={locale}>
+        <h1>{document.title}</h1>
+        <div className="policy-copy" style={{whiteSpace: 'pre-wrap'}}>{document.text}</div>
+      </article>;
+    } catch (error) {
+      if (!(error instanceof LocaleUnavailableError)) throw error;
+      return <LegalLanguageNotice />;
+    }
+  }
   return (
     <article className="container section policy-page">
       <header className="page-intro">

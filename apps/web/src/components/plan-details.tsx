@@ -5,9 +5,11 @@ import { useMarketingConsent } from './privacy-provider';
 import { productStructuredData } from '@/lib/product-seo';
 import { jsonLd } from '@/lib/seo';
 import { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
+import Link from '@/components/localized-link';
+import { useLocale, useTranslations } from 'next-intl';
+import { destinationName } from '@alozuri/shared/i18n/destinations';
 import { useDispatch, useSelector } from 'react-redux';
-import { dataLabel, countryName, money, coverageLabel, type Plan } from '@alozuri/shared';
+import { dataLabel, money, coverageLabel, type Plan } from '@alozuri/shared';
 import { demoPlans } from '@alozuri/shared/demo';
 import { useCurrency } from './currency-provider';
 import { api, demoMode } from '@/lib/api';
@@ -20,6 +22,8 @@ export function PlanDetails({
   review?: boolean;
   initialPlan?: Plan | null;
 }) {
+  const locale = useLocale();
+  const t = useTranslations('plans');
   const marketing = useMarketingConsent();
   const viewId = useRef<string | null>(null);
   const { currency, refresh, ready } = useCurrency();
@@ -135,7 +139,7 @@ export function PlanDetails({
       {!plan.demo && !error && !loading && (!ready || plan.currency === currency) && (
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: jsonLd(productStructuredData(plan)) }}
+          dangerouslySetInnerHTML={{ __html: jsonLd(productStructuredData(plan, locale)) }}
         />
       )}
       <Link className="text-link" href="/destinations">
@@ -158,7 +162,7 @@ export function PlanDetails({
             </p>
             <div className="coverage-list">
               {plan.countries.map((c) => (
-                <span key={c}>{countryName(c)}</span>
+                <span key={c}>{destinationName(c, locale)}</span>
               ))}
             </div>
           </div>
@@ -207,8 +211,8 @@ export function PlanDetails({
             {(!ready || plan.currency === currency) && !loading && !error
               ? money(plan.priceCents, plan.currency)
               : error
-                ? 'Price unavailable'
-                : 'Loading price…'}{' '}
+                ? t('unavailable')
+                : t('loadingPrice')}{' '}
             <small>{ready ? currency : plan.currency}</small>
           </h2>
           <p>
@@ -236,10 +240,10 @@ export function PlanDetails({
             {adding
               ? 'Adding…'
               : !ready || plan.currency !== currency || loading
-                ? 'Loading price…'
+                ? t('loadingPrice')
                 : !cart.ready || cart.syncing
                   ? 'Preparing basket…'
-                  : 'Add to cart'}
+                  : t('add')}
           </button>
           <Link
             className="button full-width"
@@ -249,7 +253,7 @@ export function PlanDetails({
               if (plan.demo) event.preventDefault();
             }}
           >
-            Buy now
+            {t('buy')}
           </Link>
           {error && (
             <button

@@ -2,12 +2,13 @@ import { demoPlans } from '@alozuri/shared/demo';
 import { dataLabel } from '@alozuri/shared';
 import { PlanDetails } from '@/components/plan-details';
 import { getPublicPlan } from '@/lib/catalogue-server';
-import { publicMetadata, breadcrumbs, jsonLd } from '@/lib/seo';
+import { breadcrumbs, jsonLd } from '@/lib/seo';
+import { localizedMetadata as publicMetadata } from '@/lib/localized-metadata';
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params,
     plan = await getPublicPlan(id);
   return plan
-    ? publicMetadata(
+    ? await publicMetadata(
         plan.name,
         `${dataLabel(plan)} travel data for ${plan.days} ${plan.days === 1 ? 'day' : 'days'}. Review verified country coverage, activation and fair-use conditions before buying.`,
         '/plans/' + id,

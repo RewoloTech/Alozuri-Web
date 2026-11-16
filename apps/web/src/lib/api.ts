@@ -1,3 +1,4 @@
+import { storeApiError } from './api-error';
 import { authClient } from './firebase';
 import { allowedStoreRequest } from './store-proxy';
 export const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE !== 'false';
@@ -60,7 +61,7 @@ export async function api<T>(
   const body = await response
     .json()
     .catch(() => ({ error: 'The service is temporarily unavailable.' }));
-  if (!response.ok) throw new Error(body.error || 'Something went wrong. Please try again.');
+  if (!response.ok) throw await storeApiError(body, response.status);
   return body as T;
 }
 
@@ -72,11 +73,7 @@ export async function apiBlob(
   const response = await storeResponse(path, init, authenticated);
   if (!response.ok) {
     const body: unknown = await response.json().catch(() => null);
-    throw new Error(
-      body && typeof body === 'object' && 'error' in body && typeof body.error === 'string'
-        ? body.error
-        : 'Your contract could not be downloaded. Please retry.',
-    );
+    throw await storeApiError(body, response.status);
   }
   if (!response.headers.get('content-type')?.includes('application/pdf'))
     throw new Error('Your contract is temporarily unavailable.');

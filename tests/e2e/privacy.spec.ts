@@ -510,7 +510,13 @@ test('an API error is shown without an automatic replay and prices can be retrie
       await route.fulfill({
         status: 503,
         headers: { 'Access-Control-Allow-Origin': 'http://localhost:3100' },
-        json: { error: 'Quote temporarily unavailable. Please retry.' },
+        json: {
+          error: {
+            code: 'INTERNAL_ERROR',
+            message: 'Private quote-provider diagnostic.',
+            requestId: 'quote-fixture',
+          },
+        },
       });
     else await route.continue();
   });
@@ -518,7 +524,12 @@ test('an API error is shown without an automatic replay and prices can be retrie
   await page.getByRole('button', { name: 'Add to cart', exact: true }).click();
   await expect(page.getByRole('link', { name: 'Shopping cart, 1 item' })).toBeVisible();
   await page.goto('/cart');
-  await expect(page.locator('main [role="alert"]')).toContainText('Quote temporarily unavailable.');
+  await expect(page.locator('main [role="alert"]')).toContainText(
+    'Something went wrong. Please try again.',
+  );
+  await expect(page.locator('main [role="alert"]')).not.toContainText(
+    'Private quote-provider diagnostic',
+  );
   expect(quotes).toBe(1);
   expect(proxies).toBe(0);
   await page.getByRole('button', { name: 'Retry prices' }).click();

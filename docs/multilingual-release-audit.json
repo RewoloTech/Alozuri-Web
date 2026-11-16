@@ -1,0 +1,358 @@
+{
+  "ready": false,
+  "locales": [
+    {
+      "locale": "en",
+      "ready": true,
+      "issues": []
+    },
+    {
+      "locale": "es",
+      "ready": false,
+      "issues": [
+        "website_draft",
+        "checkout_draft",
+        "errors_draft",
+        "installation_draft",
+        "email_draft",
+        "legal_missing",
+        "documents_missing",
+        "legal_documents_unavailable"
+      ]
+    },
+    {
+      "locale": "de",
+      "ready": false,
+      "issues": [
+        "website_draft",
+        "checkout_draft",
+        "errors_draft",
+        "installation_draft",
+        "email_draft",
+        "legal_missing",
+        "documents_missing",
+        "legal_documents_unavailable"
+      ]
+    },
+    {
+      "locale": "fr",
+      "ready": false,
+      "issues": [
+        "website_draft",
+        "checkout_draft",
+        "errors_draft",
+        "installation_draft",
+        "email_draft",
+        "legal_missing",
+        "documents_missing",
+        "legal_documents_unavailable"
+      ]
+    },
+    {
+      "locale": "it",
+      "ready": false,
+      "issues": [
+        "website_draft",
+        "checkout_draft",
+        "errors_draft",
+        "installation_draft",
+        "email_draft",
+        "legal_missing",
+        "documents_missing",
+        "legal_documents_unavailable"
+      ]
+    },
+    {
+      "locale": "pt-BR",
+      "ready": false,
+      "issues": [
+        "website_draft",
+        "checkout_draft",
+        "errors_draft",
+        "installation_draft",
+        "email_draft",
+        "legal_missing",
+        "documents_missing",
+        "legal_documents_unavailable"
+      ]
+    },
+    {
+      "locale": "ro",
+      "ready": false,
+      "issues": [
+        "website_draft",
+        "checkout_draft",
+        "errors_draft",
+        "installation_draft",
+        "email_draft",
+        "legal_missing",
+        "documents_missing",
+        "legal_documents_unavailable"
+      ]
+    },
+    {
+      "locale": "ja",
+      "ready": false,
+      "issues": [
+        "website_draft",
+        "checkout_draft",
+        "errors_draft",
+        "installation_draft",
+        "email_draft",
+        "legal_missing",
+        "documents_missing",
+        "legal_documents_unavailable"
+      ]
+    },
+    {
+      "locale": "ko",
+      "ready": false,
+      "issues": [
+        "website_draft",
+        "checkout_draft",
+        "errors_draft",
+        "installation_draft",
+        "email_draft",
+        "legal_missing",
+        "documents_missing",
+        "legal_documents_unavailable"
+      ]
+    },
+    {
+      "locale": "zh-Hans",
+      "ready": false,
+      "issues": [
+        "website_draft",
+        "checkout_draft",
+        "errors_draft",
+        "installation_draft",
+        "email_draft",
+        "legal_missing",
+        "documents_missing",
+        "legal_documents_unavailable"
+      ]
+    },
+    {
+      "locale": "ar",
+      "ready": false,
+      "issues": [
+        "website_draft",
+        "checkout_draft",
+        "errors_draft",
+        "installation_draft",
+        "email_draft",
+        "legal_missing",
+        "documents_missing",
+        "legal_documents_unavailable"
+      ]
+    },
+    {
+      "locale": "nl",
+      "ready": false,
+      "issues": [
+        "website_draft",
+        "checkout_draft",
+        "errors_draft",
+        "installation_draft",
+        "email_draft",
+        "legal_missing",
+        "documents_missing",
+        "legal_documents_unavailable"
+      ]
+    },
+    {
+      "locale": "pl",
+      "ready": false,
+      "issues": [
+        "website_draft",
+        "checkout_draft",
+        "errors_draft",
+        "installation_draft",
+        "email_draft",
+        "legal_missing",
+        "documents_missing",
+        "legal_documents_unavailable"
+      ]
+    }
+  ],
+  "customerLiteralCandidates": 537,
+  "files": [
+    {
+      "file": "apps/web/src/components/purchase-status.tsx",
+      "count": 41
+    },
+    {
+      "file": "apps/web/src/components/planner.tsx",
+      "count": 39
+    },
+    {
+      "file": "apps/web/src/components/privacy-provider.tsx",
+      "count": 39
+    },
+    {
+      "file": "apps/web/src/components/home.tsx",
+      "count": 37
+    },
+    {
+      "file": "apps/web/src/components/auth-form.tsx",
+      "count": 32
+    },
+    {
+      "file": "apps/web/src/components/dashboard.tsx",
+      "count": 31
+    },
+    {
+      "file": "apps/web/src/components/cart.tsx",
+      "count": 27
+    },
+    {
+      "file": "apps/web/src/components/plan-details.tsx",
+      "count": 27
+    },
+    {
+      "file": "apps/web/src/app/partners/page.tsx",
+      "count": 25
+    },
+    {
+      "file": "apps/web/src/components/checkout.tsx",
+      "count": 25
+    },
+    {
+      "file": "apps/web/src/app/help/page.tsx",
+      "count": 24
+    },
+    {
+      "file": "apps/web/src/components/checkout-account.tsx",
+      "count": 17
+    },
+    {
+      "file": "apps/web/src/components/esim-usage.tsx",
+      "count": 17
+    },
+    {
+      "file": "apps/web/src/components/footer.tsx",
+      "count": 17
+    },
+    {
+      "file": "apps/web/src/components/order-details.tsx",
+      "count": 11
+    },
+    {
+      "file": "apps/web/src/app/destinations/europe/page.tsx",
+      "count": 10
+    },
+    {
+      "file": "apps/web/src/app/guides/page.tsx",
+      "count": 10
+    },
+    {
+      "file": "apps/web/src/components/destination-advice.tsx",
+      "count": 9
+    },
+    {
+      "file": "apps/web/src/components/featured-bundles.tsx",
+      "count": 9
+    },
+    {
+      "file": "apps/web/src/components/header.tsx",
+      "count": 9
+    },
+    {
+      "file": "apps/web/src/components/legal-document.tsx",
+      "count": 9
+    },
+    {
+      "file": "apps/web/src/components/verify-email.tsx",
+      "count": 9
+    },
+    {
+      "file": "apps/web/src/components/country-offers.tsx",
+      "count": 8
+    },
+    {
+      "file": "apps/web/src/components/installation-details.tsx",
+      "count": 8
+    },
+    {
+      "file": "apps/web/src/app/legal/versions/[version]/[slug]/page.tsx",
+      "count": 6
+    },
+    {
+      "file": "apps/web/src/app/guides/[slug]/page.tsx",
+      "count": 5
+    },
+    {
+      "file": "apps/web/src/components/account-menu.tsx",
+      "count": 5
+    },
+    {
+      "file": "apps/web/src/app/destinations/page.tsx",
+      "count": 4
+    },
+    {
+      "file": "apps/web/src/app/not-found.tsx",
+      "count": 4
+    },
+    {
+      "file": "apps/web/src/app/error.tsx",
+      "count": 3
+    },
+    {
+      "file": "apps/web/src/components/destination-directory.tsx",
+      "count": 3
+    },
+    {
+      "file": "apps/web/src/components/order-lookup.tsx",
+      "count": 3
+    },
+    {
+      "file": "apps/web/src/app/destinations/[code]/page.tsx",
+      "count": 2
+    },
+    {
+      "file": "apps/web/src/components/stripe-checkout.tsx",
+      "count": 2
+    },
+    {
+      "file": "apps/web/src/app/checkout/page.tsx",
+      "count": 1
+    },
+    {
+      "file": "apps/web/src/app/checkout/success/page.tsx",
+      "count": 1
+    },
+    {
+      "file": "apps/web/src/app/dashboard/orders/page.tsx",
+      "count": 1
+    },
+    {
+      "file": "apps/web/src/app/layout.tsx",
+      "count": 1
+    },
+    {
+      "file": "apps/web/src/app/login/page.tsx",
+      "count": 1
+    },
+    {
+      "file": "apps/web/src/app/verify-email/page.tsx",
+      "count": 1
+    },
+    {
+      "file": "apps/web/src/components/account-gate.tsx",
+      "count": 1
+    },
+    {
+      "file": "apps/web/src/components/account-navigation.tsx",
+      "count": 1
+    },
+    {
+      "file": "apps/web/src/components/legacy-checkout.tsx",
+      "count": 1
+    },
+    {
+      "file": "apps/web/src/components/seasonal-destinations.tsx",
+      "count": 1
+    }
+  ],
+  "limitations": "Static JSX inventory is conservative; dynamic strings, complete emails, PDFs and native/legal review require separate verification."
+}

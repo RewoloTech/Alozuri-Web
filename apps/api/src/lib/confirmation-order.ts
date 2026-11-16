@@ -1,3 +1,4 @@
+import { LOCALES } from '../../../../packages/shared/src/i18n/locales.ts';
 import { promotionSnapshot } from './promotions.js';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
@@ -12,6 +13,7 @@ const cents = z.number().int().nonnegative().safe();
 // installation details are validated and supplied separately from private activation records.
 export const confirmationOrderSchema = z
   .object({
+    locale: z.enum(LOCALES).optional(),
     id: z.string().regex(/^purchase_[a-f0-9]{48}$/),
     email: z.email(),
     customerName: z.string().min(1).max(200).optional(),

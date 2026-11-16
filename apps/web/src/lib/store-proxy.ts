@@ -13,7 +13,7 @@ export function allowedStoreRequest(method: string, path: string): boolean {
   if (method === 'GET') return reads.some((pattern) => new RegExp(pattern).test(path));
   if (method === 'POST')
     return ['/v2/quote', '/v2/checkout', '/v2/cart/merge', '/v2/profile'].includes(path);
-  if (method === 'PATCH') return path === '/v2/profile';
+  if (method === 'PATCH') return path === '/v2/profile' || path === '/v2/profile/language';
   return method === 'PUT' && path === '/v2/cart';
 }
 

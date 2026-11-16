@@ -1,4 +1,5 @@
 import { currencySchema } from './exchange-rates.js';
+import type { ErrorCode } from '../../../../packages/shared/src/i18n/errors.ts';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import {
@@ -19,6 +20,7 @@ export class SearchError extends Error {
   constructor(
     message: string,
     readonly statusCode = 400,
+    readonly code: ErrorCode = 'VALIDATION_FAILED',
   ) {
     super(message);
   }
@@ -68,7 +70,7 @@ export function parseSearchCursor(cursor: string | undefined): Bookmark | undefi
   try {
     return bookmarkSchema.parse(JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8')));
   } catch {
-    throw new SearchError('Invalid search page. Start a new search.');
+    throw new SearchError('Invalid search page. Start a new search.', 400, 'SEARCH_PAGE_INVALID');
   }
 }
 const hash = (input: unknown) => createHash('sha256').update(JSON.stringify(input)).digest('hex');
@@ -110,9 +112,17 @@ export class SearchCatalogue {
     const normalized = { ...filters, countries: normalizeCountries(filters.countries).sort() };
     const fingerprint = hash(normalized);
     if (cursor && cursor.query !== fingerprint)
-      throw new SearchError('Search page does not match these filters. Start a new search.');
+      throw new SearchError(
+        'Search page does not match these filters. Start a new search.',
+        400,
+        'SEARCH_PAGE_INVALID',
+      );
     if (cursor && cursor.revision !== this.revision)
-      throw new SearchError('The catalogue changed. Refresh your search.', 409);
+      throw new SearchError(
+        'The catalogue changed. Refresh your search.',
+        409,
+        'CATALOGUE_CHANGED',
+      );
     const sets = normalized.countries
       .map((c) => this.countries.get(c) || new Set<string>())
       .sort((a, b) => a.size - b.size);
@@ -161,7 +171,8 @@ export class SearchCatalogue {
       ordered = [...picks, ...candidates.filter((p) => !picked.has(p.id))];
     }
     const offset = cursor?.offset || 0;
-    if (offset > ordered.length) throw new SearchError('Invalid search page. Start a new search.');
+    if (offset > ordered.length)
+      throw new SearchError('Invalid search page. Start a new search.', 400, 'SEARCH_PAGE_INVALID');
     const next = offset + normalized.pageSize;
     const nextCursor =
       next < ordered.length

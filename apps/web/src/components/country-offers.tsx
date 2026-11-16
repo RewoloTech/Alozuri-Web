@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
+import Link from '@/components/localized-link';
 import { countryName } from '@alozuri/shared';
 import type { Plan } from '@alozuri/shared';
 import { PlanCard } from './planner';

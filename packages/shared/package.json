@@ -16,9 +16,19 @@
     "./contract": "./src/contract.ts",
     "./contract-document": "./src/contract-document.ts",
     "./financial": "./src/financial.ts",
-    "./pricing-history": "./src/pricing-history.ts"
+    "./pricing-history": "./src/pricing-history.ts",
+    "./i18n": "./src/i18n/locales.ts",
+    "./i18n/messages": "./src/i18n/messages.ts",
+    "./i18n/catalogs": "./src/i18n/catalogs.ts",
+    "./i18n/errors": "./src/i18n/errors.ts",
+    "./i18n/legal-documents": "./src/i18n/legal-documents.ts",
+    "./i18n/destinations": "./src/i18n/destinations.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@formatjs/icu-messageformat-parser": "^3.5.23",
+    "use-intl": "^4.15.1"
   }
 }

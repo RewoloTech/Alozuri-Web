@@ -1,3 +1,4 @@
+import { transactionLocale } from './transaction-locale.js';
 import QRCode from 'qrcode';
 import { z } from 'zod';
 import { activationSchema } from './supplier.js';
@@ -27,6 +28,7 @@ export async function installationConfirmationEmail(
   inputUnits: EmailInstallation[],
 ) {
   const order = confirmationOrderSchema.parse(input);
+  transactionLocale(order);
   const units = z
     .array(emailInstallationSchema)
     .min(1)

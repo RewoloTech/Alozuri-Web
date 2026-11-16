@@ -1,6 +1,7 @@
 import type { MetadataRoute } from 'next';
 import { BUSINESS } from '@alozuri/shared/legal';
 import { INDEXABLE, PRIVATE_ROUTES } from '@/lib/seo';
+import { INTERFACE_LOCALES, localePath } from '@alozuri/shared/i18n';
 export const dynamic = 'force-static';
 export default function robots(): MetadataRoute.Robots {
   return {
@@ -12,6 +13,11 @@ export default function robots(): MetadataRoute.Robots {
             disallow: [
               ...PRIVATE_ROUTES.map((p) => p + '/'),
               ...PRIVATE_ROUTES,
+              ...INTERFACE_LOCALES.filter((locale) => locale !== 'en').flatMap((locale) =>
+                PRIVATE_ROUTES.filter((path) => !['/operations', '/admin'].includes(path)).flatMap(
+                  (path) => [localePath(path, locale), localePath(path, locale) + '/'],
+                ),
+              ),
               '/legal/versions/',
               '/api/',
             ],

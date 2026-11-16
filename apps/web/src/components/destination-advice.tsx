@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import Link from '@/components/localized-link';
 import type { DestinationContent } from '@/lib/destination-content';
 export function DestinationAdvice({ content }: { content: DestinationContent }) {
   return (

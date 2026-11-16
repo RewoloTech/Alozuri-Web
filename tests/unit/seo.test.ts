@@ -31,6 +31,15 @@ test('public canonical and social URLs stay aligned; private operations remains 
   assert.equal(m.twitter.title, m.openGraph.title);
   assert.ok(PRIVATE_ROUTES.includes('/operations'));
 });
+test('localised product links retain the exact recorded amount, currency and supplier identifier', () => {
+  const plan = { ...demoPlans[0], demo: false, priceCents: 113, currency: 'GBP' };
+  const schema = productStructuredData(plan, 'de')!;
+  assert.equal(schema.url, 'https://alozuri.com/de/plans/' + plan.id);
+  assert.equal(schema.offers.url, schema.url);
+  assert.equal(schema.offers.price, '1.13');
+  assert.equal(schema.offers.priceCurrency, 'GBP');
+  assert.equal(schema.sku, plan.id);
+});
 test('curated destination advice and guide routes are unique and contain useful sections', () => {
   assert.equal(new Set(guides.map((g) => g.slug)).size, 5);
   for (const g of guides) {
