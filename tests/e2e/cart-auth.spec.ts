@@ -1181,6 +1181,8 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
     await expect(promotionsPanel.getByLabel('Discount % (1–50)')).toHaveValue('35');
     await promotionsPanel.getByRole('button', { name: '40%', exact: true }).click();
     await expect(promotionsPanel.getByLabel('Discount % (1–50)')).toHaveValue('40');
+    await promotionsPanel.getByRole('button', { name: '45%', exact: true }).click();
+    await expect(promotionsPanel.getByLabel('Discount % (1–50)')).toHaveValue('45');
     await promotionsPanel.getByRole('button', { name: '50%', exact: true }).click();
     await expect(promotionsPanel.getByLabel('Discount % (1–50)')).toHaveValue('50');
     await promotionsPanel.getByRole('button', { name: 'Preview impact', exact: true }).click();

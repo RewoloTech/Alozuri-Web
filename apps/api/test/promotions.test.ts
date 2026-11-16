@@ -19,7 +19,7 @@ const base = {
 };
 test('whole percentage ceiling, canonical codes, dates, and no stacking or browser amounts', () => {
   assert.equal(promotionInput.parse(base).code, 'SAVE10');
-  for (const discountPercent of [35, 40, 50]) {
+  for (const discountPercent of [35, 40, 45, 50]) {
     assert.equal(
       promotionInput.parse({ ...base, discountPercent }).discountPercent,
       discountPercent,
@@ -45,7 +45,7 @@ test('whole percentage ceiling, canonical codes, dates, and no stacking or brows
   assert.equal(promotionInput.safeParse({ ...base, expiresAt: base.startsAt }).success, false);
   assert.equal(promotionInput.safeParse({ ...base, maxUses: 0 }).success, false);
 });
-for (const percent of [5, 10, 15, 20, 25, 30, 35, 40, 50])
+for (const percent of [5, 10, 15, 20, 25, 30, 35, 40, 45, 50])
   test(`${percent}% discount rounds down per unit and cannot exceed ceiling`, () => {
     for (const price of [1, 101, 499, 12345, 99999999]) {
       const actual = discountUnit(price, percent);

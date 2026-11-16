@@ -1664,3 +1664,139 @@ test('Meta never loads for refused consent or a private credential URL', async (
   ).toBeVisible();
   expect(requests).toBe(0);
 });
+
+for (const width of [390, 1440])
+  test(`Continue to payment validates typed promotions and opens the payment form at the top (${width}px)`, async ({
+    page,
+  }) => {
+    await setup(page);
+    await mockStripe(page);
+    await page.setViewportSize({ width, height: 700 });
+    let checkouts = 0;
+    await page.route('http://127.0.0.1:8189/v2/quote', async (route) => {
+      const { promotionCode } = route.request().postDataJSON();
+      const headers = { 'Access-Control-Allow-Origin': 'http://localhost:3100' };
+      if (promotionCode && promotionCode !== 'SAVE45')
+        return route.fulfill({ status: 400, headers, json: { error: 'Promotion has expired.' } });
+      const discounted = promotionCode === 'SAVE45';
+      const totalCents = discounted ? 660 : 1200;
+      return route.fulfill({
+        headers,
+        json: {
+          quote: {
+            currency: 'USD',
+            items: [{ plan: { ...plan, priceCents: totalCents }, quantity: 1 }],
+            totalCents,
+            subtotalCents: totalCents,
+            taxCents: 0,
+            ...(discounted
+              ? {
+                  promotion: { code: 'SAVE45', discountPercent: 45 },
+                  discountCents: 540,
+                  originalRetailCents: 1200,
+                }
+              : {}),
+          },
+        },
+      });
+    });
+    await page.route('http://127.0.0.1:8189/v2/checkout', async (route) => {
+      checkouts++;
+      const input = route.request().postDataJSON();
+      expect(input.promotionCode).toBe('SAVE45');
+      expect(input.expectedTotalCents).toBe(660);
+      return route.fulfill({
+        headers: { 'Access-Control-Allow-Origin': 'http://localhost:3100' },
+        json: {
+          orderId,
+          accessToken: 'fixture-private',
+          clientSecret: 'pi_browser_secret',
+          quote: {
+            currency: 'USD',
+            items: [{ plan: { ...plan, priceCents: 660 }, quantity: 1 }],
+            totalCents: 660,
+            subtotalCents: 660,
+            taxCents: 0,
+            promotion: { code: 'SAVE45', discountPercent: 45 },
+            discountCents: 540,
+          },
+        },
+      });
+    });
+    await page.goto('/checkout?buy=' + plan.id);
+    await page
+      .getByRole('textbox', { name: 'Email address', exact: true })
+      .fill('guest@example.com');
+    await page.getByRole('checkbox').check();
+    await page.locator('.checkout-promo-entry summary').click();
+    await page.getByLabel('Promotional code', { exact: true }).fill('EXPIRED');
+    await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
+    await expect(page.locator('main').getByRole('alert')).toContainText('Promotion has expired');
+    expect(checkouts).toBe(0);
+    await expect(page.getByRole('heading', { name: 'Secure payment', exact: true })).toHaveCount(0);
+    await page.getByLabel('Promotional code', { exact: true }).fill(' save45 ');
+    const continueButton = page.getByRole('button', { name: 'Continue to payment', exact: true });
+    await continueButton.scrollIntoViewIfNeeded();
+    await continueButton.click();
+    await expect(page.getByRole('heading', { name: 'Secure payment', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Pay $6.60', exact: true })).toBeEnabled();
+    await expect(page.getByRole('heading', { name: 'Secure payment', exact: true })).toBeFocused();
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+    expect(checkouts).toBe(1);
+    await page.screenshot({ path: `/tmp/alozuri-payment-top-${width}.png` });
+  });
+
+test('editing a code during Continue validation cancels automatic payment progression', async ({
+  page,
+}) => {
+  await setup(page);
+  await mockStripe(page);
+  let release = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let checkouts = 0;
+  page.on('request', (request) => {
+    if (request.url().endsWith('/v2/checkout') && request.method() === 'POST') checkouts++;
+  });
+  await page.route('http://127.0.0.1:8189/v2/quote', async (route) => {
+    const input = route.request().postDataJSON();
+    if (!input.promotionCode) return route.fallback();
+    await gate;
+    return route.fulfill({
+      headers: { 'Access-Control-Allow-Origin': 'http://localhost:3100' },
+      json: {
+        quote: {
+          currency: 'USD',
+          items: [{ plan: { ...plan, priceCents: 660 }, quantity: 1 }],
+          subtotalCents: 660,
+          totalCents: 660,
+          taxCents: 0,
+          promotion: { code: 'SAVE45', discountPercent: 45 },
+          discountCents: 540,
+        },
+      },
+    });
+  });
+  await page.goto('/checkout?buy=' + plan.id);
+  await page.getByRole('textbox', { name: 'Email address', exact: true }).fill('guest@example.com');
+  await page.getByRole('checkbox').check();
+  await page.locator('.checkout-promo-entry summary').click();
+  await page.getByLabel('Promotional code', { exact: true }).fill('SAVE45');
+  const requested = page.waitForRequest(
+    (request) =>
+      request.url().endsWith('/v2/quote') && request.postDataJSON()?.promotionCode === 'SAVE45',
+  );
+  await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
+  await requested;
+  await page.getByLabel('Promotional code', { exact: true }).fill('DIFFERENT');
+  release();
+  await expect(page.getByText('SAVE45: 45% off', { exact: false })).toBeVisible();
+  expect(checkouts).toBe(0);
+  await expect(page.getByRole('heading', { name: 'Secure payment', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Remove code', exact: true }).click();
+  await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Secure payment', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Pay $12.00', exact: true })).toBeEnabled();
+  expect(checkouts).toBe(1);
+});

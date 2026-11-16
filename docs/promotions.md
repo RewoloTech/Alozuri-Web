@@ -32,7 +32,7 @@ The per-code reservation map is capped at 100 concurrent pending purchases to bo
 
 Automated tests cover:
 
-- [x] Whole-number ceiling/no stacking, 5/10/15/20/25/30/35/40/50% rounding, dates and invalid/exhausted/inactive codes.
+- [x] Whole-number ceiling/no stacking, 5/10/15/20/25/30/35/40/45/50% rounding, dates and invalid/exhausted/inactive codes.
 - [x] Package-specific normal/reduced/low/negative contribution warnings and explicit estimated fees.
 - [x] Guest/account checkout and GBP/EUR/USD; exact discounted Stripe amounts and frozen supplier costs.
 - [x] Concurrent one-use reservations, failed/cancelled/abandoned intents and duplicate success events.
@@ -98,3 +98,5 @@ The protected endpoints are `PATCH /v1/operations/promotions/:code/status` with 
 ## Promotion shown on sales
 
 Financial Overview's sales table has a dedicated **Promotion** column, showing the historical applied code, percentage and actual discount in the selling currency; orders without a recorded promotion show a dash. The code/percentage snapshot and exact discount were already recorded by server-side checkout and retained in `financial.promotion` and `financial.selling.discountMinor`. This display reads those historical values, never the promotion's current configuration. Pausing, editing or rejecting deletion of a used code does not change a past order's displayed discount. Existing records with no reliable promotion snapshot are not assigned invented codes. Deploy the API before the frontend; no deployment is performed by this implementation.
+
+Checkout validates an entered or changed promotion when Continue to payment is pressed, even without Apply code. It waits for the server quote and uses its discounted amount for checkout; invalid codes stop progression. Changing the email, cart, currency or entered code during validation cancels automatic continuation. Entered-code removal is also re-quoted before payment. Existing Apply/Remove controls remain available. The payment step scrolls to the page top and focuses its Secure payment heading. Operations also provides a 45% shortcut within the existing 50% maximum.

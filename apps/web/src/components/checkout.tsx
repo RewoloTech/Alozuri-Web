@@ -281,6 +281,11 @@ function CheckoutForIdentity() {
   );
   const [promotionInput, setPromotionInput] = useState('');
   const [promotionCode, setPromotionCode] = useState('');
+  const reviewForm = useRef<HTMLFormElement>(null);
+  const paymentHeading = useRef<HTMLHeadingElement>(null);
+  const pendingPromotionContinue = useRef<string | null>(null);
+  const enteredPromotion = promotionInput.trim().toUpperCase();
+  const promotionChanged = enteredPromotion !== promotionCode;
   const signature = JSON.stringify(cartItems(lines));
   useEffect(() => {
     if (session) return;
@@ -312,6 +317,7 @@ function CheckoutForIdentity() {
       })
       .catch((e) => {
         if (active) {
+          pendingPromotionContinue.current = null;
           setQuotedSignature('');
           setError(
             controller.signal.aborted
@@ -337,6 +343,29 @@ function CheckoutForIdentity() {
     quotedSignature === signature &&
     (quote.promotion?.code ?? '') === promotionCode &&
     !loading;
+  const continuationKey = JSON.stringify([
+    signature,
+    currency,
+    email.trim().toLowerCase(),
+    compatible,
+    user?.uid ?? 'guest',
+    enteredPromotion,
+  ]);
+  useEffect(() => {
+    if (!pendingPromotionContinue.current) return;
+    if (pendingPromotionContinue.current !== continuationKey) {
+      pendingPromotionContinue.current = null;
+      return;
+    }
+    if (!quoteReady) return;
+    pendingPromotionContinue.current = null;
+    reviewForm.current?.requestSubmit();
+  }, [continuationKey, quoteReady]);
+  useEffect(() => {
+    if (!session) return;
+    paymentHeading.current?.focus({ preventScroll: true });
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }, [session]);
   const preview = previewCartPrices(
     lines,
     quote?.currency === currency ? quote.items : [],
@@ -349,14 +378,19 @@ function CheckoutForIdentity() {
       accountBusy ||
       cart.syncing ||
       (!buy && cart.syncFailed) ||
-      !quote ||
       !compatible ||
-      !quoteReady ||
+      loading ||
       mode === null ||
       mode === 'disabled' ||
       mode !== stripeCheckoutMode
     )
       return;
+    if (promotionChanged) {
+      pendingPromotionContinue.current = continuationKey;
+      setPromotionCode(enteredPromotion);
+      return;
+    }
+    if (!quote || !quoteReady) return;
     submitting.current = true;
     setStarting(true);
     setError('');
@@ -525,7 +559,9 @@ function CheckoutForIdentity() {
         <div className="surface stack">
           {session ? (
             <>
-              <h2>Secure payment</h2>
+              <h2 ref={paymentHeading} tabIndex={-1}>
+                Secure payment
+              </h2>
               <p>Delivery email: {session.deliveryEmail}</p>
               {mode === 'test' && (
                 <p className="notice">Test payment. No real money or eSIM will be issued.</p>
@@ -563,7 +599,7 @@ function CheckoutForIdentity() {
               </Elements>
             </>
           ) : (
-            <form className="stack" onSubmit={start}>
+            <form ref={reviewForm} className="stack" onSubmit={start}>
               <h2>Delivery email</h2>
               <p>We&apos;ll send your eSIM installation instructions here.</p>
               <CheckoutAccount
@@ -600,6 +636,7 @@ function CheckoutForIdentity() {
                     }
                   }}
                   value={promotionInput}
+                  disabled={starting}
                   onChange={(e) => setPromotionInput(e.target.value)}
                 />
                 <div className="checkout-promo-actions">
@@ -660,7 +697,7 @@ function CheckoutForIdentity() {
                   cart.syncing ||
                   (!buy && cart.syncFailed) ||
                   loading ||
-                  !quoteReady ||
+                  (!quoteReady && !promotionChanged) ||
                   !compatible ||
                   mode === null ||
                   mode === 'disabled' ||

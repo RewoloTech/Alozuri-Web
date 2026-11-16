@@ -322,7 +322,7 @@ export function PromotionsPanel({ uid }: { uid: string }) {
           />
         </label>
         <div className="operations-esim-search">
-          {[5, 10, 15, 20, 25, 30, 35, 40, 50].map((n) => (
+          {[5, 10, 15, 20, 25, 30, 35, 40, 45, 50].map((n) => (
             <button
               type="button"
               className="button small"
