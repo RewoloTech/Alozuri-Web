@@ -1,6 +1,6 @@
 import { englishMessages, type Messages } from './messages.ts';
 import type { Locale } from './locales.ts';
-/** Draft imports are lazy: never ship every language to every visitor. */
+/** Locale imports are lazy: never ship every language to every visitor. */
 export async function loadMessages(locale: Locale): Promise<Messages> {
   switch (locale) {
     case 'en':

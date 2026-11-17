@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
 import { legalDocuments } from '../../../../packages/shared/src/i18n/legal-documents.ts';
+import { staticMessages } from '../../../../packages/shared/src/i18n/static-catalogs.ts';
+import { createTranslator } from 'use-intl/core';
 import {
   LOCALES,
   requirePublishedLocale,
@@ -110,8 +112,26 @@ export function legalSnapshot(
 ): LegalSnapshot {
   requirePublishedLocale(locale);
   // A status change alone cannot turn English legal text into another language.
-  legalDocuments(locale, input.version);
+  const documents = legalDocuments(locale, input.version);
   const snapshot = englishLegalSnapshot(input, now);
+  if (locale !== 'en') {
+    const terms = documents.find((document) => document.slug === 'terms');
+    const refunds = documents.find((document) => document.slug === 'refunds');
+    if (!terms || !refunds) throw new Error('Accepted legal documents are unavailable.');
+    const t = createTranslator({ locale, messages: staticMessages(locale) });
+    const isolate = (value: string) => (locale === 'ar' ? '\u2066' + value + '\u2069' : value);
+    snapshot.termsText = terms.text;
+    snapshot.refundText = refunds.text;
+    snapshot.noticeText = t('legalUi.notice');
+    snapshot.business = {
+      ...BUSINESS,
+      identity: t('site.company', {
+        brand: isolate(BUSINESS.brand),
+        company: isolate(BUSINESS.company),
+        number: isolate(BUSINESS.number),
+      }),
+    };
+  }
   const contentHash = createHash('sha256')
     .update(
       JSON.stringify({

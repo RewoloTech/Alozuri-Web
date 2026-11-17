@@ -34,7 +34,7 @@ test('optional account creation reuses the delivery email and keeps checkout ope
   await expect(page.getByText('Signed in as', { exact: false })).toHaveCount(0);
   await expect(email).toHaveValue('new@example.test');
   await expect(page.getByText('Authentication attempts: 1')).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Verify your email' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Verify email' })).toBeVisible();
   await page.getByRole('button', { name: 'Continue to payment' }).click();
   await expect(
     page.getByRole('status').filter({ hasText: 'Payment continues with' }),
@@ -50,7 +50,7 @@ test('Google sign-in fills its account email and avoids duplicate attempts', asy
     'google@example.test',
   );
   await expect(page.getByText('Authentication attempts: 1')).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Verify your email' })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Verify email' })).toHaveCount(0);
   await page.getByRole('textbox', { name: 'Email address' }).fill('delivery@example.test');
   await page.getByRole('button', { name: 'Continue to payment' }).click();
   await expect(

@@ -35,8 +35,29 @@ if (existsSync(path.join(source, 'apps/api/package.json'))) {
   cpSync(path.join(source, 'apps/api/package.json'), path.join(target, 'apps/api/package.json'));
 }
 symlinkSync(path.join(source, 'node_modules'), path.join(target, 'node_modules'), 'dir');
+// Workspace package symlinks point back at the developer's checkout. Resolve
+// every shared export to the copied source so edits cannot hot-reload a running
+// browser test or mix two catalogue versions.
+const testTsconfigPath = path.join(target, 'apps/web/tsconfig.json');
+const testTsconfig = JSON.parse(readFileSync(testTsconfigPath, 'utf8'));
+const sharedExports = JSON.parse(
+  readFileSync(path.join(target, 'packages/shared/package.json'), 'utf8'),
+).exports;
+for (const [name, file] of Object.entries(sharedExports)) {
+  if (typeof file !== 'string' || !file.startsWith('./src/'))
+    throw new Error('The shared test package export must refer to a source file.');
+  testTsconfig.compilerOptions.paths[
+    name === '.' ? '@alozuri/shared' : '@alozuri/shared/' + name.slice(2)
+  ] = ['../../packages/shared/' + file.slice(2)];
+}
+writeFileSync(testTsconfigPath, JSON.stringify(testTsconfig, null, 2));
 // Component fixtures exist only in this temporary test app, never the deployed source.
-for (const name of ['account-menu', 'checkout-account', 'operations-plan-sales']) {
+for (const name of [
+  'account-menu',
+  'checkout-account',
+  'operations-plan-sales',
+  'language-navigation',
+]) {
   const fixture = path.join(target, `apps/web/src/app/e2e-fixtures/${name}/page.tsx`);
   mkdirSync(path.dirname(fixture), { recursive: true });
   cpSync(path.join(source, `tests/fixtures/${name}.tsx`), fixture);

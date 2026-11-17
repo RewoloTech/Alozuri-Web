@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 import { useEffect, useRef, useState } from 'react';
 import { useLocalizedRouter as useRouter } from '@/lib/localized-router';
 import { loadStripe } from '@stripe/stripe-js/pure';
@@ -26,9 +27,11 @@ export function StripeCheckout({
   orderId: string;
   onComplete?: () => void;
 }) {
+  const t = useTranslations('paymentUi');
+  const common = useTranslations('common');
   const container = useRef<HTMLDivElement>(null);
   const router = useRouter();
-  const [error, setError] = useState('');
+  const [error, setError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
@@ -66,7 +69,7 @@ export function StripeCheckout({
         checkout = undefined;
         if (!cancelled) {
           setLoading(false);
-          setError('The payment form could not load. Check your connection and try again.');
+          setError(true);
         }
       }
     });
@@ -78,19 +81,19 @@ export function StripeCheckout({
   }, [clientSecret, orderId, router, attempt, onComplete]);
   return (
     <div className="surface stripe-checkout">
-      {loading && <p role="status">Loading secure payment form…</p>}
+      {loading && <p role="status">{t('loadingPayment')}</p>}
       {error && (
         <div role="alert">
-          <p className="error-message">{error}</p>
+          <p className="error-message">{t('formError')}</p>
           <button
             className="button"
             onClick={() => {
-              setError('');
+              setError(false);
               setLoading(true);
               setAttempt((n) => n + 1);
             }}
           >
-            Reload payment form
+            {common('retry')}
           </button>
         </div>
       )}

@@ -23,12 +23,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     PUBLISHED_LOCALES.map((locale) => ({
       url: BUSINESS.site + (path === '' && locale === 'en' ? '' : localePath(path || '/', locale)),
       alternates: {
-        languages: Object.fromEntries(
-          PUBLISHED_LOCALES.map((language) => [
+        languages: Object.fromEntries([
+          ...PUBLISHED_LOCALES.map((language) => [
             language,
             BUSINESS.site + localePath(path || '/', language),
           ]),
-        ),
+          ['x-default', BUSINESS.site + localePath(path || '/', 'en')],
+        ]),
       },
       ...(Object.values(POLICIES).some((p) => p.path === path)
         ? { lastModified: LEGAL_EFFECTIVE_DATE }

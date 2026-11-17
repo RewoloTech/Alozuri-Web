@@ -1,6 +1,18 @@
 import { privacyChoice, CONSENT_COOKIE } from '../../packages/shared/src/privacy';
 import { test, expect, type Frame } from '@playwright/test';
 import { writeFileSync } from 'node:fs';
+import { LOCALES } from '../../packages/shared/src/i18n/locales';
+test.beforeEach(async ({ page }, info) => {
+  const locale = LOCALES.find((value) => info.title.includes('saved ' + value + ' order')) ?? 'en';
+  await page.route('http://127.0.0.1:8189/**', (route) =>
+    route.continue({
+      headers: {
+        ...route.request().headers(),
+        'x-forwarded-for': '198.51.100.' + (LOCALES.indexOf(locale) + 1),
+      },
+    }),
+  );
+});
 test.skip(
   process.env.STRIPE_INTEGRATION !== '1',
   'Run with npm run test:stripe and matching local Stripe test keys.',
@@ -115,7 +127,7 @@ test('real Stripe Payment Element declines a test card, retries the same intent 
   await expect(page.getByRole('heading', { name: 'Your test order', exact: true })).toBeVisible({
     timeout: 45000,
   });
-  await expect(page.getByText('Payment: paid', { exact: true })).toBeVisible({ timeout: 30000 });
+  await expect(page.getByText('Payment: Paid', { exact: true })).toBeVisible({ timeout: 30000 });
   expect(requests).toBe(1);
   const documents = page.locator('details.order-documents');
   await expect(documents).not.toHaveAttribute('open', '');
@@ -123,3 +135,103 @@ test('real Stripe Payment Element declines a test card, retries the same intent 
   await expect(documents.getByRole('button', { name: 'Download your contract PDF' })).toBeVisible();
   await page.screenshot({ path: 'test-results/stripe-real-confirmation.png', fullPage: true });
 });
+
+// Actual Stripe sandbox, never live keys. The first English case above covers
+// decline/retry; each remaining order verifies native Elements and confirmation.
+for (const locale of [
+  'es',
+  'de',
+  'fr',
+  'it',
+  'pt-BR',
+  'ro',
+  'ja',
+  'ko',
+  'zh-Hans',
+  'ar',
+  'nl',
+  'pl',
+] as const)
+  test(`real Stripe sandbox completes a saved ${locale} order`, async ({ page }) => {
+    test.setTimeout(120_000);
+    const { loadMessages } = await import('../../packages/shared/src/i18n/catalogs');
+    const { createTranslator } = await import('use-intl/core');
+    const messages = await loadMessages(locale);
+    const t = createTranslator({ locale, messages });
+    await page.context().addCookies([
+      {
+        name: CONSENT_COOKIE,
+        value: encodeURIComponent(JSON.stringify(privacyChoice(false))),
+        domain: 'localhost',
+        path: '/',
+      },
+    ]);
+    await page.setViewportSize({
+      width: locale === 'ar' ? 390 : locale === 'ja' ? 375 : 1440,
+      height: 900,
+    });
+    let checkouts = 0;
+    page.on('request', (request) => {
+      if (request.url().endsWith('/v2/checkout') && request.method() === 'POST') {
+        checkouts++;
+        expect(request.postDataJSON().locale).toBe(locale);
+      }
+    });
+    await page.goto(
+      '/' + locale + '/plans/' + (process.env.STRIPE_PLAN_ID || 'esim-stripe-integration'),
+    );
+    await page.getByRole('button', { name: messages.plans.add, exact: true }).click();
+    await expect(page.locator('.cart-badge')).toHaveText('1');
+    await page.goto('/' + locale + '/checkout');
+    await page.locator('input[type="email"]').fill('checkout-test@example.com');
+    await page.locator('input[type="checkbox"][required]').check();
+    await page.getByRole('button', { name: messages.checkout.continue, exact: true }).click();
+    let paymentFrame: Frame | undefined;
+    await expect
+      .poll(
+        async () => {
+          for (const frame of page.frames())
+            if (
+              await frame
+                .locator('input[name="number"],input[autocomplete="cc-number"]')
+                .count()
+                .catch(() => 0)
+            ) {
+              paymentFrame = frame;
+              return true;
+            }
+          return false;
+        },
+        { timeout: 45_000 },
+      )
+      .toBe(true);
+    if (!paymentFrame) throw new Error('Native Stripe card form did not load.');
+    const frame = paymentFrame;
+    const country = frame.locator('select[name="country"]');
+    if (await country.count()) await country.selectOption('US');
+    await frame
+      .locator('input[name="number"],input[autocomplete="cc-number"]')
+      .first()
+      .pressSequentially('4242424242424242', { delay: 20 });
+    await frame.locator('input[name="expiry"],input[autocomplete="cc-exp"]').first().fill('1230');
+    await frame.locator('input[name="cvc"],input[autocomplete="cc-csc"]').first().fill('123');
+    const postal = frame.locator('input[name="postalCode"],input[autocomplete="postal-code"]');
+    if (await postal.count()) await postal.first().fill('10001');
+    const pay = page.locator('button.primary.full-width').filter({ hasText: /\d/ }).last();
+    await expect(pay).toBeEnabled();
+    await pay.focus();
+    await pay.press('Enter');
+    await expect(
+      page.getByRole('heading', { name: messages.orderUi.testOrder, exact: true }),
+    ).toBeVisible({ timeout: 45_000 });
+    await expect(page.locator('main')).toContainText(
+      t('orderUi.paymentStatus', { status: t('status.paid') }),
+      { timeout: 30_000 },
+    );
+    expect(checkouts).toBe(1);
+    expect(new URL(page.url()).pathname).toBe('/' + locale + '/checkout/success');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await page.screenshot({ path: `/tmp/alozuri-sandbox-${locale}.png`, fullPage: true });
+  });

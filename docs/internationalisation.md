@@ -1,199 +1,152 @@
-# Internationalisation: controlled implementation
+# Alozuri internationalisation
 
-## Current publishing status
+All 13 languages are implemented and enabled in the local build: English, Spanish,
+German, French, Italian, Brazilian Portuguese, Romanian, Japanese, Korean,
+Simplified Chinese, Arabic, Dutch and Polish. This change has **not been deployed**.
+Professional native-language and legal approval has not been obtained. The legal
+review requirement is recorded separately from whether content exists and is enabled.
+See [the release audit](multilingual-production-audit.md) for actual verification.
 
-English remains the existing production language. Spanish, German, French, Italian,
-Brazilian Portuguese, Romanian, Japanese, Korean, Simplified Chinese, Arabic,
-Dutch and Polish are registered but **unpublished**. The owner confirmed that no
-reviewed translations are available. Core catalogue translations are drafts, not
-an approved translation of the entire storefront or of a complete email.
+## Content and routing
 
-This is the foundation for the requested multilingual rollout, not completion of
-all 13 customer journeys. Do not enable another locale merely by changing a
-review flag. The missing implementation and review work below must be completed.
+`packages/shared/src/i18n` owns the exact typed message contract, ICU catalogues,
+lazy website loading, neutral error identifiers, product display helpers and
+versioned legal documents. `next-intl` supplies the web context; backend email and
+PDF renderers use the same messages through `use-intl`. There is no runtime
+translation service, translation database, additional scheduled job or new service.
 
-## Shared architecture
+The full customer interface includes home, destination search, filters, plan
+specifications, cart, checkout, promotions, authentication, account settings,
+orders, installation, usage, help, guides, partnerships, consent, legal documents,
+loading, errors and empty states. Known supplier descriptions and geographic plan
+names are translated for display; original identifiers and unknown supplier
+conditions remain intact. Translation never infers coverage or activation rules.
 
-`packages/shared/src/i18n` owns the typed locale registry, exact message contract,
-version-controlled draft catalogues, lazy message loading, stable error identifiers,
-and legal-document resolver. `next-intl` provides the web context and ICU rendering;
-`use-intl` uses the same catalogues on the backend. No translation service is called
-at runtime and ordinary translations are not stored in Firestore.
+English retains its existing unprefixed URLs. `/en/...` redirects permanently to
+English, preserving the query string. Other locales reuse the existing routes at
+`/{locale}/...`. Switching languages preserves pathname, query, hash, cart, filled
+checkout details and currency. API, Operations and internal routes are not localized;
+prefixed versions return 404. Private customer pages remain noindex/no-store.
 
-The audit (`npm run test:i18n`) checks exact keys/domains, valid ICU, interpolation
-variables, unexpected markup, untranslated English placeholders, Polish/Arabic
-plural forms and publishing gates. French “Destinations” is an explicit legitimate
-same-word exception. Native review is still required.
+Public pages have native titles/descriptions, canonical links, all 13 hreflang
+alternates, `x-default`, localized Open Graph metadata and sitemap entries. Product
+structured data uses translated descriptions and labels with the exact original
+SKU, amount and currency. Product and legacy checkout routes render request-specific
+language; catalogue fetches retain their existing explicit data cache.
 
-The language provider resolves explicit selection, saved account locale, guest
-cookie, browser languages, then English. Only published languages are selectable.
-`alozuri_locale` is a functional preference cookie; it is separate from marketing
-consent. The account endpoint is `PATCH /v2/profile/language`, authenticated using
-the existing Firebase token. It accepts only a locale, never a target UID or role.
-The header has a compact globe dropdown next to currency. English is selectable;
-unpublished languages are disabled under “Not available yet”. The profile selector
-remains hidden while only English is published.
-Cart, currency, globe, account and menu controls share a 44 px header height.
+## Preference and currency independence
 
-Language code does not read/write the currency preference or call exchange-rate
-or pricing functions. The existing `alozuri-currency` storage, currency detection,
-rate snapshots, minor-unit calculations and checkout totals are unchanged.
+Selection priority is explicit choice/localized URL, saved account preference,
+guest cookie, browser languages, then English. Functional cookies
+`alozuri_locale` and `alozuri_locale_explicit` last 180 days. An authenticated
+`PATCH /v2/profile/language` saves only the current user's validated locale.
+Preference writes are serialized so an earlier request cannot replace a later
+choice. No UID or role can be submitted through this endpoint.
 
-Existing English URLs remain canonical. `/en/...` redirects to them with the query
-string intact. Draft locale prefixes return private, non-indexable 404 responses.
-API, operations and internal routes are not localised. No foreign-language
-canonical, hreflang or sitemap entry is advertised before its page exists.
+Manual intent is captured before asynchronous dictionary loading, so account
+responses cannot cancel a choice in progress. Login and logout retain the explicit
+cookie; browser detection runs only when there is no usable preference. Automatic
+locale navigation remains automatic, allowing a subsequently loaded account
+preference to take priority. A newly requested localized URL (including `/en`
+aliases and browser back/forward) is an explicit choice; navigation helpers retain
+its requested language rather than replacing it with the current one. Picker
+changes save the signed-in account preference; shared URLs update the browser
+preference only. In-flight application navigation retains its intended destination
+when an account preference arrives, so a language update cannot reopen login or
+checkout’s previous step. No language decision uses IP location.
 
-## Transaction snapshots and legal evidence
+Language does not read or write currency state, alter exchange rates, reprice an
+order, round money or change promotion calculations. The existing currency store,
+detection and formatting utilities remain authoritative. Persisted order amounts
+and currencies are used in all transaction documents.
 
-New purchases store `locale`; their child eSIM orders inherit it. Locale is part
-of checkout idempotency comparison. An existing checkout request cannot be
-converted into a differently worded contract by changing a profile or browser.
-Stripe Elements receives the **server-returned order locale**, not a subsequent
-website preference. `zh-Hans` maps to Elements' `zh`. This app uses PaymentIntents
-and Elements; it does not create Stripe Checkout Sessions or tax invoices.
+## Arabic
 
-Legal acceptance retains its existing version, text, business identity, timestamp
-and behaviour. Added fields are `legal.locale` and a SHA-256 `legal.contentHash`
-over canonical content/version metadata. Timestamp is deliberately excluded from
-the content hash. Existing policy versions remain the English master.
-`legalDocuments(locale, version)` rejects missing languages and unknown versions;
-it never returns an English substitute for a non-English request.
+The document receives `lang="ar" dir="rtl"`. Structural header controls, primary
+columns, card grids and action groups explicitly retain their English order.
+Arabic headings, labels, paragraphs and messages receive native RTL direction.
+Technical references, emails, currency amounts, QR images and activation values
+use isolated LTR runs. Native dates and translated plural forms use the selected
+locale. Header controls retain the same 44-pixel height. Chat follows normal
+flow on checkout, cart, private orders and account forms so it cannot obstruct actions.
 
-Historical records with **absent** locale mean English. Present invalid locales
-are rejected; they do not default to English. No bulk migration or rewriting of
-historical transactions is required. Email/PDF rendering checks order/legal locale
-agreement and publication. Existing recorded currencies and amounts are retained.
+## Legal content and transaction evidence
 
-## Durable confirmation outbox
+All seven current policies have complete versioned content in every language under
+`i18n/policies/2026-11-16.1`. The current English policy version adds the actual
+language-preference storage to privacy and cookie disclosures. The preceding
+English master remains archived as `policies-v4.ts`; previous versions and existing
+order evidence are not rewritten. Existing agreements, compatibility confirmation,
+consumer rights and cancellation behaviour remain unchanged.
 
-The existing backend-owned `OrderConfirmations` worker still runs through the
-existing event-driven task workflow. No service, cron or polling job was added.
-Ready confirmations still wait for all eSIM installation records. Existing
-historical pending-confirmation behaviour is preserved.
+Tests pin the English source digest, every language's policy structure, original
+links and all 91 legal text hashes. Changes to published wording require a new
+version. `POLICY_TRANSLATION_REVIEW` explicitly records that professional legal
+review has not been completed for the 12 translations. The release audit therefore
+continues to exit nonzero for that review requirement, despite complete content.
+An unavailable historical translation never silently substitutes English.
 
-Before a new message is sent, a Firestore transaction writes its immutable rendered
-snapshot to `purchases/{purchaseId}/notifications/order-confirmation` and updates
-the established purchase send markers. It records the event, deterministic
-notification ID, locale, template version, HTML, plain text, subject, sender,
-recipient, inline attachments, payload hash, attempts, status and timestamps.
-The original Resend idempotency key is preserved. Provider ID, delivery status and
-safe diagnostics are recorded after sending/reconciliation.
+New purchases already record `locale` and a hashed legal snapshot. Rendering uses
+that saved locale, never the current browser/account preference. Missing locale on
+historical records means English; an invalid present locale or an order/legal
+language mismatch is rejected. Stripe Elements receives the order locale, with
+`zh-Hans` mapped to `zh`; its return URL retains that language. New Stripe payment
+descriptions are localized while frozen historical attribution and idempotency
+bodies remain intact. No payment amount or supplier ordering algorithm changes.
 
-Retries use that snapshot; they do not render new content from a changed template
-or current profile. Changed activation credentials require review rather than
-sending an obsolete QR code. Concurrent workers use the existing transactional
-lease. Ambiguous sends older than the existing 23-hour safe retry window require
-reconciliation, rather than risking a duplicate after Resend's retention window.
-Already-sent purchases remain deduplicated indefinitely by their Firestore markers.
-Legacy in-flight sends without snapshots retain their payload-hash safeguard.
+## Email and PDF
 
-Snapshots contain private order links and installation credentials. Existing
-Firestore rules deny all direct browser access. No customer/operations serializer
-returns this subcollection. `rendered` is exempted from indexing in
-`infra/firestore.indexes.json`; deploy that index configuration with the release.
-Oversized or inconsistent snapshots require review before any send.
+The complete confirmation template, subject, plan details, QR installation guidance,
+manual activation labels, contractual information and policy text use the order
+language. QR bytes, private links and activation identifiers are preserved. Ready
+confirmations still wait for every eSIM's installation details. These are existing
+order confirmations/contracts, not invented tax invoices. Existing payment/refund
+status messages are translated; this work does not add a separate refund-mail flow.
 
-There is no new manual resend endpoint. Do not clear send markers to resend an
-uncertain message. A controlled, audited resend operation remains to be implemented.
+The confirmation outbox keeps the established deterministic notification identity,
+transactional lease, frozen rendered payload, payload hash, Resend idempotency key,
+provider reconciliation and 23-hour ambiguous-send safeguard. Retries reuse the
+frozen message; changing the template or profile does not change a queued message.
+The template version is deliberately not bumped to trigger historical resends.
 
-## Errors and compatibility
+An authorized PDF download uses the same renderer in the browser and API. Complete
+Inter, Arabic and regional CJK fonts are self-hosted, with source hashes and OFL
+licenses. Unicode bidi run layout handles Arabic shaping and mixed technical values.
+Fonts load only on demand; normal storefront pages do not download the PDF fonts.
+The larger CJK font pair is approximately 6–12 MB on first PDF use and is cached.
+PDF generation retains the existing 5 MB output bound and creates no permanent file,
+upload or new database record. Font failures can be retried.
 
-Fastify supplies `errorDetails: {code, params, requestId, field?}` alongside the
-existing English `error` string, preserving deployed clients during migration.
-Clients requesting `X-Alozuri-Error-Format: 2` receive the canonical
-`{error: {code, params, requestId, field?}}` envelope. Promotion and checkout-retry
-conditions have explicit codes; frontend checkout no longer recognises them by
-parsing English sentences. Unknown identifiers use safe generic copy.
+## Errors, consent and internal inspection
 
-The browser maps known identifiers to the shared translated catalogue, including
-catalogue revision changes and invalid search cursors. It never displays the API's
-English compatibility message, even for validation errors. Safe field, parameter
-and request-ID metadata are retained. Mapping every remaining endpoint to specific
-domain codes is still required before publishing other languages. Server business
-logic is not translated. Stale catalogue recovery uses error identifiers rather
-than matching English text.
+Backend errors stay neutral with stable codes. The browser displays translated,
+allowlisted messages and safe generic fallbacks, never raw provider diagnostics.
+Existing advertising/support consent gates remain unchanged; language preference
+is functional storage and does not grant marketing consent.
 
-## Review and preview
+Verified administrators can inspect `/operations/languages`. Its protected
+`/v1/operations/localization/preview` endpoint renders the actual email template with
+synthetic order/QR data and all seven legal texts, without writing orders or sending
+messages. Its sample label describes synthetic data, not an unfinished language.
+Professional legal review is explicitly flagged here too.
 
-Verified administrators can open `/operations/languages` from Operations. The API
-`GET /v1/operations/localization/preview?locale=ar` verifies administrator access on
-every request. It previews the core catalogue, a clearly labelled draft email-copy
-sample, plain text and current legal availability. English legal source documents
-can be expanded; absent translated legal content is explicitly reported as missing.
-The sandboxed iframe has no access to account state and sends no messages.
+## Checks
 
-## Work required before a non-English launch
+- `npm run test:i18n`: exact domains/keys, ICU variables, native plural categories,
+  untranslated placeholders, directional-control masking, routes and display rules.
+- `npm run i18n:check-release`: conservative customer JSX inventory and content gates;
+  also reports professional legal review separately. Do not suppress findings.
+- API document tests: every saved locale, original USD/GBP/EUR amounts, full policy
+  structure/hashes, QR bytes, native subjects, frozen retries and actual PDFs.
+- Browser localization/document tests: all locales, legal pages, native SEO, mobile
+  email layouts, RTL structure, state preservation and browser PDF downloads.
+- Firestore/Auth emulators: currency, checkout ownership, legal snapshots, webhook
+  replay, fulfilment safety, confirmation retries and authenticated cart behaviour.
+- `npm run test:stripe`: matching **test** keys and local Firestore only. Native
+  sandbox cases simulate distinct clients through the existing proxy trust pattern;
+  production rate limits are unchanged. No supplier is connected to this harness.
+- `node --import tsx tests/seo-production.mts`: disposable production build/server,
+  native crawlable HTML, canonical/hreflang, schema, sitemap and private-page headers.
 
-- Finish extracting the remaining storefront, destination, account, promotion,
-  installation and validation copy. Current catalogues cover core labels only.
-- Implement fully translated public routes, metadata, canonical/hreflang/sitemap
-  output, route-aware navigation, SSR language and cross-route cart preservation.
-- Complete the full order/ready/delayed/refund/top-up/payment/security templates;
-  connect newly introduced notification types only to verified existing events.
-  The existing consolidated English email is the only delivery template today.
-- Add complete approved legal documents for each version/language and use them
-  consistently on web pages, in acceptance snapshots and in transactional documents.
-- Implement and verify Arabic RTL across full pages and email, plus shaping/fonts
-  for Arabic/CJK PDF documents. RTL core preview does not establish full RTL support.
-- Add audited manual resend controls. Do not translate an existing transaction
-  implicitly when account preferences change.
-- Finish native, technical and legal review, recording reviewer/version evidence.
-- Test German checkout followed by French preference changes, concurrent orders
-  in different languages, full translated emails/PDFs, refunds/top-ups and localised
-  SEO. These journeys cannot pass while those languages are intentionally blocked.
-- Verify Stripe-generated receipts separately if enabled. Do not describe the
-  existing order-confirmation PDF as a VAT invoice or change a Stripe Customer's
-  global language to control concurrent order communications.
-
-## Verification
-
-See `tests/unit/i18n.test.ts`, `apps/api/test/localization.test.ts`, the locale and
-notification cases in `apps/api/test/commerce.firestore.mts`,
-`tests/e2e/localization.spec.ts` and the administrator preview checks in
-`tests/e2e/cart-auth.spec.ts`. Checkout/cart Jest tests render the real i18n provider.
-Existing currency, promotion and guest checkout browser regressions were also run.
-Test fixtures use no real charges, supplier purchases or customer emails.
-
-Recorded local checks on 16 November 2026:
-
-| Check                                                                  | Result                                                              |
-| ---------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| `npm run lint`                                                         | Passed, no warnings                                                 |
-| `npm run typecheck`                                                    | Passed, all workspaces                                              |
-| `npm run typecheck:tests`                                              | Passed                                                              |
-| `npm run test:unit`                                                    | 38 shared + 193 API + 7 localisation/release-inventory tests passed |
-| `npm run test:jest`                                                    | 22 tests passed                                                     |
-| `npm run build`                                                        | Next.js production build and API build passed                       |
-| Firestore emulator, complete commerce suite                            | 86 tests passed before the final focused additions                  |
-| Firestore emulator, final locale/confirmation/contract/currency subset | 13 tests passed                                                     |
-| Currency and shopping browser regression subset                        | 23 tests passed                                                     |
-| Localisation routing/privacy browser tests                             | 2 tests passed                                                      |
-| Follow-up plan/currency browser subset                                 | 12 tests passed                                                     |
-| Auth emulator profile/customer navigation                              | Passed                                                              |
-| Auth emulator Operations + all 13 previews + role revocation           | Passed                                                              |
-
-Browser checks included 375, 390, 768 and 1440 px widths. The Arabic email-copy
-sample was visually inspected at mobile width; this is not verification of complete
-Arabic storefronts or Arabic PDFs. No live Stripe charge, live supplier order,
-customer email send or non-English checkout was attempted.
-
-For a later release, deploy and verify the API's structured-error support before
-deploying the web changes. Apply the Firestore index exemption. No credentials,
-extra scheduler, paid translation service or currency migration are required.
-
-No deployment is performed by this implementation.
-
-## Production publication gate
-
-`npm run i18n:check-release` validates every locale, required domain status and
-legal-document availability, then inventories static customer JSX text and
-accessibility attributes that still need extraction. Exact technical names and
-values are excluded. This is a conservative inventory; it does not claim to find
-all dynamic strings, verify native wording or approve legal documents.
-
-The command exits unsuccessfully while any required locale/content is incomplete.
-See `docs/multilingual-release-audit.json` for the current result and counts by file.
-Passing commerce regression tests does not override this publication gate. Do not
-use a label change, an English fallback or a preview deployment to present this
-unfinished multilingual implementation as production-ready.
+A production release requires explicit deployment authorization and professional
+review of translated legal documents. No automatic deployment is part of this work.

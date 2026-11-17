@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
-import Link from '@/components/localized-link';
-import { LOCALES, LOCALE_NAMES, type Locale } from '@alozuri/shared/i18n';
+import Link from 'next/link';
+import { LOCALES, LOCALE_NAMES, localePath, type Locale } from '@alozuri/shared/i18n';
 import { englishMessages, type Messages } from '@alozuri/shared/i18n/messages';
 import { api } from '@/lib/api';
 import { useAuth } from './auth-provider';
@@ -13,6 +13,7 @@ type Preview = {
   review: Record<string, string>;
   legal: {
     version: string;
+    professionalReviewRequired: boolean;
     status: string;
     documents: { slug: string; title: string; text: string }[];
   };
@@ -39,7 +40,7 @@ export function LocalizationPreview() {
       .catch(() => {
         if (!controller.signal.aborted)
           setError(
-            'Language preview could not load. Verify administrator access and API deployment.',
+            'Language sample could not load. Verify administrator access and API deployment.',
           );
       });
     return () => controller.abort();
@@ -57,11 +58,12 @@ export function LocalizationPreview() {
       <Link href="/operations">Operations</Link>
       <h1>Language review</h1>
       <p>
-        Drafts are not approved customer communications. Legal and document translations must be
-        reviewed before a language can be published.
+        Inspect the same email template and legal content used for customer orders. Samples use
+        synthetic data and are never sent. Translated legal documents still require professional
+        review.
       </p>
       <label>
-        Preview language
+        Sample language
         <select
           className="commerce-input"
           value={locale}
@@ -78,13 +80,11 @@ export function LocalizationPreview() {
         </select>
       </label>
       {error && <p role="alert">{error}</p>}
-      {!preview && !error && <p role="status">Loading preview…</p>}
+      {!preview && !error && <p role="status">Loading sample…</p>}
       {preview && (
         <>
           <p>
-            <strong>
-              {preview.published ? 'English production baseline' : 'Unpublished draft'}
-            </strong>
+            <strong>{preview.published ? 'Content enabled' : 'Content unavailable'}</strong>
           </p>
           <ul>
             {Object.entries(preview.review).map(([domain, status]) => (
@@ -94,7 +94,7 @@ export function LocalizationPreview() {
             ))}
           </ul>
           <details>
-            <summary>Review core translation catalogue</summary>
+            <summary>Review translation catalogue</summary>
             {Object.entries(preview.messages).map(([domain, messages]) => (
               <section key={domain}>
                 <h2>{domain}</h2>
@@ -120,14 +120,14 @@ export function LocalizationPreview() {
               </section>
             ))}
           </details>
-          <h2>Email copy preview</h2>
+          <h2>Order confirmation sample</h2>
           <p>
-            This is a core translation sample. Full translated email templates are not available
-            yet.
+            This sample includes the actual template, installation instructions and synthetic QR
+            code.
           </p>
           <p>{preview.email.subject}</p>
           <iframe
-            title="Draft language email preview"
+            title="Order confirmation sample"
             sandbox=""
             srcDoc={preview.email.html}
             referrerPolicy="no-referrer"
@@ -141,11 +141,10 @@ export function LocalizationPreview() {
           <p>
             Version {preview.legal.version} · {preview.legal.status}
           </p>
-          {preview.legal.status === 'missing' ? (
-            <p>No approved legal translation is available. Checkout in this language is blocked.</p>
-          ) : (
-            <Link href="/terms">View English legal source</Link>
+          {preview.legal.professionalReviewRequired && (
+            <p>Professional legal review has not been completed for this translation.</p>
           )}
+          <Link href={localePath('/terms', preview.locale)}>View selected language’s terms</Link>
           {preview.legal.documents.map((document) => (
             <details key={document.slug}>
               <summary>{document.title}</summary>

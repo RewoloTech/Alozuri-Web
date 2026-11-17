@@ -1,4 +1,6 @@
 'use client';
+import { useLocale, useTranslations } from 'next-intl';
+import { localeDirection } from '@alozuri/shared/i18n';
 import { useEffect, useRef, useState } from 'react';
 import Link from '@/components/localized-link';
 import { ArrowUpRight, Globe2 } from 'lucide-react';
@@ -13,11 +15,21 @@ import {
 import { useCurrency } from './currency-provider';
 import { api } from '@/lib/api';
 export function FeaturedBundles({ initial }: { initial: FeaturedBundle[] | null }) {
+  const t = useTranslations('display');
+  const plans = useTranslations('plans');
+  const locale = useLocale();
+  const dir = localeDirection(locale);
+  const regionNames: Record<FeaturedRegion, string> = {
+    europe: t('europe'),
+    asia: t('asia'),
+    'north-america': t('northAmerica'),
+    global: t('global'),
+  };
   const { currency, refresh, ready } = useCurrency();
   const [bundles, setBundles] = useState(initial ?? unavailableBundles()),
     [loadedCurrency, setLoadedCurrency] = useState('USD'),
     [loading, setLoading] = useState(!initial),
-    [error, setError] = useState('');
+    [error, setError] = useState(false);
   const [choices, setChoices] = useState<Partial<Record<FeaturedRegion, BundleAllowance>>>({});
   const loadedRequest = useRef(initial ? 'USD:0' : '');
   useEffect(() => {
@@ -26,7 +38,7 @@ export function FeaturedBundles({ initial }: { initial: FeaturedBundle[] | null 
     if (loadedRequest.current === requestKey) return;
     let active = true;
     setLoading(true);
-    setError('');
+    setError(false);
     void api<{ bundles: unknown }>('/v1/featured-bundles?currency=' + currency)
       .then((response) => {
         const next = parseFeaturedBundles(response.bundles, currency);
@@ -38,7 +50,7 @@ export function FeaturedBundles({ initial }: { initial: FeaturedBundle[] | null 
         }
       })
       .catch(() => {
-        if (active) setError('Bundle prices are temporarily unavailable. Please try again later.');
+        if (active) setError(true);
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -55,12 +67,12 @@ export function FeaturedBundles({ initial }: { initial: FeaturedBundle[] | null 
     >
       <div className="section-heading">
         <div>
-          <h2 id="featured-bundles-title">Explore Regional &amp; Global eSIMs</h2>
-          <p>Compare data allowances and coverage for your next trip.</p>
+          <h2 id="featured-bundles-title">{t('featureTitle')}</h2>
+          <p>{t('featureDescription')}</p>
         </div>
       </div>
-      {error && <p role="status">{error}</p>}
-      <div className="featured-grid" aria-busy={!ready || loading}>
+      {error && <p role="status">{t('featureError')}</p>}
+      <div className="featured-grid" dir="ltr" aria-busy={!ready || loading}>
         {bundles.map((bundle) => {
           const selected =
             bundle.options.find((option) => option.dataGb === choices[bundle.region]) ??
@@ -68,29 +80,35 @@ export function FeaturedBundles({ initial }: { initial: FeaturedBundle[] | null 
           return (
             <article
               className="surface featured-card"
+              dir={dir}
               key={bundle.region}
               aria-labelledby={'featured-' + bundle.region}
             >
-              <div className="featured-card-heading">
-                <h3 id={'featured-' + bundle.region}>{bundle.regionName}</h3>
+              <div className="featured-card-heading" dir="ltr">
+                <h3 id={'featured-' + bundle.region}>{regionNames[bundle.region]}</h3>
                 <Globe2 size={23} aria-hidden="true" />
               </div>
               {selected ? (
                 <>
                   <p className="featured-spec">
-                    {selected.dataGb} GB · {selected.validityDays} days
+                    <bdi dir="ltr">{selected.dataGb} GB</bdi> ·{' '}
+                    {plans('days', { count: selected.validityDays })}
                   </p>
-                  <p className="featured-coverage">Covers {selected.countryCount} countries</p>
-                  <strong className="featured-price">
+                  <p className="featured-coverage">
+                    {t('featureCoverage', { count: selected.countryCount })}
+                  </p>
+                  <strong className="featured-price" dir="ltr">
                     {current
                       ? money(selected.priceCents, selected.currency)
                       : error
-                        ? 'Price unavailable'
-                        : 'Loading price…'}{' '}
+                        ? plans('unavailable')
+                        : plans('loadingPrice')}{' '}
                     <small>{ready ? currency : ''}</small>
                   </strong>
-                  <fieldset className="featured-allowances">
-                    <legend>Data allowance for {bundle.regionName}</legend>
+                  <fieldset className="featured-allowances" dir="ltr">
+                    <legend>
+                      {t('featureRegionAllowance', { region: regionNames[bundle.region] })}
+                    </legend>
                     {bundle.options.map((option) => (
                       <button
                         type="button"
@@ -109,18 +127,21 @@ export function FeaturedBundles({ initial }: { initial: FeaturedBundle[] | null 
                   </fieldset>
                   <Link
                     className="button primary"
-                    aria-label={'View plan: ' + bundle.regionName + ' ' + selected.dataGb + ' GB'}
+                    aria-label={t('featureView', {
+                      region: regionNames[bundle.region],
+                      amount: selected.dataGb,
+                    })}
                     href={'/plans/' + encodeURIComponent(selected.productId)}
                   >
-                    View plan <ArrowUpRight size={16} aria-hidden="true" />
+                    {plans('view')} <ArrowUpRight size={16} aria-hidden="true" />
                   </Link>
                 </>
               ) : (
                 <>
                   <p className="featured-unavailable">
-                    {loading ? 'Loading current plans…' : 'Plans currently unavailable'}
+                    {loading ? t('featureLoading') : t('featureUnavailable')}
                   </p>
-                  <p className="fine-print">Please check again later.</p>
+                  <p className="fine-print">{t('featureRetry')}</p>
                 </>
               )}
             </article>

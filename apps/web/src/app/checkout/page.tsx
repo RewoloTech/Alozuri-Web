@@ -1,9 +1,13 @@
+import { LocalizedLoading } from '@/components/localized-loading';
+import { privateMetadata } from '@/lib/server-translations';
 import { Suspense } from 'react';
 import { Checkout } from '@/components/checkout';
-export const metadata = { title: 'Checkout', robots: { index: false } };
+export async function generateMetadata() {
+  return privateMetadata('checkout.title');
+}
 export default function Page() {
   return (
-    <Suspense fallback={<div className="loading-page">Opening checkout…</div>}>
+    <Suspense fallback={<LocalizedLoading message="paymentUi.loadingCheckout" />}>
       <Checkout />
     </Suspense>
   );

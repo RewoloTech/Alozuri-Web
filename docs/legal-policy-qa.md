@@ -98,3 +98,17 @@ Recorded verification:
 - Application/test TypeScript, lint, changed-file formatting, production build and Git diff checks passed. Historic plain-text output was also compared against the original formatter and is identical for all archived documents.
 
 No production deployment, live customer payment, supplier purchase or database migration is part of this review.
+
+## Multilingual implementation — 16 November 2026
+
+The current policy master is `2026-11-16.1`, with the preceding
+`2026-11-13.1` master preserved in `policies-v4.ts`. The current change adds
+language-preference storage to the privacy/cookie disclosures. It does not add
+a cancellation waiver or change the required compatibility confirmation.
+
+All seven current documents now have full translations in 12 additional languages,
+versioned with the source. Automated tests compare every section, paragraph count,
+step, table, factual link and text digest, and render native email and PDF contracts.
+These checks are engineering evidence, not legal or professional native review.
+**Professional legal review remains required for all 12 translations.**
+No production policy or order record was changed by this local implementation.

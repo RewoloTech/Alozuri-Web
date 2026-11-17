@@ -1,61 +1,91 @@
+'use client';
 import Link from '@/components/localized-link';
+import { useTranslations, useLocale } from 'next-intl';
+import { localeDirection } from '@alozuri/shared/i18n';
 import { ArrowUpRight } from 'lucide-react';
 import { BUSINESS } from '@alozuri/shared/legal';
 import { POLICIES } from '@alozuri/shared/policies';
 import { CookieSettingsButton } from './privacy-provider';
 import { Brand } from './header';
 export function Footer() {
+  const t = useTranslations('site');
+  const legal = useTranslations('legal');
+  const navigation = useTranslations('navigation');
+  const locale = useLocale();
+  const direction = localeDirection(locale);
+  const isolate = (value: string) => (locale === 'ar' ? '\u2066' + value + '\u2069' : value);
+  const policies = [
+    { slug: 'terms', title: legal('terms') },
+    { slug: 'privacy', title: legal('privacy') },
+    { slug: 'cookies', title: legal('cookies') },
+    { slug: 'refunds', title: legal('refunds') },
+    { slug: 'acceptable-use', title: t('acceptableUse') },
+  ];
   return (
     <footer className="site-footer">
-      <div className="container footer-main">
+      <div className="container footer-main" dir="ltr">
         <div>
           <Brand />
-          <p>
-            A little less roaming.
-            <br /> A lot more exploring.
+          <p dir={direction}>
+            {t('sloganA')}
+            <br /> {t('sloganB')}
           </p>
         </div>
-        <nav className="footer-links footer-explore" aria-labelledby="footer-explore">
+        <nav
+          className="footer-links footer-explore"
+          aria-labelledby="footer-explore"
+          dir={direction}
+        >
           <h2 className="eyebrow" id="footer-explore">
-            Explore
+            {t('explore')}
           </h2>
           <Link href="/destinations">
-            All destinations <ArrowUpRight size={14} />
+            {t('allDestinations')} <ArrowUpRight size={14} />
           </Link>
-          <Link href="/#planner">Build your itinerary</Link>
-          <Link href="/destinations/europe">Europe travel eSIMs</Link>
-          <Link href="/guides">Travel eSIM guides</Link>
-          <Link href="/partners">Partners</Link>
+          <Link href="/#planner">{t('itinerary')}</Link>
+          <Link href="/destinations/europe">{t('europeEsims')}</Link>
+          <Link href="/guides">{t('guides')}</Link>
+          <Link href="/partners">{t('partners')}</Link>
         </nav>
-        <nav className="footer-links footer-legal" aria-labelledby="footer-legal">
+        <nav className="footer-links footer-legal" aria-labelledby="footer-legal" dir={direction}>
           <h2 className="eyebrow" id="footer-legal">
-            Legal
+            {t('legal')}
           </h2>
-          {['terms', 'privacy', 'cookies', 'refunds', 'acceptable-use'].map((slug) => (
+          {policies.map(({ slug, title }) => (
             <Link key={slug} href={POLICIES[slug].path}>
-              {POLICIES[slug].title}
+              {title}
             </Link>
           ))}
           <CookieSettingsButton />
         </nav>
-        <nav className="footer-links footer-help" aria-labelledby="footer-help">
+        <nav className="footer-links footer-help" aria-labelledby="footer-help" dir={direction}>
           <h2 className="eyebrow" id="footer-help">
-            Help &amp; Support
+            {t('support')}
           </h2>
-          <Link href="/help">Help centre</Link>
-          <Link href={POLICIES.compatibility.path}>eSIM compatibility &amp; installation</Link>
-          <Link href={POLICIES.contact.path}>Contact &amp; complaints</Link>
-          <Link href="/account/esims">My eSIMs</Link>
-          <Link href="/register">Create an account</Link>
+          <Link href="/help">{navigation('help')}</Link>
+          <Link href={POLICIES.compatibility.path}>{t('compatibility')}</Link>
+          <Link href={POLICIES.contact.path}>{t('contact')}</Link>
+          <Link href="/account/esims">{t('myEsims')}</Link>
+          <Link href="/register">{t('createAccount')}</Link>
         </nav>
       </div>
       <div className="container company-disclosure">
-        <p>{BUSINESS.identity}</p>
-        <address>Registered office: {BUSINESS.address}</address>
-        <a href={'mailto:' + BUSINESS.email}>{BUSINESS.email}</a>
+        <p>
+          {t('company', {
+            brand: isolate(BUSINESS.brand),
+            company: isolate(BUSINESS.company),
+            number: isolate(BUSINESS.number),
+          })}
+        </p>
+        <address>
+          {t('office')}: <bdi dir="ltr">{BUSINESS.address}</bdi>
+        </address>
+        <a href={'mailto:' + BUSINESS.email} dir="ltr">
+          {BUSINESS.email}
+        </a>
       </div>
       <div className="container footer-bottom">
-        <span>© {new Date().getFullYear()} Alozuri. Made for the journey.</span>
+        <span>{t('copyright', { year: new Date().getFullYear() })}</span>
       </div>
     </footer>
   );

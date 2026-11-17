@@ -2,6 +2,7 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import Link from '@/components/localized-link';
 import { MessageCircle, X } from 'lucide-react';
+import { useLocale, useTranslations } from 'next-intl';
 import {
   CONSENT_COOKIE,
   CONSENT_MAX_AGE,
@@ -10,6 +11,7 @@ import {
   TAWK_CHAT_URL,
   type PrivacyChoice,
 } from '@alozuri/shared/privacy';
+import { localeDirection } from '@alozuri/shared/i18n';
 import { BUSINESS } from '@alozuri/shared/legal';
 const PrivacyContext = createContext({
   openChat: () => {},
@@ -17,12 +19,16 @@ const PrivacyContext = createContext({
   marketingAllowed: false,
 });
 export function PrivacyProvider({ children }: { children: React.ReactNode }) {
+  const t = useTranslations('privacyUi');
+  const site = useTranslations('site');
+  const legal = useTranslations('legal');
+  const dir = localeDirection(useLocale());
   const [choice, setChoice] = useState<PrivacyChoice | null>(null),
     [ready, setReady] = useState(false),
     [settings, setSettings] = useState(false),
     [support, setSupport] = useState(false),
     [marketing, setMarketing] = useState(false),
-    [storageError, setStorageError] = useState(''),
+    [storageError, setStorageError] = useState<'storageRefused' | 'storageFailed' | ''>(''),
     [chatOpen, setChatOpen] = useState(false);
   const chatDialog = useRef<HTMLDialogElement>(null),
     chatTrigger = useRef<HTMLElement | null>(null);
@@ -72,11 +78,7 @@ export function PrivacyProvider({ children }: { children: React.ReactNode }) {
         .find((c) => c.startsWith(CONSENT_COOKIE + '='))
         ?.slice(CONSENT_COOKIE.length + 1);
       const saved = stored === encodeURIComponent(JSON.stringify(value));
-      setStorageError(
-        saved
-          ? ''
-          : 'Your browser did not save this choice. Optional technologies remain off; email support is available.',
-      );
+      setStorageError(saved ? '' : 'storageRefused');
       setChoice(saved ? value : privacyChoice(false));
       setSupport(saved ? allowed : false);
       setMarketing(saved ? advertising : false);
@@ -84,7 +86,7 @@ export function PrivacyProvider({ children }: { children: React.ReactNode }) {
       setChoice(privacyChoice(false));
       setSupport(false);
       setMarketing(false);
-      setStorageError('Preferences could not be saved. Optional technologies remain off.');
+      setStorageError('storageFailed');
     }
     close();
   }
@@ -137,38 +139,36 @@ export function PrivacyProvider({ children }: { children: React.ReactNode }) {
     >
       {children}
       {ready && !choice && (
-        <section className="cookie-banner" aria-label="Privacy choices">
-          <div>
-            <h2>Your privacy choices</h2>
+        <section className="cookie-banner" dir="ltr" aria-label={t('choices')}>
+          <div dir={dir}>
+            <h2>{t('choices')}</h2>
             <p>
-              Essential storage keeps sign-in, your basket and checkout working. Optional Tawk.to
-              chat and its service providers, including Cloudflare, stay off until you allow and
-              open chat. Optional Meta advertising measurement stays off until you allow
-              advertising. <Link href="/cookies">Cookie Policy</Link>
+              {t('banner')} <Link href="/cookies">{legal('cookies')}</Link>
             </p>
           </div>
-          <div className="cookie-actions">
+          <div className="cookie-actions" dir="ltr">
             <button className="button" onClick={() => save(true)}>
-              Accept all
+              {t('acceptAll')}
             </button>
             <button className="button" onClick={() => save(false)}>
-              Reject optional
+              {t('reject')}
             </button>
             <button className="button" onClick={openSettings}>
-              Customise choices
+              {t('customize')}
             </button>
           </div>
         </section>
       )}
       {storageError && (
         <p className="privacy-storage-message" role="status">
-          {storageError}
+          {t(storageError)}
         </p>
       )}
       {settings && (
         <dialog
           ref={dialog}
           className="privacy-dialog"
+          dir={dir}
           aria-labelledby="privacy-title"
           onCancel={(event) => {
             event.preventDefault();
@@ -176,14 +176,10 @@ export function PrivacyProvider({ children }: { children: React.ReactNode }) {
           }}
           onClose={() => setSettings(false)}
         >
-          <h2 id="privacy-title">Cookie settings</h2>
+          <h2 id="privacy-title">{site('cookieSettings')}</h2>
+          <p>{t('settingsHint')}</p>
           <p>
-            Shopping and email support work without optional consent. Change your choice at any
-            time.
-          </p>
-          <p>
-            <strong>Necessary — always active.</strong> Account sessions, shopping basket, secure
-            checkout, requested currency and these privacy choices.
+            <strong>{t('necessaryTitle')}</strong> {t('necessary')}
           </p>
           <label className="checkbox-label">
             <input
@@ -192,9 +188,7 @@ export function PrivacyProvider({ children }: { children: React.ReactNode }) {
               onChange={(e) => setSupport(e.target.checked)}
             />
             <span>
-              <strong>Optional support — Tawk.to.</strong> Allow live chat when you choose to open
-              it, including the provider’s service analytics and security technologies. We do not
-              automatically share your account or order details with chat.
+              <strong>{t('optionalSupportTitle')}</strong> {t('optionalSupport')}
             </span>
           </label>
           <label className="checkbox-label">
@@ -204,28 +198,24 @@ export function PrivacyProvider({ children }: { children: React.ReactNode }) {
               onChange={(e) => setMarketing(e.target.checked)}
             />
             <span>
-              <strong>Optional advertising — Meta.</strong> Measure advertising and purchases using
-              Meta Pixel and confirmed purchase measurement.
+              <strong>{t('advertisingTitle')}</strong> {t('advertising')}
             </span>
           </label>
           <p>
-            Meta measures page views, plan views, checkout starts and confirmed purchases only with
-            advertising consent. It receives browser identifiers, event IDs, purchase value and
-            currency, not installation credentials.{' '}
-            <Link href="/cookies">Read the cookie inventory</Link>.
+            {t('measurement')} <Link href="/cookies">{t('inventory')}</Link>.
           </p>
-          <div className="cookie-actions">
+          <div className="cookie-actions" dir="ltr">
             <button className="button" onClick={() => save(true)}>
-              Accept all
+              {t('acceptAll')}
             </button>
             <button className="button" onClick={() => save(false)}>
-              Reject optional
+              {t('reject')}
             </button>
             <button className="button" onClick={() => save(support, marketing)}>
-              Save choices
+              {t('save')}
             </button>
             <button className="button" onClick={close}>
-              Close settings
+              {t('closeSettings')}
             </button>
           </div>
         </dialog>
@@ -234,21 +224,22 @@ export function PrivacyProvider({ children }: { children: React.ReactNode }) {
         <dialog
           ref={chatDialog}
           className="chat-panel"
+          dir={dir}
           aria-labelledby="chat-title"
           onCancel={(event) => {
             event.preventDefault();
             closeChat();
           }}
         >
-          <header className="chat-panel-header">
-            <h2 id="chat-title">Chat</h2>
-            <button type="button" onClick={closeChat} aria-label="Close chat">
+          <header className="chat-panel-header" dir="ltr">
+            <h2 id="chat-title">{t('chat')}</h2>
+            <button type="button" onClick={closeChat} aria-label={t('closeChat')}>
               <X size={22} />
             </button>
           </header>
           {choice?.support ? (
             <iframe
-              title="Alozuri customer chat"
+              title={t('chatFrame')}
               src={TAWK_CHAT_URL}
               sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads"
               referrerPolicy="no-referrer"
@@ -256,30 +247,29 @@ export function PrivacyProvider({ children }: { children: React.ReactNode }) {
           ) : (
             <div className="chat-permission">
               <MessageCircle size={32} aria-hidden="true" />
-              <h3>Chat with Alozuri</h3>
-              <p>
-                Chat is provided by Tawk.to and may use its cookies and storage. Enable optional
-                support to start. We do not share your account, order or installation details
-                automatically.
-              </p>
+              <h3>{t('chatTitle')}</h3>
+              <p>{t('chatPrivacy')}</p>
               <button
                 type="button"
                 className="button primary"
                 onClick={() => save(true, choice?.marketing === true)}
               >
-                Enable chat
+                {t('enableChat')}
               </button>
               <p>
-                Prefer email? <a href={'mailto:' + BUSINESS.email}>{BUSINESS.email}</a>
+                {t('preferEmail')}{' '}
+                <a href={'mailto:' + BUSINESS.email}>
+                  <bdi dir="ltr">{BUSINESS.email}</bdi>
+                </a>
               </p>
               <Link href="/cookies" onClick={closeChat}>
-                Privacy and cookie choices
+                {t('privacyLink')}
               </Link>
             </div>
           )}
           {choice?.support && (
             <p className="chat-fallback">
-              Chat not loading? <a href={'mailto:' + BUSINESS.email}>Email us</a>.
+              {t('chatLoading')} <a href={'mailto:' + BUSINESS.email}>{t('emailUs')}</a>.
             </p>
           )}
         </dialog>
@@ -287,40 +277,42 @@ export function PrivacyProvider({ children }: { children: React.ReactNode }) {
       <button
         type="button"
         className="support-shortcut"
-        aria-label="Chat"
+        aria-label={t('chat')}
         onClick={openChat}
         aria-haspopup="dialog"
         aria-expanded={chatOpen}
       >
         <MessageCircle size={20} aria-hidden="true" />
-        <span className="support-shortcut-label">Chat</span>
+        <span className="support-shortcut-label">{t('chat')}</span>
       </button>
     </PrivacyContext.Provider>
   );
 }
 export function CookieSettingsButton() {
+  const t = useTranslations('site');
   const { openSettings } = useContext(PrivacyContext);
   return (
     <button className="text-link" onClick={openSettings}>
-      Cookie settings
+      {t('cookieSettings')}
     </button>
   );
 }
 export function SupportChoices() {
+  const t = useTranslations('privacyUi');
   const { openChat } = useContext(PrivacyContext);
   return (
     <div className="surface support-options">
-      <h2>Choose how to contact us</h2>
+      <h2>{t('contactTitle')}</h2>
       <p>
-        <a href={'mailto:' + BUSINESS.email}>Email {BUSINESS.email}</a> without optional consent.
+        <a href={'mailto:' + BUSINESS.email}>
+          <bdi dir="ltr">{BUSINESS.email}</bdi>
+        </a>{' '}
+        {t('emailWithoutConsent')}
       </p>
       <button className="button" onClick={openChat}>
-        Open chat
+        {t('openChat')}
       </button>
-      <p>
-        Chat opens in the corner on desktop and full screen on mobile. Do not send passwords, full
-        card details, QR codes or activation credentials. Agent availability is not guaranteed.
-      </p>
+      <p>{t('chatSafety')}</p>
     </div>
   );
 }

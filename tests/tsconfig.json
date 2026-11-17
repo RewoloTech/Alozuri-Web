@@ -3,16 +3,12 @@
   "compilerOptions": {
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "types": [
-      "node"
-    ],
+    "types": ["node"],
     "jsx": "react-jsx",
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "paths": {
-      "@/*": [
-        "../apps/web/src/*"
-      ]
+      "@/*": ["../apps/web/src/*"]
     }
   },
   "include": [
@@ -26,6 +22,8 @@
     "../apps/api/test/**/*.ts",
     "../apps/api/test/**/*.mts",
     "../scripts/operations-admin.mts",
-    "../scripts/backfill-financials.mts"
+    "../scripts/backfill-financials.mts",
+    "../packages/shared/src/types/**/*.d.ts",
+    "../apps/web/src/i18n/types.d.ts"
   ]
 }

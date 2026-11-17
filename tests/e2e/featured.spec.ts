@@ -200,7 +200,7 @@ test('allowance updates the actual variant, price, validity and coverage while c
   await expect(page.getByRole('link', { name: 'Shopping cart, 1 item' })).toBeVisible();
   await page.goto('/cart');
   await expect(page.locator('.commerce-total')).toContainText('£20.00');
-  await expect(page.getByRole('link', { name: 'Secure checkout →', exact: true })).toHaveAttribute(
+  await expect(page.getByRole('link', { name: 'Secure checkout', exact: true })).toHaveAttribute(
     'aria-disabled',
     'false',
   );

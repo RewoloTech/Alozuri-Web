@@ -1,4 +1,7 @@
 'use client';
+import { ERROR_MESSAGES, type ErrorCode } from '@alozuri/shared/i18n/errors';
+import type { Messages } from '@alozuri/shared/i18n/messages';
+import { LinkedMessage, MESSAGE_LINKS } from './linked-message';
 import { StoreApiError } from '@/lib/api-error';
 import { endorselyReferral } from '@/lib/endorsely';
 import { trackMeta } from '@/lib/meta-pixel';
@@ -7,7 +10,12 @@ import { LEGAL_VERSION, CHECKOUT_LEGAL_ACCEPTANCE } from '@alozuri/shared/legal'
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from '@/components/localized-link';
 import { useLocale, useTranslations } from 'next-intl';
-import { stripeElementsLocale, isPublishedLocale, type Locale } from '@alozuri/shared/i18n';
+import {
+  stripeElementsLocale,
+  isPublishedLocale,
+  localePath,
+  type Locale,
+} from '@alozuri/shared/i18n';
 import { useLanguage } from './language-provider';
 import { LoaderCircle } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
@@ -33,16 +41,43 @@ import { CheckoutAccount } from './checkout-account';
 const key = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '';
 let stripePromise: ReturnType<typeof loadStripe> | undefined;
 const verificationTimeoutMs = 10_000;
+type CheckoutFailure = { key: keyof Messages['paymentUi'] } | { code: ErrorCode };
+class CheckoutPresentationError extends Error {
+  constructor(readonly key: keyof Messages['paymentUi']) {
+    super(key);
+  }
+}
+function presentationFailure(
+  error: unknown,
+  fallback: keyof Messages['paymentUi'],
+): CheckoutFailure {
+  return error instanceof StoreApiError
+    ? { code: error.code }
+    : { key: error instanceof CheckoutPresentationError ? error.key : fallback };
+}
 function CheckoutPolicyNotice() {
+  const p = useTranslations('paymentUi');
+  const legal = useTranslations('legal');
+  const locale = useLocale();
   return (
-    <p className="checkout-policy-notice">
-      By continuing, you agree to our <Link href="/terms">Terms &amp; Conditions</Link> and
-      acknowledge our <Link href="/refund-policy">Refund Policy</Link> and{' '}
-      <Link href="/privacy">Privacy Policy</Link>.
+    <p className="checkout-policy-notice" dir={locale === 'ar' ? 'rtl' : 'ltr'}>
+      <LinkedMessage
+        message={p('policy', {
+          terms: MESSAGE_LINKS.terms,
+          refunds: MESSAGE_LINKS.refunds,
+          privacy: MESSAGE_LINKS.privacy,
+        })}
+        links={{
+          terms: { href: '/terms', label: legal('terms') },
+          refunds: { href: '/refund-policy', label: legal('refunds') },
+          privacy: { href: '/privacy', label: legal('privacy') },
+        }}
+      />
     </p>
   );
 }
 function StripePayment({
+  locale,
   clientSecret,
   orderId,
   deliveryEmail,
@@ -51,6 +86,7 @@ function StripePayment({
   walletFallback,
   onWalletStalled,
 }: {
+  locale: Locale;
   clientSecret: string;
   orderId: string;
   deliveryEmail: string;
@@ -59,11 +95,14 @@ function StripePayment({
   walletFallback: boolean;
   onWalletStalled: () => void;
 }) {
+  const p = useTranslations('paymentUi');
+  const t = useTranslations('checkout');
+  const errors = useTranslations('errors');
   const stripe = useStripe(),
     elements = useElements(),
     router = useRouter();
   const [processing, setProcessing] = useState(false),
-    [error, setError] = useState(''),
+    [error, setError] = useState<CheckoutFailure | null>(null),
     [wallets, setWallets] = useState(true),
     [ready, setReady] = useState(false);
   const submitted = useRef(false);
@@ -76,7 +115,7 @@ function StripePayment({
     }
     submitted.current = true;
     setProcessing(true);
-    setError('');
+    setError(null);
     try {
       // Bound validation only: confirmation/3DS must never be abandoned mid-payment.
       // No confirmPayment call can run after this timeout, even if submit resolves late.
@@ -98,7 +137,7 @@ function StripePayment({
         if (stalled) {
           event?.paymentFailed({
             reason: 'fail',
-            message: 'The wallet did not respond. Please pay by card instead.',
+            message: p('walletFailed'),
           });
           // Recreate Elements with the SAME PaymentIntent; no new order or charge.
           onWalletStalled();
@@ -107,18 +146,23 @@ function StripePayment({
         throw cause;
       });
       if (!validation) return;
-      if (validation.error)
-        throw new Error(validation.error.message || 'Check your payment details.');
+      if (validation.error) throw new CheckoutPresentationError('detailsError');
       const result = await stripe.confirmPayment({
         elements,
         clientSecret,
         confirmParams: {
-          return_url: new URL('/checkout/success?order=' + orderId, window.location.origin).href,
+          return_url: new URL(
+            localePath('/checkout/success?order=' + orderId, locale),
+            window.location.origin,
+          ).href,
           payment_method_data: { billing_details: { email: deliveryEmail } },
         },
         redirect: 'if_required',
       });
-      if (result.error) throw new Error(result.error.message || 'Payment could not be completed.');
+      if (result.error)
+        throw new CheckoutPresentationError(
+          result.error.code === 'card_declined' ? 'declined' : 'detailsError',
+        );
       if (
         result.paymentIntent?.status === 'succeeded' ||
         result.paymentIntent?.status === 'processing'
@@ -126,9 +170,9 @@ function StripePayment({
         router.replace('/checkout/success?order=' + orderId);
         return;
       }
-      throw new Error('Payment needs further action. Please try again.');
+      throw new CheckoutPresentationError('furtherAction');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Payment could not be completed.');
+      setError(presentationFailure(e, 'detailsError'));
       event?.paymentFailed({ reason: 'fail' });
       submitted.current = false;
       setProcessing(false);
@@ -157,14 +201,12 @@ function StripePayment({
             onConfirm={(e) => void pay(e)}
             onLoadError={() => setWallets(false)}
           />
-          {wallets && <p className="payment-divider">or pay by card</p>}
+          {wallets && <p className="payment-divider">{p('orCard')}</p>}
         </div>
       )}
       <PaymentElement
         onReady={() => setReady(true)}
-        onLoadError={() =>
-          setError('The payment form could not load. Refresh the page and try again.')
-        }
+        onLoadError={() => setError({ key: 'formError' })}
         options={{
           layout: 'tabs',
           business: { name: 'Alozuri' },
@@ -175,7 +217,7 @@ function StripePayment({
       />
       {error && (
         <p role="alert" className="error-message">
-          {error}
+          {'code' in error ? errors(ERROR_MESSAGES[error.code]) : p(error.key)}
         </p>
       )}
       <button
@@ -186,31 +228,36 @@ function StripePayment({
       >
         {paymentBusy && <LoaderCircle size={18} className="checkout-spinner" aria-hidden="true" />}
         {processing
-          ? 'Processing payment…'
+          ? p('processing')
           : loadingPayment
             ? error
-              ? 'Payment form unavailable'
-              : 'Loading secure payment…'
-            : `Pay ${money(totalCents, currency)}`}
+              ? p('unavailable')
+              : p('loadingPayment')
+            : t('pay', { amount: money(totalCents, currency) })}
       </button>
     </div>
   );
 }
 export function Checkout() {
+  const p = useTranslations('paymentUi');
   const { user, loading } = useAuth();
   const { currency, ready } = useCurrency();
   if (!ready || loading)
     return (
       <section className="container section" role="status">
-        Loading checkout…
+        {p('loadingCheckout')}
       </section>
     );
   return <CheckoutForIdentity key={(user?.uid ?? 'guest') + currency} />;
 }
 function CheckoutForIdentity() {
   const locale = useLocale();
+  const isolate = (value: string) => (locale === 'ar' ? '\u2066' + value + '\u2069' : value);
   const { changeLanguage } = useLanguage();
   const t = useTranslations('checkout');
+  const p = useTranslations('paymentUi');
+  const cartCopy = useTranslations('cart');
+  const errors = useTranslations('errors');
   const { currency, refresh, lock } = useCurrency();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -220,7 +267,7 @@ function CheckoutForIdentity() {
   const buy = params.get('buy');
   const [buyPlan, setBuyPlan] = useState<Plan | null>(null),
     [quote, setQuote] = useState<Quote | null>(null),
-    [error, setError] = useState(''),
+    [error, setError] = useState<CheckoutFailure | null>(null),
     [loading, setLoading] = useState(false),
     [starting, setStarting] = useState(false),
     [email, setEmail] = useState(user?.email || ''),
@@ -258,7 +305,7 @@ function CheckoutForIdentity() {
       .catch(() => {
         if (active) {
           setMode('disabled');
-          setError('We could not load payment availability. Please retry.');
+          setError({ key: 'availabilityError' });
         }
       })
       .finally(() => clearTimeout(timeout));
@@ -279,7 +326,7 @@ function CheckoutForIdentity() {
       .then((r) => {
         if (active) setBuyPlan(r.plan);
       })
-      .catch(() => setError('This plan is unavailable. Return to your cart.'));
+      .catch(() => setError({ key: 'planUnavailable' }));
     return () => {
       active = false;
     };
@@ -308,7 +355,7 @@ function CheckoutForIdentity() {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), verificationTimeoutMs);
     setLoading(true);
-    setError('');
+    setError(null);
     void api<{ quote: Quote }>('/v2/quote', {
       method: 'POST',
       signal: controller.signal,
@@ -330,10 +377,8 @@ function CheckoutForIdentity() {
           setQuotedSignature('');
           setError(
             controller.signal.aborted
-              ? 'Confirming your total took too long. Your cart is saved. Please retry.'
-              : e instanceof Error
-                ? e.message
-                : 'Could not check prices.',
+              ? { key: 'totalTimeout' }
+              : presentationFailure(e, 'priceError'),
           );
         }
       })
@@ -403,7 +448,7 @@ function CheckoutForIdentity() {
     if (!quote || !quoteReady) return;
     submitting.current = true;
     setStarting(true);
-    setError('');
+    setError(null);
     try {
       const fingerprint = JSON.stringify({
         locale,
@@ -473,7 +518,7 @@ function CheckoutForIdentity() {
       });
       if (!(await stripePromise)) {
         stripePromise = undefined;
-        throw new Error('Stripe could not load. Check your connection and try again.');
+        throw new CheckoutPresentationError('stripeError');
       }
       setSession({
         ...result,
@@ -483,7 +528,7 @@ function CheckoutForIdentity() {
       const trackingValue = metaMoney(result.quote.totalCents, result.quote.currency);
       if (trackingValue) void trackMeta('InitiateCheckout', trackingValue, result.orderId, true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Checkout could not start.');
+      setError(presentationFailure(e, 'startError'));
       if (
         e instanceof StoreApiError &&
         ['PROMO_RESERVATION_EXPIRED', 'CHECKOUT_CLOSED'].includes(e.code)
@@ -516,44 +561,46 @@ function CheckoutForIdentity() {
   if (!mounted || !cart.ready)
     return (
       <section className="container section" role="status">
-        Loading checkout…
+        {p('loadingCheckout')}
       </section>
     );
   if (!lines.length)
     return (
       <section className="container section">
-        <h1>{buy ? 'Loading your plan…' : 'Your cart is empty'}</h1>
-        {error && <p role="alert">{error}</p>}
+        <h1>{buy ? p('loadingPlan') : cartCopy('emptyTitle')}</h1>
+        {error && (
+          <p role="alert">{'code' in error ? errors(ERROR_MESSAGES[error.code]) : p(error.key)}</p>
+        )}
         <Link className="button primary" href="/destinations">
-          Explore destinations
+          {cartCopy('explore')}
         </Link>
       </section>
     );
   const progressLabel = starting
-    ? 'Preparing secure payment…'
+    ? p('preparing')
     : accountBusy
-      ? 'Finishing sign-in…'
+      ? p('signingIn')
       : cart.syncing
-        ? 'Saving your cart…'
+        ? cartCopy('saving')
         : mode === null
-          ? 'Checking payment availability…'
+          ? p('checkingAvailability')
           : loading || (!quoteReady && !error)
-            ? 'Confirming your total…'
+            ? p('confirmingTotal')
             : '';
   const checkoutHint = starting
-    ? 'Opening your payment options. You will review payment before being charged.'
+    ? p('openingHint')
     : accountBusy
-      ? 'Finish signing in to continue. Your order is saved.'
+      ? p('signInHint')
       : progressLabel
-        ? 'You can enter your details while we confirm your order. You will review payment before being charged.'
+        ? p('confirmingHint')
         : !buy && cart.syncFailed
-          ? 'Resolve your cart sync issue before continuing to payment.'
+          ? p('syncHint')
           : !quoteReady
-            ? 'We could not confirm your total. Please retry below.'
+            ? p('totalHint')
             : mode === 'disabled' || mode !== stripeCheckoutMode
-              ? 'Payments are currently unavailable. Your cart is saved.'
+              ? p('paymentsHint')
               : !compatible
-                ? 'Confirm that your device supports eSIM above to continue.'
+                ? p('compatibilityHint')
                 : '';
   const orderSummary = (
     <OrderSummary
@@ -570,7 +617,7 @@ function CheckoutForIdentity() {
   return (
     <section className="container section checkout-page">
       <Link className="text-link" href="/cart">
-        ← Edit cart
+        {p('editCart')}
       </Link>
       <div className="page-intro">
         <h1>{t('title')}</h1>
@@ -583,21 +630,18 @@ function CheckoutForIdentity() {
           </button>
         </div>
       )}
-      <div className={`commerce-layout${session ? '' : ' checkout-review'}`}>
-        <div className="surface stack">
+      <div className={`commerce-layout${session ? '' : ' checkout-review'}`} dir="ltr">
+        <div className="surface stack" dir={locale === 'ar' ? 'rtl' : 'ltr'}>
           {session ? (
             <>
               <h2 ref={paymentHeading} tabIndex={-1}>
                 {t('securePayment')}
               </h2>
-              <p>Delivery email: {session.deliveryEmail}</p>
-              {mode === 'test' && (
-                <p className="notice">Test payment. No real money or eSIM will be issued.</p>
-              )}
+              <p>{p('deliveryEmail', { email: isolate(session.deliveryEmail) })}</p>
+              {mode === 'test' && <p className="notice">{p('testNotice')}</p>}
               {walletFallback && (
                 <p role="alert" className="notice">
-                  The wallet did not respond. Please pay by card below. Your existing order is
-                  unchanged, and no payment was submitted by this wallet attempt.
+                  {p('walletTimeout')}
                 </p>
               )}
               <Elements
@@ -617,6 +661,7 @@ function CheckoutForIdentity() {
                 }}
               >
                 <StripePayment
+                  locale={session.locale}
                   walletFallback={walletFallback}
                   onWalletStalled={() => setWalletFallback(true)}
                   clientSecret={session.clientSecret}
@@ -628,9 +673,9 @@ function CheckoutForIdentity() {
               </Elements>
             </>
           ) : (
-            <form ref={reviewForm} className="stack" onSubmit={start}>
-              <h2>{t('deliveryEmail')}</h2>
-              <p>{t('emailHint')}</p>
+            <form ref={reviewForm} className="stack" onSubmit={start} dir="ltr">
+              <h2 dir={locale === 'ar' ? 'rtl' : 'ltr'}>{t('deliveryEmail')}</h2>
+              <p dir={locale === 'ar' ? 'rtl' : 'ltr'}>{t('emailHint')}</p>
               <CheckoutAccount
                 email={email}
                 onEmailChange={setEmail}
@@ -639,19 +684,19 @@ function CheckoutForIdentity() {
                 onBusyChange={setAccountBusy}
                 returnTo={buy ? '/checkout?buy=' + encodeURIComponent(buy) : '/checkout'}
               />
-              {cart.syncing && <p role="status">Syncing your saved cart…</p>}
+              {cart.syncing && <p role="status">{p('syncingCart')}</p>}
               {!buy && cart.syncFailed && (
                 <p className="error-message" role="alert">
-                  {cart.error}{' '}
-                  <Link href="/cart">Return to your cart to resolve this before paying.</Link>
+                  {cartCopy('syncError')} <Link href="/cart">{p('resolveCart')}</Link>
                 </p>
               )}
               {orderSummary}
-              <details className="checkout-promo-entry">
-                <summary>Have a promotional code?</summary>
-                <label htmlFor="promotion-code">Promotional code</label>
+              <details className="checkout-promo-entry" dir={locale === 'ar' ? 'rtl' : 'ltr'}>
+                <summary>{p('promotionQuestion')}</summary>
+                <label htmlFor="promotion-code">{t('promotionalCode')}</label>
                 <input
                   id="promotion-code"
+                  dir="ltr"
                   className="commerce-input"
                   maxLength={32}
                   autoComplete="off"
@@ -668,7 +713,7 @@ function CheckoutForIdentity() {
                   disabled={starting}
                   onChange={(e) => setPromotionInput(e.target.value)}
                 />
-                <div className="checkout-promo-actions">
+                <div className="checkout-promo-actions" dir="ltr">
                   <button
                     type="button"
                     className="button small"
@@ -693,9 +738,14 @@ function CheckoutForIdentity() {
               </details>
               {quoteReady && quote?.promotion && (
                 <p role="status" className="checkout-promotion">
-                  {quote.promotion.code}: {quote.promotion.discountPercent}% off · Discount{' '}
-                  {money(quote.discountCents ?? 0, currency)} · Original total{' '}
-                  {money(quote.originalRetailCents ?? quote.totalCents, currency)}
+                  {p('promotionApplied', {
+                    code: isolate(quote.promotion.code),
+                    percent: quote.promotion.discountPercent,
+                    discount: isolate(money(quote.discountCents ?? 0, currency)),
+                    original: isolate(
+                      money(quote.originalRetailCents ?? quote.totalCents, currency),
+                    ),
+                  })}
                 </p>
               )}
               <label className="checkbox-label">
@@ -705,15 +755,15 @@ function CheckoutForIdentity() {
                   checked={compatible}
                   onChange={(e) => setCompatible(e.target.checked)}
                 />
-                <span>
-                  My device supports eSIM and is carrier unlocked.{' '}
-                  <Link href="/esim-compatibility">Check compatibility</Link>
+                <span dir={locale === 'ar' ? 'rtl' : 'ltr'}>
+                  {p('compatible')}{' '}
+                  <Link href="/esim-compatibility">{p('checkCompatibility')}</Link>
                 </span>
               </label>
               <CheckoutPolicyNotice />
               {mode !== null && (mode === 'disabled' || mode !== stripeCheckoutMode) ? (
                 <p className="notice" role="status">
-                  Payments are not currently configured for this storefront. Your cart is saved.
+                  {p('notConfigured')}
                 </p>
               ) : null}
               <button
@@ -742,21 +792,21 @@ function CheckoutForIdentity() {
               <p id="checkout-next-step" className="fine-print checkout-next-step" role="status">
                 {checkoutHint}
               </p>
-              <p className="fine-print payment-security">
-                Payment details are handled securely by Stripe.
-              </p>
+              <p className="fine-print payment-security">{cartCopy('security')}</p>
             </form>
           )}
           {error && (
             <div role="alert">
-              <p className="error-message">{error}</p>
+              <p className="error-message">
+                {'code' in error ? errors(ERROR_MESSAGES[error.code]) : p(error.key)}
+              </p>
               {!session && (!quoteReady || mode === 'disabled') && (
                 <button
                   type="button"
                   className="button"
                   onClick={() => setQuoteAttempt((n) => n + 1)}
                 >
-                  Retry checkout
+                  {p('retry')}
                 </button>
               )}
             </div>

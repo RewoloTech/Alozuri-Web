@@ -1,7 +1,7 @@
-# Alozuri translation glossary — draft
+# Alozuri translation terminology
 
-These are editorial starting points, not native, technical or legal approval.
-Do not publish translations until reviewed in context. The word eSIM, product and
+These terms guide the implemented catalogues; they are not evidence of professional
+native-language or legal approval. Review translations in context before release. The word eSIM, product and
 supplier IDs, ICCID, SM-DP+, APN, QR payloads, activation codes and Stripe identifiers
 are technical values. Preserve them exactly. Installation and activation are
 different events; never imply installation automatically activates every plan.

@@ -1,4 +1,9 @@
 'use client';
+import { usePlanCopy } from '@/lib/use-plan-copy';
+import { LinkedMessage, MESSAGE_LINKS } from './linked-message';
+import { StoreApiError } from '@/lib/api-error';
+import { ERROR_MESSAGES, type ErrorCode } from '@alozuri/shared/i18n/errors';
+import type { Messages } from '@alozuri/shared/i18n/messages';
 import { trackMeta } from '@/lib/meta-pixel';
 import { metaMoney } from '@/lib/meta-events';
 import { useMarketingConsent } from './privacy-provider';
@@ -9,11 +14,12 @@ import Link from '@/components/localized-link';
 import { useLocale, useTranslations } from 'next-intl';
 import { destinationName } from '@alozuri/shared/i18n/destinations';
 import { useDispatch, useSelector } from 'react-redux';
-import { dataLabel, money, coverageLabel, type Plan } from '@alozuri/shared';
+import { money, type Plan } from '@alozuri/shared';
 import { demoPlans } from '@alozuri/shared/demo';
 import { useCurrency } from './currency-provider';
 import { api, demoMode } from '@/lib/api';
 import { addToCart, type RootState } from '@/lib/store';
+type PlanFailure = { key: keyof Messages['planInfo'] } | { code: ErrorCode };
 export function PlanDetails({
   id,
   initialPlan = null,
@@ -23,7 +29,15 @@ export function PlanDetails({
   initialPlan?: Plan | null;
 }) {
   const locale = useLocale();
+  const translate = useTranslations();
   const t = useTranslations('plans');
+  const info = useTranslations('planInfo');
+  const search = useTranslations('search');
+  const cartCopy = useTranslations('cart');
+  const errors = useTranslations('errors');
+  const legal = useTranslations('legal');
+  const payment = useTranslations('paymentUi');
+  const copy = usePlanCopy();
   const marketing = useMarketingConsent();
   const viewId = useRef<string | null>(null);
   const { currency, refresh, ready } = useCurrency();
@@ -35,7 +49,7 @@ export function PlanDetails({
     [loading, setLoading] = useState(!demoMode && !initialPlan),
     [adding, setAdding] = useState(false),
     [added, setAdded] = useState(false),
-    [error, setError] = useState(''),
+    [error, setError] = useState<PlanFailure | null>(null),
     [retry, setRetry] = useState(0);
   const loadedRequest = useRef(initialPlan ? `${id}:USD:0:0` : '');
   useEffect(() => {
@@ -43,13 +57,13 @@ export function PlanDetails({
     const key = `${id}:${currency}:${refresh}:${retry}`;
     if (loadedRequest.current === key) {
       setLoading(false);
-      setError('');
+      setError(null);
       return;
     }
     let active = true;
     const controller = new AbortController();
     setLoading(true);
-    setError('');
+    setError(null);
     void api<{ plan: Plan }>(
       '/v1/packages/' +
         encodeURIComponent(id) +
@@ -63,7 +77,7 @@ export function PlanDetails({
         }
       })
       .catch(() => {
-        if (active) setError('We could not load the current price. Please retry.');
+        if (active) setError({ key: 'priceError' });
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -98,7 +112,7 @@ export function PlanDetails({
     if (!ready || !plan || plan.demo || plan.currency !== currency || loading || error) return;
     setAdding(true);
     setAdded(false);
-    setError('');
+    setError(null);
     try {
       const fresh = await api<{ plan: Plan }>(
         '/v1/packages/' +
@@ -110,7 +124,7 @@ export function PlanDetails({
       dispatch(addToCart(fresh.plan));
       setAdded(true);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not add this plan.');
+      setError(e instanceof StoreApiError ? { code: e.code } : { key: 'addError' });
     } finally {
       setAdding(false);
     }
@@ -118,16 +132,18 @@ export function PlanDetails({
   if (loading && !plan)
     return (
       <div className="loading-page" role="status">
-        Loading your plan…
+        {payment('loadingPlan')}
       </div>
     );
   if (!plan)
     return (
       <section className="container section">
-        <h1>Plan unavailable</h1>
-        <p role="alert">{error}</p>
+        <h1>{info('unavailable')}</h1>
+        <p role="alert">
+          {error ? ('code' in error ? errors(ERROR_MESSAGES[error.code]) : info(error.key)) : ''}
+        </p>
         <Link className="button" href="/destinations">
-          Search plans
+          {info('search')}
         </Link>
       </section>
     );
@@ -139,75 +155,74 @@ export function PlanDetails({
       {!plan.demo && !error && !loading && (!ready || plan.currency === currency) && (
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: jsonLd(productStructuredData(plan, locale)) }}
+          dangerouslySetInnerHTML={{
+            __html: jsonLd(productStructuredData(plan, copy.locale, translate)),
+          }}
         />
       )}
       <Link className="text-link" href="/destinations">
-        ← Explore destinations
+        {cartCopy('explore')}
       </Link>
       <div className="page-intro">
-        <span className="eyebrow">ONE PLAN. EVERY STOP.</span>
-        <h1>{plan.name}</h1>
+        <span className="eyebrow">{info('eyebrow')}</span>
+        <h1>{copy.title(plan)}</h1>
         <p>
-          {dataLabel(plan)} · {plan.days} days · Data only
+          {copy.allowance(plan)} · {t('days', { count: plan.days })} · {search('dataOnly')}
         </p>
       </div>
-      <div className="detail-layout">
-        <div className="stack">
+      <div className="detail-layout" dir="ltr">
+        <div className="stack" dir={copy.dir}>
           <div className="surface">
-            <h2>{coverageLabel(plan)}</h2>
-            <p>
-              Includes exactly {plan.countries.length}{' '}
-              {plan.countries.length === 1 ? 'destination' : 'destinations'}:
-            </p>
-            <div className="coverage-list">
+            <h2>{info(plan.countries.length === 1 ? 'localCoverage' : 'multiCoverage')}</h2>
+            <p>{info('includes', { count: plan.countries.length })}</p>
+            <div className="coverage-list" dir="ltr">
               {plan.countries.map((c) => (
-                <span key={c}>{destinationName(c, locale)}</span>
+                <span key={c} dir={copy.dir}>
+                  {destinationName(c, locale)}
+                </span>
               ))}
             </div>
           </div>
           <div className="surface">
-            <h2>Know before you go</h2>
+            <h2>{info('know')}</h2>
             <dl className="spec-list">
               <div>
-                <dt>Activation</dt>
-                <dd>{plan.activation}</dd>
+                <dt>{info('activation')}</dt>
+                <dd>{copy.activation(plan.activation)}</dd>
               </div>
               <div>
-                <dt>Networks</dt>
-                <dd>
-                  {plan.networks.length
-                    ? plan.networks.join(', ')
-                    : 'Network information has not been provided for this plan.'}
-                </dd>
+                <dt>{info('networks')}</dt>
+                <dd>{plan.networks.length ? plan.networks.join(', ') : info('networkMissing')}</dd>
               </div>
               <div>
-                <dt>Data policy</dt>
-                <dd>{plan.fairUse}</dd>
+                <dt>{info('dataPolicy')}</dt>
+                <dd>{copy.fairUse(plan.fairUse)}</dd>
               </div>
               <div>
-                <dt>Calls and texts</dt>
-                <dd>Data only. Keep your home SIM for your existing number.</dd>
+                <dt>{info('calls')}</dt>
+                <dd>{info('callsText')}</dd>
               </div>
             </dl>
             <Link href="/help#compatibility" className="text-link">
-              Check device compatibility ↗
+              {info('device')}
             </Link>
             {plan.supplierNotes && (
               <details className="plan-conditions">
-                <summary>Plan conditions</summary>
-                <p style={{ whiteSpace: 'pre-line' }}>{plan.supplierNotes}</p>
+                <summary>{info('conditions')}</summary>
+                <p style={{ whiteSpace: 'pre-line' }}>{copy.notes(plan.supplierNotes)}</p>
                 <p>
-                  Your statutory rights apply. Read our{' '}
-                  <Link href="/refund-policy">Refund Policy</Link>.
+                  <LinkedMessage
+                    message={info('rights', { refunds: MESSAGE_LINKS.refunds })}
+                    links={{ refunds: { href: '/refund-policy', label: legal('refunds') } }}
+                  />
                 </p>
               </details>
             )}
           </div>
         </div>
-        <aside className="surface purchase-summary">
-          <span className="eyebrow">{plan.demo ? 'SAMPLE PLAN' : 'PLAN SUMMARY'}</span>
-          <h2>
+        <aside className="surface purchase-summary" dir={copy.dir}>
+          <span className="eyebrow">{plan.demo ? info('sample') : info('summary')}</span>
+          <h2 dir="ltr">
             {(!ready || plan.currency === currency) && !loading && !error
               ? money(plan.priceCents, plan.currency)
               : error
@@ -216,12 +231,10 @@ export function PlanDetails({
             <small>{ready ? currency : plan.currency}</small>
           </h2>
           <p>
-            {dataLabel(plan)} · {plan.days} days
+            {copy.allowance(plan)} · {t('days', { count: plan.days })}
           </p>
-          <p>Coverage: {plan.countries.length} destinations</p>
-          {plan.demo && (
-            <p className="notice">Illustrative sample. This plan cannot be purchased.</p>
-          )}
+          <p>{search('coverage', { count: plan.countries.length })}</p>
+          {plan.demo && <p className="notice">{info('sampleNotice')}</p>}
           <button
             className="button primary full-width"
             disabled={
@@ -238,11 +251,11 @@ export function PlanDetails({
             onClick={() => void add()}
           >
             {adding
-              ? 'Adding…'
+              ? info('adding')
               : !ready || plan.currency !== currency || loading
                 ? t('loadingPrice')
                 : !cart.ready || cart.syncing
-                  ? 'Preparing basket…'
+                  ? info('basket')
                   : t('add')}
           </button>
           <Link
@@ -261,28 +274,30 @@ export function PlanDetails({
               className="button full-width"
               onClick={() => setRetry((value) => value + 1)}
             >
-              Retry price
+              {info('retry')}
             </button>
           )}
           {added && (
             <div role="status" className="success-message">
-              <p>Added to your cart.</p>
-              <Link href="/destinations">Continue shopping</Link> ·{' '}
-              <Link href="/cart">View cart →</Link>
+              <p>{info('added')}</p>
+              <Link href="/destinations">{cartCopy('continueShopping')}</Link> ·{' '}
+              <Link href="/cart">{info('viewCart')}</Link>
             </div>
           )}
           {(error || limit || cart.error) && (
             <p className="error-message" role="alert">
-              {error ||
-                (limit ? 'Cart limit reached: five per plan and ten eSIMs per order.' : cart.error)}
+              {error
+                ? 'code' in error
+                  ? errors(ERROR_MESSAGES[error.code])
+                  : info(error.key)
+                : limit
+                  ? info('limit')
+                  : cartCopy('syncError')}
             </p>
           )}
-          <p className="fine-print">
-            Your device must support eSIM and be carrier unlocked. Install over Wi-Fi and follow the
-            activation rule.
-          </p>
+          <p className="fine-print">{info('deviceNotice')}</p>
           <Link href="/refund-policy" className="text-link">
-            Refund information
+            {info('refunds')}
           </Link>
         </aside>
       </div>

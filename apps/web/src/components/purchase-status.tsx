@@ -1,4 +1,10 @@
 'use client';
+import { useLocale, useTranslations } from 'next-intl';
+import { usePlanCopy } from '@/lib/use-plan-copy';
+import { useStatusCopy } from '@/lib/use-status-copy';
+import { ContractDownloadError } from '@/lib/contract-errors';
+import { BUSINESS } from '@alozuri/shared/legal';
+import { LinkedMessage, MESSAGE_LINKS } from './linked-message';
 import { trackMeta, marketingConsentNow, onPixelReady } from '@/lib/meta-pixel';
 import { confirmedMetaPurchase } from '@/lib/meta-events';
 import { useMarketingConsent } from './privacy-provider';
@@ -7,7 +13,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from '@/components/localized-link';
 import { useSearchParams } from 'next/navigation';
 import { useDispatch, useSelector } from 'react-redux';
-import { money, dataLabel, type CartLine, type CartItem, type Plan } from '@alozuri/shared';
+import { money, type CartLine, type CartItem, type Plan } from '@alozuri/shared';
 import { removeFromCart, quantityChanged, type RootState } from '@/lib/store';
 import { api } from '@/lib/api';
 import {
@@ -45,6 +51,12 @@ export function PurchaseStatus() {
   return <PrivatePurchase key={`${id}:${user?.uid ?? 'guest'}`} id={id} />;
 }
 function PrivatePurchase({ id }: { id: string }) {
+  const t = useTranslations('orderUi');
+  const site = useTranslations('site');
+  const emailCopy = useTranslations('emails');
+  const payment = useTranslations('paymentUi');
+  const copy = usePlanCopy();
+  const status = useStatusCopy();
   const marketing = useMarketingConsent();
   const reported = useRef(new Set<string>());
   const { user } = useAuth(),
@@ -52,10 +64,10 @@ function PrivatePurchase({ id }: { id: string }) {
     cart = useSelector((s: RootState) => s.cart);
   const [order, setOrder] = useState<Purchase | null>(null),
     [access, setAccess] = useState(''),
-    [error, setError] = useState(''),
+    [error, setError] = useState(false),
     [refresh, setRefresh] = useState(0),
     [downloadingContract, setDownloadingContract] = useState(false),
-    [contractError, setContractError] = useState('');
+    [contractError, setContractError] = useState<'pdfError' | 'pdfFontError' | ''>('');
   useEffect(() => {
     const token = new URLSearchParams(window.location.hash.slice(1)).get('access');
     if (token) {
@@ -83,7 +95,7 @@ function PrivatePurchase({ id }: { id: string }) {
         );
         if (!active) return;
         setOrder(value);
-        setError('');
+        setError(false);
         if (
           value.status !== 'cancelled' &&
           value.status !== 'refunded' &&
@@ -96,10 +108,7 @@ function PrivatePurchase({ id }: { id: string }) {
         )
           timer = setTimeout(() => void poll(), 4000);
       } catch {
-        if (active)
-          setError(
-            'We could not load this order. Use the private email link or sign in with the delivery email address.',
-          );
+        if (active) setError(true);
       }
     }
     void poll();
@@ -168,46 +177,49 @@ function PrivatePurchase({ id }: { id: string }) {
   }, [marketing, order, access, user]);
   const ready = order?.allocations.length && order.allocations.every((a) => a.status === 'ready');
   return (
-    <section className="container section">
+    <section className="container section purchase-status-page">
       <div className="page-intro">
-        <span className="eyebrow">YOUR ALOZURI ORDER</span>
+        <span className="eyebrow">{t('eyebrow')}</span>
         <h1>
           {order?.test
-            ? 'Your test order'
+            ? t('testOrder')
             : ready
-              ? 'Your eSIM is ready.'
+              ? t('readyTitle')
               : order?.status === 'paid'
-                ? 'Your eSIM is on its way.'
-                : 'Checking your payment'}
+                ? t('onWayTitle')
+                : t('checkingTitle')}
         </h1>
       </div>
       {error ? (
         <div className="surface">
-          <p role="alert">{error}</p>
+          <p role="alert">{t('loadError')}</p>
           <button className="button" onClick={() => setRefresh((n) => n + 1)}>
-            Check again
+            {t('checkAgain')}
           </button>
-          <Link href="/login?next=/account/esims">Sign in to your purchases</Link>
+          <Link href="/login?next=/account/esims">{t('signinPurchases')}</Link>
         </div>
       ) : !order ? (
         <p role="status">
-          {!access && !user?.emailVerified
-            ? 'Open your private order link from your email, or sign in to view your purchase.'
-            : 'Confirming your order…'}
+          {!access && !user?.emailVerified ? t('privateLinkHint') : t('confirming')}
         </p>
       ) : (
-        <div className="commerce-layout">
-          <div className="stack">
+        <div className="commerce-layout" dir="ltr">
+          <div className="stack" dir={copy.dir}>
             <div className="surface">
-              <p>Order reference: {order.reference ?? order.id}</p>
-              <p>Payment: {order.status.replaceAll('_', ' ')}</p>
-              <p>Delivery email: {order.email}</p>
-              <p>Total: {money(order.totalCents, order.currency)}</p>
+              <p>
+                {emailCopy('reference', { reference: copy.isolate(order.reference ?? order.id) })}
+              </p>
+              <p>{t('paymentStatus', { status: status.order(order.status) })}</p>
+              <p>{payment('deliveryEmail', { email: copy.isolate(order.email) })}</p>
+              <p>{t('total', { amount: copy.isolate(money(order.totalCents, order.currency)) })}</p>
               {order.legal && (
                 <details className="order-documents">
-                  <summary>Order documents</summary>
+                  <summary>{t('documents')}</summary>
                   <p>
-                    Terms version {order.legal.version} · Accepted {order.legal.acceptedAt}
+                    {t('termsVersion', {
+                      version: copy.isolate(order.legal.version),
+                      date: copy.isolate(order.legal.acceptedAt),
+                    })}
                   </p>
                   <button
                     className="button"
@@ -229,75 +241,75 @@ function PrivatePurchase({ id }: { id: string }) {
                         setTimeout(() => URL.revokeObjectURL(url), 60000);
                       } catch (error) {
                         setContractError(
-                          error instanceof Error
-                            ? error.message
-                            : 'Your contract could not be downloaded. Please retry.',
+                          error instanceof ContractDownloadError &&
+                            error.code === 'FONT_UNAVAILABLE'
+                            ? 'pdfFontError'
+                            : 'pdfError',
                         );
                       } finally {
                         setDownloadingContract(false);
                       }
                     }}
                   >
-                    {downloadingContract ? 'Preparing PDF…' : 'Download your contract PDF'}
+                    {downloadingContract ? t('preparingPdf') : t('downloadPdf')}
                   </button>
-                  {!contractPaymentConfirmed(order) && (
-                    <p role="status">The PDF becomes available after payment is confirmed.</p>
-                  )}
-                  {contractError && <p role="alert">{contractError}</p>}
+                  {!contractPaymentConfirmed(order) && <p role="status">{t('pdfPending')}</p>}
+                  {contractError && <p role="alert">{t(contractError)}</p>}
                 </details>
               )}
               {order.test ? (
-                <p className="notice">Stripe test order. No real charge or eSIM is issued.</p>
+                <p className="notice">{t('testNotice')}</p>
               ) : order.confirmationNeedsSupport ? (
                 <p className="notice" role="status">
-                  Your payment is recorded. Your order needs support before we can prepare your
-                  eSIM. <a href="mailto:support@alozuri.com">Contact support@alozuri.com</a> with
-                  your order reference.
+                  <LinkedMessage
+                    message={t('supportNotice', { support: MESSAGE_LINKS.support })}
+                    links={{ support: { href: 'mailto:' + BUSINESS.email, label: BUSINESS.email } }}
+                  />
                 </p>
               ) : order.status === 'paid' && !ready ? (
-                <p role="status">
-                  Preparing your eSIM. This private page updates when installation details are
-                  ready. Your order confirmation email includes a link back here and your purchase
-                  contract.
-                </p>
+                <p role="status">{t('preparingNotice')}</p>
               ) : null}
             </div>
             {order.allocations.map((a) => (
               <article className="surface stack" key={a.id}>
-                <h2>{a.plan.name}</h2>
-                <p>Status: {a.status.replaceAll('_', ' ')}</p>
+                <h2>{copy.title(a.plan)}</h2>
+                <p>{t('unitStatus', { status: status.order(a.status) })}</p>
                 {a.status === 'ready' && !order.test ? (
                   <>
                     <EsimUsagePanel purchaseId={id} unitId={a.id} accessToken={access} />
                     <InstallationDetails orderId={a.id} purchaseId={id} accessToken={access} />
                   </>
                 ) : a.status === 'provision_error' ? (
-                  <p>Delivery needs attention. Contact support with your order reference.</p>
+                  <p>{t('deliveryIssue')}</p>
                 ) : a.status === 'refund_pending' ? (
-                  <p>Your refund is being processed.</p>
+                  <p>{t('refundNotice')}</p>
                 ) : null}
               </article>
             ))}
             <button className="button" onClick={() => setRefresh((n) => n + 1)}>
-              Refresh order status
+              {t('refresh')}
             </button>
             <Link className="text-link" href="/help">
-              Installation guidance →
+              {t('guidance')}
             </Link>
           </div>
-          <aside className="surface stack">
-            <h2>Your order</h2>
+          <aside className="surface stack" dir={copy.dir}>
+            <h2>{t('title')}</h2>
             {order.items.map((line) => (
               <div key={line.plan.id}>
                 <LineDescription line={line} />
                 <p>
-                  Quantity {line.quantity} ·{' '}
-                  {money(line.plan.priceCents * line.quantity, order.currency)}
+                  {t('quantityAmount', {
+                    quantity: line.quantity,
+                    amount: copy.isolate(
+                      money(line.plan.priceCents * line.quantity, order.currency),
+                    ),
+                  })}
                 </p>
               </div>
             ))}
             <Link className="button" href="/account/esims">
-              My eSIMs
+              {site('myEsims')}
             </Link>
           </aside>
         </div>
@@ -311,22 +323,30 @@ export function PurchaseHistory({ view = 'esims' }: { view?: PurchaseView }) {
   return <AccountPurchases key={(user?.uid ?? 'guest') + view} view={view} />;
 }
 function AccountPurchases({ view }: { view: PurchaseView }) {
+  const t = useTranslations('orderUi');
+  const site = useTranslations('site');
+  const navigation = useTranslations('navigation');
+  const auth = useTranslations('authUi');
+  const cartCopy = useTranslations('cart');
+  const copy = usePlanCopy();
+  const status = useStatusCopy();
+  const locale = useLocale();
   const { user, loading } = useAuth();
   const uid = user?.uid,
     verified = user?.emailVerified;
   const [orders, setOrders] = useState<Purchase[] | null>(null),
-    [error, setError] = useState(''),
+    [error, setError] = useState(false),
     [refresh, setRefresh] = useState(0);
   useEffect(() => {
     if (!uid || !verified) return;
     let active = true;
-    setError('');
+    setError(false);
     void api<{ orders: Purchase[] }>('/v2/orders', {}, uid)
       .then((r) => {
         if (active) setOrders(r.orders);
       })
       .catch(() => {
-        if (active) setError('Your purchases could not be loaded. Try again later.');
+        if (active) setError(true);
       });
     return () => {
       active = false;
@@ -335,67 +355,63 @@ function AccountPurchases({ view }: { view: PurchaseView }) {
   return (
     <section className="container section">
       <div className="page-intro">
-        <span className="eyebrow">YOUR ALOZURI</span>
-        <h1>{view === 'usage' ? 'Data usage' : view === 'orders' ? 'Orders' : 'My eSIMs'}</h1>
-        <p>
-          {view === 'usage'
-            ? 'Check the data usage for each of your delivered eSIMs.'
-            : 'Your purchases and installation details, in one place.'}
-        </p>
+        <span className="eyebrow">{t('accountEyebrow')}</span>
+        <h1>
+          {view === 'usage' ? site('usage') : view === 'orders' ? site('orders') : site('myEsims')}
+        </h1>
+        <p>{view === 'usage' ? t('usageHint') : t('historyHint')}</p>
       </div>
       <AccountNavigation active={view} />
       {loading ? (
-        <p role="status">Checking your account…</p>
+        <p role="status">{auth('checkingAccess')}</p>
       ) : !user?.emailVerified ? (
         <div className="surface">
-          <p>
-            Sign in with your verified delivery email to find your purchases. Guest customers can
-            also use the private link in their delivery email.
-          </p>
+          <p>{t('loginHint')}</p>
           <Link
             className="button primary"
             href={'/login?next=' + encodeURIComponent('/account/' + view)}
           >
-            Sign in
+            {navigation('login')}
           </Link>
         </div>
       ) : error ? (
         <div className="surface stack">
-          <p role="alert">{error}</p>
+          <p role="alert">{t('purchasesError')}</p>
           <button className="button" onClick={() => setRefresh((value) => value + 1)}>
-            Retry loading {view === 'usage' ? 'eSIMs' : 'purchases'}
+            {t('retryPurchases')}
           </button>
         </div>
       ) : orders === null ? (
-        <p role="status">Loading purchases…</p>
+        <p role="status">{t('loadingPurchases')}</p>
       ) : !orders.length ? (
         <div className="surface">
-          <h2>No purchases yet</h2>
-          <Link href="/destinations">Explore destinations →</Link>
+          <h2>{t('empty')}</h2>
+          <Link href="/destinations">{cartCopy('explore')}</Link>
         </div>
       ) : view === 'usage' ? (
         <AccountUsage orders={orders} />
       ) : (
-        <div className="stack">
+        <div className="stack" dir={copy.dir}>
           {orders.map((order) => (
             <article className="surface purchase-card" key={order.id}>
-              <h2>{order.items.map((i) => i.plan.name).join(', ')}</h2>
+              <h2>{order.items.map((i) => copy.title(i.plan)).join(', ')}</h2>
               <p>
-                {new Date(order.createdAt).toLocaleDateString('en-GB')} ·{' '}
-                {money(order.totalCents, order.currency)} · {order.test ? 'Test order · ' : ''}
-                {order.status.replaceAll('_', ' ')}
+                {new Date(order.createdAt).toLocaleDateString(locale === 'en' ? 'en-GB' : locale)} ·{' '}
+                {money(order.totalCents, order.currency)} ·{' '}
+                {order.test ? t('testOrder') + ' · ' : ''}
+                {status.order(order.status)}
               </p>
               <div className="purchase-actions">
                 <Link className="button" href={'/checkout/success?order=' + order.id}>
-                  View order and installation
+                  {t('viewOrder')}
                 </Link>
               </div>
               {view === 'orders' ? null : order.test ? (
-                <p className="fine-print">Test order. No eSIM usage is available.</p>
+                <p className="fine-print">{t('testNoUsage')}</p>
               ) : (
                 (order.allocations ?? []).map((unit) => (
                   <section className="surface stack" key={unit.id}>
-                    <h3>{unit.plan.name}</h3>
+                    <h3>{copy.title(unit.plan)}</h3>
                     {unit.status === 'ready' ? (
                       <>
                         <EsimUsagePanel purchaseId={order.id} unitId={unit.id} />
@@ -404,10 +420,7 @@ function AccountPurchases({ view }: { view: PurchaseView }) {
                         )}
                       </>
                     ) : (
-                      <p>
-                        eSIM status: {unit.status.replaceAll('_', ' ')}. Usage will be available
-                        after delivery.
-                      </p>
+                      <p>{t('unitWaiting', { status: status.order(unit.status) })}</p>
                     )}
                   </section>
                 ))
@@ -417,24 +430,27 @@ function AccountPurchases({ view }: { view: PurchaseView }) {
         </div>
       )}
       <p>
-        <Link href="/dashboard">Earlier orders and account settings →</Link>
+        <Link href="/dashboard">{t('earlierAccount')}</Link>
       </p>
     </section>
   );
 }
 
 function AccountUsage({ orders }: { orders: Purchase[] }) {
+  const t = useTranslations('orderUi');
+  const plans = useTranslations('plans');
+  const copy = usePlanCopy();
   const units = orders
     .filter((order) => !order.test)
     .flatMap((order) => (order.allocations ?? []).map((unit) => ({ order, unit })));
   return units.length ? (
-    <div className="stack">
+    <div className="stack" dir={copy.dir}>
       {units.map(({ order, unit }) => (
         <article className="surface usage-card" key={unit.id}>
-          <h2>{unit.plan.name}</h2>
+          <h2>{copy.title(unit.plan)}</h2>
           <p>
-            {dataLabel(unit.plan)} · {unit.plan.days} days · {unit.plan.countries.length}{' '}
-            {unit.plan.countries.length === 1 ? 'country' : 'countries'}
+            {copy.allowance(unit.plan)} · {plans('days', { count: unit.plan.days })} ·{' '}
+            {copy.coverage(unit.plan)}
           </p>
           {unit.status === 'ready' && order.status === 'paid' ? (
             <EsimUsagePanel purchaseId={order.id} unitId={unit.id} />
@@ -442,15 +458,15 @@ function AccountUsage({ orders }: { orders: Purchase[] }) {
             <p role="status">
               {['refunded', 'refund_pending', 'cancelled'].includes(order.status) ||
               ['refunded', 'refund_pending', 'cancelled'].includes(unit.status)
-                ? 'Usage is unavailable for this cancelled or refunded eSIM.'
+                ? t('cancelledUsage')
                 : unit.status === 'provision_error' || order.status === 'attention'
-                  ? 'This eSIM needs support before usage can be shown.'
-                  : 'Your eSIM is being prepared. Usage becomes available after delivery.'}
+                  ? t('supportUsage')
+                  : t('preparingUsage')}
             </p>
           )}
           <div className="purchase-actions">
             <Link className="button" href={'/checkout/success?order=' + order.id}>
-              View order and installation
+              {t('viewOrder')}
             </Link>
           </div>
         </article>
@@ -458,14 +474,14 @@ function AccountUsage({ orders }: { orders: Purchase[] }) {
     </div>
   ) : (
     <div className="surface">
-      <h2>No eSIMs available for usage yet</h2>
+      <h2>{t('emptyUsage')}</h2>
       <p>
         {orders.some((order) => !order.test && order.status === 'paid')
-          ? 'Your paid order is being prepared. Your eSIM will appear here after it is allocated.'
-          : 'Usage is available for delivered eSIMs. Test orders do not contain a live eSIM.'}
+          ? t('paidAllocating')
+          : t('liveUsageOnly')}
       </p>
       <Link className="button" href="/account/orders">
-        View orders
+        {t('viewOrders')}
       </Link>
     </div>
   );

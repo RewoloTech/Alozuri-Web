@@ -1,10 +1,10 @@
 import { LegalDocument } from '@/components/legal-document';
 import { POLICIES } from '@alozuri/shared/policies';
 import { breadcrumbs, jsonLd } from '@/lib/seo';
-import { localizedMetadata as publicMetadata } from '@/lib/localized-metadata';
+import { policyMetadata } from '@/lib/policy-metadata';
 const policy = POLICIES['terms'];
 export async function generateMetadata() {
-  return await publicMetadata(policy.title, policy.description, policy.path);
+  return policyMetadata('terms');
 }
 export default function Page() {
   return (

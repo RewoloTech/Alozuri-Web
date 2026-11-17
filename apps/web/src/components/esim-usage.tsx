@@ -1,26 +1,10 @@
 'use client';
+import { useLocale, useTranslations } from 'next-intl';
+import { useStatusCopy } from '@/lib/use-status-copy';
 import { useEffect, useState } from 'react';
 import { dataSizeLabel } from '@alozuri/shared';
-import { installationLabel } from '@alozuri/shared/esim-usage';
 import type { EsimUsage } from '@alozuri/shared/esim-usage';
 import { api } from '@/lib/api';
-
-const labels: Record<string, string> = {
-  CREATE: 'Preparing',
-  PAYING: 'Preparing',
-  PAID: 'Preparing',
-  GETTING_RESOURCE: 'Preparing',
-  GOT_RESOURCE: 'Ready',
-  IN_USE: 'Active',
-  USED_UP: 'Data depleted',
-  UNUSED_EXPIRED: 'Expired',
-  USED_EXPIRED: 'Expired',
-  CANCEL: 'Cancelled',
-  SUSPENDED: 'Suspended',
-  REVOKE: 'Revoked',
-};
-const volume = (bytes: number | null) =>
-  bytes === null ? 'Not reported' : dataSizeLabel(bytes / 1073741824);
 
 export function EsimUsagePanel({
   purchaseId,
@@ -31,15 +15,23 @@ export function EsimUsagePanel({
   unitId: string;
   accessToken?: string;
 }) {
+  const t = useTranslations('usageUi');
+  const site = useTranslations('site');
+  const locale = useLocale();
+  const status = useStatusCopy();
+  const volume = (bytes: number | null) =>
+    bytes === null ? status.notReported : dataSizeLabel(bytes / 1073741824);
+  const date = (value: string) =>
+    new Date(value).toLocaleString(locale === 'en' ? 'en-GB' : locale);
   const [usage, setUsage] = useState<EsimUsage | null>(null),
     [loading, setLoading] = useState(true),
-    [error, setError] = useState(''),
+    [error, setError] = useState(false),
     [refresh, setRefresh] = useState(0);
   useEffect(() => {
     let active = true;
     const controller = new AbortController();
     setLoading(true);
-    setError('');
+    setError(false);
     void api<{ usage: EsimUsage }>(
       `/v2/orders/${encodeURIComponent(purchaseId)}/units/${encodeURIComponent(unitId)}/usage`,
       { signal: controller.signal, headers: accessToken ? { 'X-Order-Access': accessToken } : {} },
@@ -49,7 +41,7 @@ export function EsimUsagePanel({
         if (active) setUsage(result.usage);
       })
       .catch(() => {
-        if (active) setError('Usage could not be checked. Please try again.');
+        if (active) setError(true);
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -61,94 +53,77 @@ export function EsimUsagePanel({
   }, [purchaseId, unitId, accessToken, refresh]);
   const snapshot = usage?.snapshot;
   return (
-    <section className="esim-usage" aria-label="Data usage" aria-busy={loading}>
-      <h3>Data usage</h3>
-      {loading && <p role="status">Checking data usage…</p>}
+    <section className="esim-usage" aria-label={site('usage')} aria-busy={loading}>
+      <h3>{site('usage')}</h3>
+      {loading && <p role="status">{t('checking')}</p>}
       {snapshot ? (
         <>
           <dl className="spec-list">
             <div>
-              <dt>Used data</dt>
-              <dd>{volume(snapshot.usedBytes)}</dd>
+              <dt>{t('used')}</dt>
+              <dd dir="ltr">{volume(snapshot.usedBytes)}</dd>
             </div>
             {snapshot.kind === 'fixed' && (
               <>
                 <div>
-                  <dt>Remaining data</dt>
-                  <dd>{volume(snapshot.remainingBytes)}</dd>
+                  <dt>{t('remaining')}</dt>
+                  <dd dir="ltr">{volume(snapshot.remainingBytes)}</dd>
                 </div>
                 <div>
-                  <dt>Total allowance</dt>
-                  <dd>{volume(snapshot.totalBytes)}</dd>
+                  <dt>{t('total')}</dt>
+                  <dd dir="ltr">{volume(snapshot.totalBytes)}</dd>
                 </div>
               </>
             )}
             <div>
-              <dt>Installation</dt>
-              <dd>{installationLabel(snapshot.smdpStatus)}</dd>
+              <dt>{t('installation')}</dt>
+              <dd>{status.installation(snapshot.smdpStatus)}</dd>
             </div>
             {snapshot.esimTranNo && (
               <div>
-                <dt>eSIM Tran No</dt>
-                <dd>{snapshot.esimTranNo}</dd>
+                <dt>{t('tran')}</dt>
+                <dd dir="ltr">{snapshot.esimTranNo}</dd>
               </div>
             )}
             <div>
-              <dt>Supplier status</dt>
-              <dd>{labels[snapshot.profileStatus] ?? 'Not reported'}</dd>
+              <dt>{t('supplierStatus')}</dt>
+              <dd>{status.profile(snapshot.profileStatus)}</dd>
             </div>
             <div>
-              <dt>Expiry</dt>
-              <dd>
-                {snapshot.expiresAt
-                  ? new Date(snapshot.expiresAt).toLocaleString('en-GB')
-                  : 'Not reported yet'}
-              </dd>
+              <dt>{t('expiry')}</dt>
+              <dd>{snapshot.expiresAt ? date(snapshot.expiresAt) : t('notYet')}</dd>
             </div>
           </dl>
           {snapshot.kind === 'fixed' &&
             snapshot.totalBytes !== null &&
             snapshot.usedBytes !== null && (
               <progress
-                aria-label="Data used"
+                aria-label={t('used')}
                 max={snapshot.totalBytes}
                 value={Math.min(snapshot.usedBytes, snapshot.totalBytes)}
               />
             )}
-          {snapshot.kind !== 'fixed' && (
-            <p>
-              This {snapshot.kind} plan shows supplier-reported usage. A remaining high-speed
-              balance is not reported here.
-            </p>
-          )}
+          {snapshot.kind !== 'fixed' && <p>{t('nonFixed')}</p>}
           <p className="fine-print">
-            Last checked:{' '}
             <time dateTime={snapshot.checkedAt}>
-              {new Date(snapshot.checkedAt).toLocaleString('en-GB')}
+              {t('lastChecked', { date: date(snapshot.checkedAt) })}
             </time>
           </p>
-          {usage.stale && <p role="status">Showing an older reading. Check again shortly.</p>}
+          {usage.stale && <p role="status">{t('stale')}</p>}
         </>
       ) : (
         !loading && (
-          <p role="status">
-            {usage?.state === 'pending'
-              ? 'Usage has not been reported yet, or a check is in progress. Try again shortly.'
-              : 'Usage is temporarily unavailable. Please try again later.'}
-          </p>
+          <p role="status">{usage?.state === 'pending' ? t('pending') : t('unavailable')}</p>
         )
       )}
-      {error && <p role="alert">{error}</p>}
-      <p className="fine-print">
-        Supplier readings can be delayed by 2–3 hours. Daily and unlimited plans follow their own
-        allowance and fair-use rules.
-      </p>
+      {error && <p role="alert">{t('error')}</p>}
+      <p className="fine-print">{t('delay')}</p>
       <button
         className="button small"
         disabled={loading}
         onClick={() => setRefresh((value) => value + 1)}
       >
-        Refresh usage
+        {t('refresh')}
       </button>
     </section>
   );

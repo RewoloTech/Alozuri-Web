@@ -67,3 +67,27 @@ test('Stripe SDK requests identify the Alozuri integration without making a live
   await stripe.paymentIntents.retrieve('pi_synthetic');
   assert.equal(requests, 1);
 });
+
+test('receipt descriptions use the order locale while immutable brand and refund references stay identical', async () => {
+  const { LOCALES } = await import('../../../packages/shared/src/i18n/locales.ts');
+  const { loadMessages } = await import('../../../packages/shared/src/i18n/catalogs.ts');
+  const english = newStripeAttribution(id);
+  for (const locale of LOCALES) {
+    const frozen = newStripeAttribution(id, locale);
+    assert.deepEqual(frozen.metadata, english.metadata);
+    assert.ok(frozen.description.includes('Alozuri'));
+    assert.ok(frozen.description.includes(orderReference(id)));
+    if (locale !== 'en')
+      assert.ok(
+        frozen.description.includes((await loadMessages(locale)).transactionUi.orderReference),
+      );
+    assert.equal(
+      stripePaymentReference(id, structuredClone(frozen)).description,
+      frozen.description,
+    );
+    assert.deepEqual(stripeRefundMetadata(child, id, frozen), {
+      ...frozen.metadata,
+      alozuriOrderId: child,
+    });
+  }
+});

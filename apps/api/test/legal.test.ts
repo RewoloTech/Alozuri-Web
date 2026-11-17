@@ -1,7 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { checkoutLegalSchema, legalSnapshot } from '../src/lib/legal.js';
-import { CHECKOUT_LEGAL_ACCEPTANCE, CHECKOUT_NOTICE } from '../../../packages/shared/src/legal.ts';
+import {
+  CHECKOUT_LEGAL_ACCEPTANCE,
+  CHECKOUT_NOTICE,
+  LEGAL_EFFECTIVE_DATE,
+} from '../../../packages/shared/src/legal.ts';
 import { POLICIES, POLICY_VERSIONS, policyText } from '../../../packages/shared/src/policies.ts';
 test('current policies explain customer rights without disclosing implementation details', () => {
   const current = Object.values(POLICIES)
@@ -122,7 +126,7 @@ test('updated cancellation terms preserve the previous policy and effective date
   );
   assert.ok(current.refundText.includes('except where required by applicable consumer law'));
   assert.ok(current.refundText.includes('verified technical or network issue'));
-  assert.equal(current.effectiveDate, '2026-11-13');
+  assert.equal(current.effectiveDate, LEGAL_EFFECTIVE_DATE);
   const previous = legalSnapshot({ ...CHECKOUT_LEGAL_ACCEPTANCE, version: '2026-11-11.3' });
   assert.equal(previous.effectiveDate, '2026-11-11');
   assert.ok(
@@ -131,4 +135,20 @@ test('updated cancellation terms preserve the previous policy and effective date
     ),
   );
   assert.ok(!previous.refundText.includes('Version 2026-11-13.1'));
+});
+
+test('language-cookie disclosure gets a new version without changing the November 13 legal master', () => {
+  const previous = legalSnapshot({ ...CHECKOUT_LEGAL_ACCEPTANCE, version: '2026-11-13.1' });
+  assert.equal(previous.effectiveDate, '2026-11-13');
+  assert.equal(
+    previous.termsText,
+    policyText(POLICY_VERSIONS['2026-11-13.1'].terms, '2026-11-13.1'),
+  );
+  assert.ok(
+    !policyText(POLICY_VERSIONS['2026-11-13.1'].cookies, '2026-11-13.1').includes('alozuri_locale'),
+  );
+  assert.ok(policyText(POLICIES.cookies).includes('alozuri_locale / alozuri_locale_explicit'));
+  assert.ok(
+    policyText(POLICIES.privacy).includes('requested language separately from your currency'),
+  );
 });

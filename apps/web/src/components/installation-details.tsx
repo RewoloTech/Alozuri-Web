@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { api } from '@/lib/api';
+import { useTranslations } from 'next-intl';
 
 type Activation = { ac: string; iccid: string; esimTranNo: string };
 export function InstallationDetails({
@@ -13,12 +14,14 @@ export function InstallationDetails({
   purchaseId?: string;
   accessToken?: string;
 }) {
+  const t = useTranslations('display');
+  const installation = useTranslations('installation');
   const [activation, setActivation] = useState<Activation | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState(false);
   async function reveal() {
     setLoading(true);
-    setError('');
+    setError(false);
     try {
       const result = await api<{ activation: Activation }>(
         purchaseId
@@ -29,9 +32,7 @@ export function InstallationDetails({
       );
       setActivation(result.activation);
     } catch {
-      setError(
-        'Installation details could not be loaded. Try again or contact support with your order reference.',
-      );
+      setError(true);
     } finally {
       setLoading(false);
     }
@@ -39,56 +40,46 @@ export function InstallationDetails({
   const parts = activation?.ac.split('$');
   return (
     <div className="stack">
-      <h3>Install your eSIM</h3>
-      <p>
-        Connect to Wi-Fi before installing. Follow your plan’s activation rule and keep these
-        details private.
-      </p>
+      <h3>{installation('title')}</h3>
+      <p>{t('installIntro')}</p>
       {!activation ? (
         <button className="button primary" disabled={loading} onClick={reveal}>
-          {loading ? 'Loading installation details…' : 'Show installation details'}
+          {loading ? t('installLoading') : t('installShow')}
         </button>
       ) : (
         <>
-          <QRCodeSVG
-            value={activation.ac}
-            size={240}
-            marginSize={4}
-            title="Your private eSIM installation QR code"
-          />
-          <p>
-            On your phone, open Settings → Mobile/Cellular → Add eSIM. Scan this QR code from
-            another screen, or enter the details below manually.
-          </p>
+          <QRCodeSVG value={activation.ac} size={240} marginSize={4} title={t('installQr')} />
+          <p>{t('installInstructions')}</p>
           <dl className="spec-list">
             <div>
-              <dt>SM-DP+ address</dt>
-              <dd style={{ overflowWrap: 'anywhere' }}>{parts?.[1]}</dd>
+              <dt>{t('smdp')}</dt>
+              <dd dir="ltr" style={{ overflowWrap: 'anywhere' }}>
+                {parts?.[1]}
+              </dd>
             </div>
             <div>
-              <dt>Activation code</dt>
-              <dd style={{ overflowWrap: 'anywhere' }}>{parts?.[2]}</dd>
+              <dt>{t('activationCode')}</dt>
+              <dd dir="ltr" style={{ overflowWrap: 'anywhere' }}>
+                {parts?.[2]}
+              </dd>
             </div>
             {parts?.[3] && (
               <div>
-                <dt>Confirmation code</dt>
-                <dd>{parts[3]}</dd>
+                <dt>{t('confirmationCode')}</dt>
+                <dd dir="ltr">{parts[3]}</dd>
               </div>
             )}
             <div>
               <dt>ICCID</dt>
-              <dd>{activation.iccid}</dd>
+              <dd dir="ltr">{activation.iccid}</dd>
             </div>
           </dl>
-          <p>
-            Do not delete the eSIM after installing unless support asks you to. Some profiles can
-            only be installed once.
-          </p>
+          <p>{t('installWarning')}</p>
         </>
       )}
       {error && (
         <p className="error-message" role="alert">
-          {error}
+          {t('installError')}
         </p>
       )}
     </div>

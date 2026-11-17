@@ -2,6 +2,17 @@ import { parse, TYPE, type MessageFormatElement } from '@formatjs/icu-messagefor
 import { englishMessages, type Messages } from './messages.ts';
 import type { Locale } from './locales.ts';
 
+// Identical native words, not fallbacks: these geographical names have the
+// same spelling in the listed languages. "Total" is also the native monetary
+// label in Spanish, French, Portuguese and Romanian. Keep entries field-scoped.
+const IDENTICAL_NATIVE_WORDS: Partial<Record<Locale, readonly string[]>> = {
+  fr: ['navigation.destinations', 'display.europe', 'cart.total'],
+  es: ['display.asia', 'cart.total', 'orderUi.total'],
+  it: ['display.asia'],
+  ro: ['display.asia', 'cart.total'],
+  'pt-BR': ['cart.total', 'orderUi.total'],
+};
+
 function validatePluralCategories(message: string, locale: Locale) {
   const visit = (elements: MessageFormatElement[]) => {
     for (const element of elements) {
@@ -60,12 +71,9 @@ export function validateMessages(input: unknown, locale?: Locale): asserts input
       if (messageVariables(translated).join('|') !== messageVariables(english).join('|'))
         throw new Error('Translation variables differ: ' + domain + '.' + key);
       if (locale && locale !== 'en') {
-        // "Destinations" is also natural French. All other identical English copy
-        // must be explicitly reviewed rather than silently passed as translated.
-        if (
-          translated === english &&
-          !(locale === 'fr' && domain === 'navigation' && key === 'destinations')
-        )
+        // Direction controls cannot disguise an untranslated placeholder.
+        const plain = translated.replace(/[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/gu, '');
+        if (plain === english && !IDENTICAL_NATIVE_WORDS[locale]?.includes(domain + '.' + key))
           throw new Error('Untranslated English placeholder: ' + domain + '.' + key);
         validatePluralCategories(translated, locale);
       }

@@ -1,7 +1,8 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from '@/components/localized-link';
-import { countryName } from '@alozuri/shared';
+import { useTranslations } from 'next-intl';
+import { usePlanCopy } from '@/lib/use-plan-copy';
 import type { Plan } from '@alozuri/shared';
 import { PlanCard } from './planner';
 import { useCurrency } from './currency-provider';
@@ -15,71 +16,64 @@ export function CountryOffers({
   initial: Plan[];
   coverage?: 'local' | 'all';
 }) {
+  const t = useTranslations('countryUi');
+  const cart = useTranslations('cart');
+  const info = useTranslations('planInfo');
+  const copy = usePlanCopy();
   const { currency, refresh, ready } = useCurrency(),
     [plans, setPlans] = useState(initial),
-    [error, setError] = useState('');
+    [error, setError] = useState(false);
   useEffect(() => {
     if (!ready) return;
     if (currency === 'USD') {
       setPlans(initial);
-      setError('');
+      setError(false);
       return;
     }
     let active = true;
     // Keep card geometry while the existing API supplies the selected currency.
     // PlanCard hides a stale currency's amount until matching prices arrive.
-    setError('');
+    setError(false);
     void api<{ plans: Plan[] }>(
       '/v1/packages/match?' + new URLSearchParams({ countries: code, coverage, currency }),
     )
       .then((r) => {
         if (active) {
           setPlans(r.plans.slice(0, 6));
-          setError('');
+          setError(false);
         }
       })
       .catch(() => {
-        if (active)
-          setError('Current currency prices could not be loaded. Use the planner to retry.');
+        if (active) setError(true);
       });
     return () => {
       active = false;
     };
   }, [code, currency, refresh, initial, ready, coverage]);
-  if (!initial.length && !plans.length)
-    return (
-      <p>
-        Current plan availability could not be confirmed here. Use the planner below to check
-        current options; no price or coverage is promised until verified.
-      </p>
-    );
+  if (!initial.length && !plans.length) return <p>{t('availabilityHint')}</p>;
   return (
     <section
       className="section"
-      aria-label={coverage === 'local' ? 'Current local plans' : 'Current multi-country plans'}
+      aria-label={coverage === 'local' ? t('localPlans') : t('multiPlans')}
     >
-      <h2>{coverage === 'local' ? 'Local plans to explore' : 'Multi-country plans to explore'}</h2>
-      <p>
-        Review the full plan conditions and current checkout total before purchasing. Use the
-        planner to compare all allowances and regional coverage.
-      </p>
-      {error && <p role="status">{error}</p>}
-      <div className="plan-grid">
+      <h2>{coverage === 'local' ? t('localPlans') : t('multiPlans')}</h2>
+      <p>{t('review')}</p>
+      {error && <p role="status">{t('pricesError')}</p>}
+      <div className="plan-grid" dir="ltr">
         {plans.map((p) => (
           <div key={p.id}>
             <PlanCard plan={p} />
-            <details className="country-plan-conditions">
-              <summary>Coverage, networks and activation</summary>
-              <p>Included countries: {p.countries.map(countryName).join(', ')}.</p>
+            <details className="country-plan-conditions" dir={copy.dir}>
+              <summary>{t('conditions')}</summary>
+              <p>{cart('coverage', { countries: p.countries.map(copy.country).join(', ') })}</p>
               <p>
-                Networks:{' '}
-                {p.networks.length
-                  ? p.networks.join(', ')
-                  : 'Not supplied for this package; no named operator is promised.'}
+                {info('networks')}:{p.networks.length ? p.networks.join(', ') : t('networkMissing')}
               </p>
-              <p>Activation: {p.activation}</p>
-              <p>Data policy: {p.fairUse}</p>
-              <Link href={'/plans/' + p.id}>Full plan specifications and current price</Link>
+              <p>{cart('activation', { rule: copy.activation(p.activation) })}</p>
+              <p>
+                {info('dataPolicy')}: {copy.fairUse(p.fairUse)}
+              </p>
+              <Link href={'/plans/' + p.id}>{t('fullSpecs')}</Link>
             </details>
           </div>
         ))}

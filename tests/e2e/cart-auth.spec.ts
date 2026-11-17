@@ -1,4 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
+import { LOCALES, type Locale } from '../../packages/shared/src/i18n/locales';
+import { loadMessages } from '../../packages/shared/src/i18n/catalogs';
 import { z } from 'zod';
 import { mergeCartItems, type CartItem, type Plan } from '../../packages/shared/src/index';
 import { CONSENT_COOKIE, privacyChoice } from '../../packages/shared/src/privacy';
@@ -33,6 +35,7 @@ async function setup(page: Page, delayed = false, interrupted = false) {
     string,
     {
       uid: string;
+      locale?: Locale;
       email: string;
       emailVerified: boolean;
       displayName: string | null;
@@ -69,6 +72,7 @@ async function setup(page: Page, delayed = false, interrupted = false) {
     else if (url.pathname === '/v1/countries') data = { countries: [] };
     else if (
       url.pathname === '/v2/profile' ||
+      url.pathname === '/v2/profile/language' ||
       url.pathname === '/v2/orders' ||
       url.pathname.endsWith('/usage')
     ) {
@@ -78,7 +82,7 @@ async function setup(page: Page, delayed = false, interrupted = false) {
         .object({ user_id: z.string(), email: z.string(), email_verified: z.boolean() })
         .parse(JSON.parse(Buffer.from(jwt, 'base64url').toString()));
       const uid = identity.user_id;
-      if (url.pathname === '/v2/profile') {
+      if (url.pathname === '/v2/profile' || url.pathname === '/v2/profile/language') {
         const timestamp = new Date().toISOString();
         const profile = profiles.get(uid) ?? {
           uid,
@@ -93,7 +97,13 @@ async function setup(page: Page, delayed = false, interrupted = false) {
           updatedAt: timestamp,
         };
         profile.emailVerified = identity.email_verified;
-        if (request.method() === 'PATCH') {
+        if (url.pathname === '/v2/profile/language') {
+          const fields = z
+            .object({ locale: z.enum(LOCALES) })
+            .strict()
+            .parse(request.postDataJSON());
+          Object.assign(profile, fields);
+        } else if (request.method() === 'PATCH') {
           const fields = z
             .object({ firstName: z.string(), lastName: z.string() })
             .strict()
@@ -250,7 +260,7 @@ async function signup(page: Page) {
   await page.getByRole('button', { name: 'Add to cart', exact: true }).click();
   await page.getByRole('link', { name: 'Shopping cart, 1 item', exact: true }).click();
   await expect(page.locator('.commerce-total')).toContainText('$12.00');
-  await page.getByRole('link', { name: 'Secure checkout →', exact: true }).click();
+  await page.getByRole('link', { name: 'Secure checkout', exact: true }).click();
   await expect(page.locator('.commerce-total')).toContainText('$12.00');
   await page.getByRole('textbox', { name: 'Email address', exact: true }).fill(email);
   await page.getByRole('button', { name: 'Create an account', exact: true }).click();
@@ -293,7 +303,9 @@ async function logout(page: Page) {
   await expect(page.getByRole('button', { name: 'My account', exact: true })).toHaveCount(0);
   const mobile = (page.viewportSize()?.width ?? 1440) <= 1000;
   if (mobile) await page.getByRole('button', { name: 'Open menu', exact: true }).click();
-  await expect(page.getByRole('link', { name: /^Log in/ })).toBeVisible();
+  await expect(
+    page.locator('.site-header').getByRole('link', { name: 'Log in', exact: true }),
+  ).toBeVisible();
   if (mobile) await page.getByRole('button', { name: 'Close menu', exact: true }).click();
 }
 async function login(page: Page, email: string, password: string) {
@@ -307,7 +319,7 @@ async function checkout(
   page: Page,
   checkouts: { expectedTotalCents: number; items: CartItem[] }[],
 ) {
-  await page.getByRole('link', { name: 'Secure checkout →', exact: true }).click();
+  await page.getByRole('link', { name: 'Secure checkout', exact: true }).click();
   await page.getByRole('checkbox').check();
   await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
   await expect(page.getByRole('main').getByRole('alert')).toContainText(
@@ -327,9 +339,10 @@ for (const width of [390, 1440])
     await expect(page.locator('.commerce-total')).toContainText('$12.00');
     await page.reload();
     await expect(page.locator('.quantity-controls output')).toHaveText('1');
-    await expect(
-      page.getByRole('link', { name: 'Secure checkout →', exact: true }),
-    ).toHaveAttribute('aria-disabled', 'false');
+    await expect(page.getByRole('link', { name: 'Secure checkout', exact: true })).toHaveAttribute(
+      'aria-disabled',
+      'false',
+    );
     expect(new Set(state.merges.map((merge) => merge.mergeId)).size).toBe(1);
     await logout(page);
     await login(page, user.email, user.password);
@@ -360,15 +373,15 @@ test('choosing the saved account cart after an interrupted guest merge does not 
   const state = await setup(page, false, true);
   await signup(page);
   await expect(page.locator('main [role="alert"]')).toContainText(
-    'Something went wrong. Please try again.',
+    'Your cart could not be synced. Retry or use your saved account cart.',
   );
-  await expect(page.getByRole('link', { name: 'Secure checkout →', exact: true })).toHaveAttribute(
+  await expect(page.getByRole('link', { name: 'Secure checkout', exact: true })).toHaveAttribute(
     'aria-disabled',
     'true',
   );
   await page.getByRole('button', { name: 'Use saved account cart', exact: true }).click();
   await expect(page.locator('.quantity-controls output')).toHaveText('2');
-  await expect(page.getByRole('link', { name: 'Secure checkout →', exact: true })).toHaveAttribute(
+  await expect(page.getByRole('link', { name: 'Secure checkout', exact: true })).toHaveAttribute(
     'aria-disabled',
     'false',
   );
@@ -392,7 +405,7 @@ test('verified customers can navigate usage, orders and profile, update names an
     .click();
   await expect(page.getByRole('heading', { name: 'Data usage', level: 1 })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Data usage', exact: true })).toContainText('4 GB');
-  const navigation = page.getByRole('navigation', { name: 'Account sections' });
+  const navigation = page.getByRole('main').getByRole('navigation', { name: 'Account navigation' });
   await expect(navigation.getByRole('link', { name: 'Data usage' })).toHaveAttribute(
     'aria-current',
     'page',
@@ -421,8 +434,8 @@ test('verified customers can navigate usage, orders and profile, update names an
   await expect(page.getByRole('region', { name: 'Data usage', exact: true })).toHaveCount(0);
   await page.setViewportSize({ width: 390, height: 900 });
   await page
-    .getByRole('navigation', { name: 'Account sections' })
-    .getByRole('link', { name: 'Profile', exact: true })
+    .getByRole('navigation', { name: 'Account navigation' })
+    .getByRole('link', { name: 'Your profile', exact: true })
     .click();
   await page.getByRole('textbox', { name: 'First name', exact: true }).fill('Mary Jane');
   await page.getByRole('textbox', { name: 'Last name', exact: true }).fill('Smith');
@@ -435,13 +448,15 @@ test('verified customers can navigate usage, orders and profile, update names an
   await page.screenshot({ path: '/tmp/alozuri-user-profile-390.png', fullPage: true });
   await expect.poll(() => [...state.profiles.values()][0].firstName).toBe('Mary Jane');
   await page
-    .getByRole('navigation', { name: 'Account sections' })
+    .getByRole('navigation', { name: 'Account navigation' })
     .getByRole('link', { name: 'Data usage', exact: true })
     .click();
   await expect(page.getByRole('region', { name: 'Data usage', exact: true })).toContainText('4 GB');
   await logout(page);
   await page.goto('/account/usage');
-  await expect(page.getByRole('link', { name: 'Sign in', exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('main').getByRole('link', { name: 'Log in', exact: true }),
+  ).toBeVisible();
   await expect(page.getByRole('region', { name: 'Data usage', exact: true })).toHaveCount(0);
 });
 
@@ -1282,18 +1297,25 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
     await expect(
       page.getByRole('tab', { name: 'Financial Overview', exact: true }),
     ).toHaveAttribute('aria-selected', 'true');
-    await page.getByRole('link', { name: 'Language review and previews', exact: true }).click();
+    await page
+      .getByRole('link', { name: 'Language review and email samples', exact: true })
+      .click();
     await expect(page.getByRole('heading', { name: 'Language review', exact: true })).toBeVisible();
     const { LOCALES } = await import('../../packages/shared/src/i18n/locales');
     for (const locale of LOCALES) {
       await page
-        .getByRole('combobox', { name: 'Preview language', exact: true })
+        .getByRole('combobox', { name: 'Sample language', exact: true })
         .selectOption(locale);
-      const frame = page.frameLocator('iframe[title="Draft language email preview"]');
+      const frame = page.frameLocator('iframe[title="Order confirmation sample"]');
       await expect(frame.locator('html')).toHaveAttribute('lang', locale);
       await expect(frame.locator('html')).toHaveAttribute('dir', locale === 'ar' ? 'rtl' : 'ltr');
+      await expect(page.getByText('Content enabled', { exact: true })).toBeVisible();
       if (locale !== 'en')
-        await expect(page.getByText('Unpublished draft', { exact: true })).toBeVisible();
+        await expect(
+          page.getByText('Professional legal review has not been completed for this translation.', {
+            exact: true,
+          }),
+        ).toBeVisible();
       if (locale === 'ar') {
         for (const width of [375, 390, 768, 1440]) {
           await page.setViewportSize({ width, height: 900 });
@@ -1315,5 +1337,106 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
     await expect(page.getByRole('heading', { name: 'Total Sales', exact: true })).toHaveCount(0);
   } finally {
     await deleteAdmin(app);
+  }
+});
+
+test('verified customer can use every account language and begin checkout without losing currency, identity or cart', async ({
+  page,
+}) => {
+  test.setTimeout(300_000);
+  const state = await setup(page);
+  const user = await signup(page);
+  for (const locale of LOCALES) {
+    const m = await loadMessages(locale);
+    await page.locator('.site-header .language-selector select').selectOption(locale);
+    const prefix = locale === 'en' ? '' : '/' + locale;
+    await expect(page).toHaveURL((url) => url.pathname === prefix + '/cart');
+    await expect(page.locator('.quantity-controls output')).toHaveText('1');
+    await expect(page.locator('.site-header .currency-select')).toHaveValue('USD');
+    await expect.poll(() => [...state.profiles.values()][0]?.locale).toBe(locale);
+    await page.goto(prefix + '/account/orders');
+    await expect(page.locator('h1')).toHaveText(m.site.orders);
+    await expect(page.locator('main')).toContainText('$12.00');
+    await page.goto(prefix + '/checkout');
+    await expect(page.locator('input[type="email"]')).toHaveValue(user.email);
+    await page.locator('input[type="checkbox"][required]').check();
+    await page.getByRole('button', { name: m.checkout.continue, exact: true }).click();
+    await expect(page.locator('main [role="alert"]')).toContainText(m.errors.generic);
+    expect(state.checkouts.at(-1)?.expectedTotalCents).toBe(1200);
+    expect(state.checkouts.at(-1)?.items).toEqual([{ planId: plan.id, quantity: 1 }]);
+    await page.goto(prefix + '/cart');
+  }
+});
+
+test('account language yields to manual English through real login, logout and checkout navigation', async ({
+  page,
+  browser,
+}) => {
+  const { initializeApp, deleteApp } = await import('firebase-admin/app');
+  const { getAuth } = await import('firebase-admin/auth');
+  const previous = process.env.FIREBASE_AUTH_EMULATOR_HOST;
+  process.env.FIREBASE_AUTH_EMULATOR_HOST = '127.0.0.1:9099';
+  const app = initializeApp({ projectId: 'demo-alozuri' }, 'language-preference-' + Date.now());
+  const auth = getAuth(app);
+  const email = `language-${Date.now()}@example.test`,
+    password = 'LanguageRegression123!';
+  const account = await auth.createUser({ email, password, emailVerified: true });
+  try {
+    const state = await setup(page);
+    const now = new Date().toISOString();
+    state.profiles.set(account.uid, {
+      uid: account.uid,
+      email,
+      emailVerified: true,
+      displayName: null,
+      firstName: '',
+      lastName: '',
+      providerIds: ['password'],
+      createdAt: now,
+      lastSignInAt: now,
+      updatedAt: now,
+      locale: 'fr',
+    });
+    // Detection is automatic; a saved account language must supersede it.
+    await page
+      .context()
+      .addInitScript(() => Object.defineProperty(navigator, 'languages', { value: ['de-DE'] }));
+    const german = await loadMessages('de');
+    await page.goto('/login?next=%2Fcart');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'de');
+    await page.getByLabel(german.authUi.email, { exact: true }).fill(email);
+    await page.getByLabel(german.authUi.password, { exact: true }).fill(password);
+    await page.getByRole('button', { name: german.navigation.login, exact: true }).click();
+    await expect(page.locator('html')).toHaveAttribute('lang', 'fr');
+    await expect(page).toHaveURL(/\/fr\/cart$/);
+    await page.locator('.site-header .language-selector select').selectOption('en');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en-GB');
+    await expect.poll(() => state.profiles.get(account.uid)?.locale).toBe('en');
+    await expect(page).toHaveURL(/\/cart$/);
+    await logout(page);
+    expect(
+      (await page.context().cookies()).find((cookie) => cookie.name === 'alozuri_locale_explicit')
+        ?.value,
+    ).toBe('1');
+    state.profiles.get(account.uid)!.locale = 'de';
+    await login(page, email, password);
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en-GB');
+    await page.goto('/checkout');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en-GB');
+    await page.reload();
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en-GB');
+    await logout(page);
+    const cookies = await page.context().cookies();
+    const returning = await browser.newContext({ locale: 'de-DE' });
+    await returning.addCookies(cookies);
+    const next = await returning.newPage();
+    await next.goto('/');
+    await expect(next.locator('html')).toHaveAttribute('lang', 'en-GB');
+    await returning.close();
+  } finally {
+    await auth.deleteUser(account.uid);
+    await deleteApp(app);
+    if (previous === undefined) delete process.env.FIREBASE_AUTH_EMULATOR_HOST;
+    else process.env.FIREBASE_AUTH_EMULATOR_HOST = previous;
   }
 });

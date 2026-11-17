@@ -3614,7 +3614,9 @@ h1 {
   color: #687084;
 }
 /* Keep chat in normal document flow on checkout so it cannot cover payment controls. */
-body:has(.checkout-page) .support-shortcut {
+body:has(.checkout-page) .support-shortcut,
+body:has(.purchase-status-page) .support-shortcut,
+body:has(.auth-page) .support-shortcut {
   position: static;
   display: flex;
   margin: 16px 20px 24px auto;
@@ -4207,6 +4209,15 @@ body:has(.operations-page) .support-shortcut {
 .travel-guide p {
   margin: 14px 0;
   line-height: 1.75;
+}
+.travel-guide .button {
+  max-width: 100%;
+  white-space: normal;
+  text-align: center;
+}
+.footer-links .text-link {
+  white-space: normal;
+  text-align: start;
 }
 .destination-advice a,
 .travel-guide p > a:not(.button),

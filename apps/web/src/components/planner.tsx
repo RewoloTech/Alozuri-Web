@@ -1,5 +1,9 @@
 'use client';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import { destinationName } from '@alozuri/shared/i18n/destinations';
+import { localeDirection } from '@alozuri/shared/i18n';
+import type { Messages } from '@alozuri/shared/i18n/messages';
+import { ERROR_MESSAGES, type ErrorCode } from '@alozuri/shared/i18n/errors';
 import { StoreApiError } from '@/lib/api-error';
 import { useEffect, useEffectEvent, useId, useRef, useState } from 'react';
 import Link from '@/components/localized-link';
@@ -26,7 +30,6 @@ import {
 } from 'lucide-react';
 import {
   countries,
-  countryName,
   countryFlag,
   uniqueDestinations,
   matchPlans,
@@ -39,16 +42,16 @@ import {
   planSummary,
   type Country,
   readSearch,
-  coverageLabel,
-  dataLabel,
   comparePlanValue,
   allowanceFilter,
   DATA_ALLOWANCES,
   type DataAllowance,
 } from '@alozuri/shared';
+import { usePlanCopy } from '@/lib/use-plan-copy';
 import { demoPlans } from '@alozuri/shared/demo';
 import { useCurrency } from './currency-provider';
 import { api, demoMode } from '@/lib/api';
+type SearchFailure = { key: keyof Messages['search'] } | { code: ErrorCode };
 export function Planner({
   initialCountries = [],
   compact = false,
@@ -61,12 +64,18 @@ export function Planner({
   simplified?: boolean;
 }) {
   const errorMessage = useTranslations('errors');
+  const t = useTranslations('search');
+  const home = useTranslations('home');
+  const plans = useTranslations('plans');
+  const locale = useLocale();
+  const dir = localeDirection(locale);
+  const name = (code: string) => destinationName(code, locale);
   const dispatch = useDispatch();
   const { currency, refresh, ready } = useCurrency();
   const currencyKey = currency + refresh + ready;
   const previousCurrency = useRef(currencyKey);
   const saved = useSelector((s: RootState) => s.itinerary);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<SearchFailure | null>(null);
   // Tabs show the user's choice immediately; draft validation stays in the shared state.
   const mode = saved.chooseSingle ? 'country' : saved.chooseTrip ? 'trip' : saved.mode;
   const selected = saved.chooseSingle ? [] : saved.countries;
@@ -110,7 +119,7 @@ export function Planner({
     if (!demoMode)
       void api<{ countries: Country[] }>('/v1/countries')
         .then((r) => setAvailableCountries(uniqueDestinations(r.countries)))
-        .catch(() => setError('Destinations could not be loaded. Refresh the page and try again.'))
+        .catch(() => setError({ key: 'destinationsError' }))
         .finally(() => setCountriesLoading(false));
   }, []);
   const [query, setQuery] = useState('');
@@ -153,10 +162,25 @@ export function Planner({
     document.addEventListener('mousedown', close);
     return () => document.removeEventListener('mousedown', close);
   }, []);
-  const filtered = filterDestinations(availableCountries, query).filter(
-    (c) =>
-      (mode === 'country' && !saved.chooseTrip) || saved.chooseSingle || !selected.includes(c.code),
+  // Search native country names as well as the supplier's English names and ISO codes.
+  const nativeCountries = availableCountries.map((country) => ({
+    ...country,
+    name: name(country.code),
+  }));
+  const matches = new Set(
+    [
+      ...filterDestinations(availableCountries, query),
+      ...filterDestinations(nativeCountries, query),
+    ].map((country) => country.code),
   );
+  const filtered = nativeCountries
+    .filter((country) => matches.has(country.code))
+    .filter(
+      (c) =>
+        (mode === 'country' && !saved.chooseTrip) ||
+        saved.chooseSingle ||
+        !selected.includes(c.code),
+    );
   const sorted = results;
   const total = page?.total ?? 0;
   const coveringTotal = page?.facets.all ?? 0;
@@ -182,7 +206,7 @@ export function Planner({
     setLoading(false);
     setLoadingMore(false);
     setRefreshRequired(false);
-    setError('');
+    setError(null);
   }, [selectionKey, mode]);
   useEffect(
     () => () => {
@@ -208,13 +232,13 @@ export function Planner({
     url.searchParams.set('sort', order);
     if (!cursor && url.href !== window.location.href) window.history.pushState({}, '', url);
     if (saved.chooseTrip || saved.chooseSingle || !selected.length) {
-      setError(
-        saved.chooseTrip
-          ? 'Add at least two destinations for a multi-country search.'
+      setError({
+        key: saved.chooseTrip
+          ? 'chooseTwoError'
           : saved.chooseSingle
-            ? 'Choose one country before searching in single-destination mode.'
-            : 'Add at least one destination to find your eSIM.',
-      );
+            ? 'chooseOneError'
+            : 'chooseFirstError',
+      });
       setOpen(true);
       return;
     }
@@ -224,7 +248,7 @@ export function Planner({
       setLoading(true);
       setPage(null);
     }
-    setError('');
+    setError(null);
     setRefreshRequired(false);
     try {
       let response: SearchPage;
@@ -292,8 +316,11 @@ export function Planner({
         );
     } catch (e) {
       if (version === requestVersion.current && !abort.signal.aborted) {
-        const message = e instanceof Error ? e.message : 'Could not find plans. Please try again.';
-        setError(message);
+        setError(
+          e instanceof StoreApiError
+            ? { code: e.code }
+            : { key: demoMode && currency !== 'USD' ? 'sampleCurrencyError' : 'searchError' },
+        );
         if (
           cursor &&
           e instanceof StoreApiError &&
@@ -323,21 +350,22 @@ export function Planner({
       <section
         className={`planner ${compact ? 'planner-compact' : ''}`}
         id="planner"
-        aria-label="Find an eSIM"
+        dir={dir}
+        aria-label={t('find')}
       >
-        <div className="planner-tabs">
+        <div className="planner-tabs" dir="ltr">
           <button
             onClick={() => {
               dispatch(switchSearch('trip'));
               setPage(null);
             }}
-            aria-label="Multi-country trip"
+            aria-label={t('multiTrip')}
             aria-pressed={mode === 'trip'}
             className={mode === 'trip' ? 'active' : ''}
           >
             <Globe2 size={16} />
-            {simplified ? 'Multi-country' : 'Multi-country trip'}
-            {!simplified && <span className="small-badge">TRIP MATCHER</span>}
+            {simplified ? t('multi') : t('multiTrip')}
+            {!simplified && <span className="small-badge">{t('matcher')}</span>}
           </button>
           <button
             onClick={() => {
@@ -349,52 +377,45 @@ export function Planner({
             className={mode === 'country' ? 'active' : ''}
           >
             <MapPin size={16} />
-            Single destination
+            {t('single')}
           </button>
         </div>
         <div className="planner-inner">
           {!simplified && (
-            <div className="planner-heading">
-              <div>
-                <h2>{mode === 'trip' ? 'Where are you travelling?' : 'Where are you heading?'}</h2>
-                <p>
-                  {mode === 'trip'
-                    ? 'Add every stop. Find one eSIM that covers them all.'
-                    : 'Find a data plan for your next destination.'}
-                </p>
+            <div className="planner-heading" dir="ltr">
+              <div dir={dir}>
+                <h2>{mode === 'trip' ? t('whereTrip') : t('whereCountry')}</h2>
+                <p>{mode === 'trip' ? t('tripHint') : t('countryHint')}</p>
               </div>
               <span className="planner-doodle">
-                <ShieldCheck size={16} /> Every stop. Covered.
+                <ShieldCheck size={16} /> {t('covered')}
               </span>
             </div>
           )}
           {saved.chooseTrip && (
             <p className="notice" role="status">
-              {selected.length
-                ? 'Add another destination to compare multi-country plans.'
-                : 'Choose at least two destinations for a multi-country trip.'}
+              {selected.length ? t('addAnother') : t('chooseTwo')}
             </p>
           )}
           {saved.chooseSingle && (
             <p className="notice" role="status">
-              Choose one country for a single-destination search. Your multi-country itinerary will
-              be kept.
+              {t('chooseOneNotice')}
             </p>
           )}
-          <div className="planner-controls">
-            <div className="country-field" ref={picker}>
+          <div className="planner-controls" dir="ltr">
+            <div className="country-field" ref={picker} dir={dir}>
               {!simplified && (
                 <span className="field-label">
-                  {mode === 'trip' ? 'YOUR DESTINATIONS' : 'YOUR DESTINATION'}
+                  {mode === 'trip' ? t('destinations') : t('destination')}
                 </span>
               )}
               <div className="country-chips">
                 {selected.map((code) => (
                   <span className="country-chip" key={code}>
                     <span>{countryFlag(code)}</span>
-                    {countryName(code)}
+                    {name(code)}
                     <button
-                      aria-label={`Remove ${countryName(code)}`}
+                      aria-label={t('remove', { country: name(code) })}
                       onClick={() => {
                         dispatch(removeCountry(code));
                         setPage(null);
@@ -413,12 +434,12 @@ export function Planner({
                 >
                   {simplified ? <MapPin size={16} aria-hidden="true" /> : <Plus size={16} />}
                   {saved.chooseTrip
-                    ? 'Add destination'
+                    ? t('add')
                     : selected.length
                       ? mode === 'country'
-                        ? 'Change destination'
-                        : 'Add stop'
-                      : 'Choose destination'}
+                        ? t('change')
+                        : t('addStop')
+                      : t('choose')}
                 </button>
               </div>
               {open && (
@@ -426,7 +447,7 @@ export function Planner({
                   className="country-popover"
                   id={pickerId}
                   role="dialog"
-                  aria-label="Choose a country"
+                  aria-label={t('chooseCountry')}
                   onKeyDown={(e) => {
                     if (e.key === 'Escape') {
                       e.preventDefault();
@@ -438,8 +459,8 @@ export function Planner({
                   <div className="country-search">
                     <Search size={17} />
                     <input
-                      aria-label="Search countries"
-                      placeholder="Search a country…"
+                      aria-label={t('searchCountries')}
+                      placeholder={t('searchPlaceholder')}
                       value={query}
                       maxLength={80}
                       onChange={(e) => setQuery(e.target.value)}
@@ -465,7 +486,7 @@ export function Planner({
                         }
                       }}
                     />
-                    <button aria-label="Close country search" onClick={() => setOpen(false)}>
+                    <button aria-label={t('closeSearch')} onClick={() => setOpen(false)}>
                       <X size={16} />
                     </button>
                   </div>
@@ -492,19 +513,19 @@ export function Planner({
                       </button>
                     ))}
                     {countriesLoading ? (
-                      <p role="status">Loading destinations…</p>
+                      <p role="status">{t('loadingDestinations')}</p>
                     ) : (
-                      !filtered.length && <p>No matching destinations.</p>
+                      !filtered.length && <p>{t('noDestinations')}</p>
                     )}
                   </div>
                 </div>
               )}
             </div>
-            <label className="data-field">
-              <span className="field-label">DATA ALLOWANCE</span>
+            <label className="data-field" dir={dir}>
+              <span className="field-label">{plans('allowance')}</span>
               <span className="select-wrap">
                 <select
-                  aria-label="Data allowance"
+                  aria-label={plans('allowance')}
                   value={allowance}
                   onChange={(e) => {
                     const value = e.target.value as DataAllowance;
@@ -513,19 +534,40 @@ export function Planner({
                   }}
                 >
                   <option value="all">
-                    All data plans{page ? ` (${page.facets['all']})` : ''}
+                    {t('allData')}
+                    {page ? ` (${page.facets['all']})` : ''}
                   </option>
-                  <option value="1">1 GB or more{page ? ` (${page.facets['1']})` : ''}</option>
-                  <option value="3">3 GB or more{page ? ` (${page.facets['3']})` : ''}</option>
-                  <option value="5">5 GB or more{page ? ` (${page.facets['5']})` : ''}</option>
-                  <option value="10">10 GB or more{page ? ` (${page.facets['10']})` : ''}</option>
-                  <option value="20">20 GB or more{page ? ` (${page.facets['20']})` : ''}</option>
-                  <option value="50">50 GB or more{page ? ` (${page.facets['50']})` : ''}</option>
+                  <option value="1">
+                    {t('minimumData', { amount: 1 })}
+                    {page ? ` (${page.facets['1']})` : ''}
+                  </option>
+                  <option value="3">
+                    {t('minimumData', { amount: 3 })}
+                    {page ? ` (${page.facets['3']})` : ''}
+                  </option>
+                  <option value="5">
+                    {t('minimumData', { amount: 5 })}
+                    {page ? ` (${page.facets['5']})` : ''}
+                  </option>
+                  <option value="10">
+                    {t('minimumData', { amount: 10 })}
+                    {page ? ` (${page.facets['10']})` : ''}
+                  </option>
+                  <option value="20">
+                    {t('minimumData', { amount: 20 })}
+                    {page ? ` (${page.facets['20']})` : ''}
+                  </option>
+                  <option value="50">
+                    {t('minimumData', { amount: 50 })}
+                    {page ? ` (${page.facets['50']})` : ''}
+                  </option>
                   <option value="daily">
-                    Daily data plans{page ? ` (${page.facets['daily']})` : ''}
+                    {t('daily')}
+                    {page ? ` (${page.facets['daily']})` : ''}
                   </option>
                   <option value="unlimited">
-                    Unlimited (check fair use){page ? ` (${page.facets['unlimited']})` : ''}
+                    {t('unlimited')}
+                    {page ? ` (${page.facets['unlimited']})` : ''}
                   </option>
                 </select>
                 <ChevronDown size={16} aria-hidden="true" />
@@ -536,7 +578,7 @@ export function Planner({
               disabled={loading || !ready}
               onClick={() => void search()}
             >
-              {loading ? 'Finding your plans…' : 'Find my eSIM'}
+              {loading ? t('finding') : home('findEsim')}
               <ArrowRight size={18} />
             </button>
           </div>
@@ -545,21 +587,21 @@ export function Planner({
               {!simplified && (
                 <span>
                   <ShieldCheck size={14} />
-                  Coverage checked for every selected country
+                  {t('coverageChecked')}
                 </span>
               )}
-              {demoMode && <span>Preview · sample plans · purchases disabled</span>}
+              {demoMode && <span>{t('demoNotice')}</span>}
             </div>
           )}
-          {loading && <p role="status">Searching current plans…</p>}
+          {loading && <p role="status">{t('searching')}</p>}
           {refreshRequired && (
             <button className="button" onClick={() => void search()}>
-              Refresh results
+              {t('refresh')}
             </button>
           )}
           {error && (
             <p role="alert" className="error-message">
-              {error}
+              {'code' in error ? errorMessage(ERROR_MESSAGES[error.code]) : t(error.key)}
             </p>
           )}
         </div>
@@ -567,37 +609,40 @@ export function Planner({
       <div ref={resultRef} className="search-results" aria-live="polite">
         {sorted && (
           <>
-            <div className="results-heading">
-              <div>
-                <span className="eyebrow">MATCHED TO YOUR ITINERARY</span>
+            <div className="results-heading" dir="ltr">
+              <div dir={dir}>
+                <span className="eyebrow">{t('matched')}</span>
                 <h2>
                   {total
                     ? mode === 'country'
-                      ? `${total} local ${total === 1 ? 'plan' : 'plans'} for ${selected.map(countryName).join(', ')}.`
-                      : `${total} ${total === 1 ? 'plan' : 'plans'}. Every stop covered.`
+                      ? t('localResults', {
+                          count: total,
+                          countries: selected.map(name).join(', '),
+                        })
+                      : t('tripResults', { count: total })
                     : coveringTotal > 0
-                      ? 'No plans match this data allowance'
+                      ? t('noAllowance')
                       : mode === 'country'
-                        ? 'No local plans available'
-                        : 'No plan covers all selected countries'}
+                        ? t('noLocal')
+                        : t('noCoverage')}
                 </h2>
                 <p>
                   {total
                     ? mode === 'country'
-                      ? 'These plans cover only your selected country.'
-                      : `Covers all your selected countries: ${selected.map(countryName).join(', ')}.`
+                      ? t('localExplanation')
+                      : t('tripExplanation', { countries: selected.map(name).join(', ') })
                     : coveringTotal > 0
-                      ? `${coveringTotal} ${coveringTotal === 1 ? 'plan covers' : 'plans cover'} ${mode === 'country' ? 'your selected country' : 'all your selected countries'}, but none match the selected data allowance.`
+                      ? t('mismatchExplanation', { count: coveringTotal })
                       : mode === 'country'
-                        ? 'No local plans are currently available for this country.'
-                        : 'No single plan currently covers every selected country. Try another destination combination.'}
+                        ? t('noLocalExplanation')
+                        : t('noCoverageExplanation')}
                 </p>
               </div>
               {sorted.length > 0 && (
                 <label className="sort-control">
                   <SlidersHorizontal size={16} />
                   <select
-                    aria-label="Sort plans"
+                    aria-label={t('sort')}
                     value={sort}
                     onChange={(e) => {
                       const order = SEARCH_SORTS.find((v) => v === e.target.value) || 'recommended';
@@ -605,10 +650,10 @@ export function Planner({
                       void search(allowance, order);
                     }}
                   >
-                    <option value="recommended">Recommended data sizes</option>
-                    <option value="value">Value per GB (fixed data)</option>
-                    <option value="price">Lowest total price</option>
-                    <option value="data">Most data</option>
+                    <option value="recommended">{t('recommended')}</option>
+                    <option value="value">{t('value')}</option>
+                    <option value="price">{t('price')}</option>
+                    <option value="data">{t('mostData')}</option>
                   </select>
                 </label>
               )}
@@ -622,13 +667,13 @@ export function Planner({
                   void search('all');
                 }}
               >
-                Show all data plans
+                {t('showAll')}
               </button>
             )}
             <p className="muted" role="status">
-              Showing {sorted.length} of {total} matching plans
+              {t('showing', { shown: sorted.length, total })}
             </p>
-            <div className="plan-grid" aria-live="off">
+            <div className="plan-grid" dir="ltr" aria-live="off">
               {sorted.map((p) => (
                 <PlanCard key={p.id} plan={p} />
               ))}
@@ -639,7 +684,7 @@ export function Planner({
                 disabled={loadingMore}
                 onClick={() => void search(allowance, sort, page.nextCursor!)}
               >
-                {loadingMore ? 'Loading more…' : `Show more plans (${sorted.length} of ${total})`}
+                {loadingMore ? t('loadingMore') : t('showMore', { shown: sorted.length, total })}
               </button>
             )}
           </>
@@ -650,43 +695,46 @@ export function Planner({
 }
 export function PlanCard({ plan, highlight = false }: { plan: PlanSummary; highlight?: boolean }) {
   const t = useTranslations('plans');
+  const s = useTranslations('search');
+  const { allowance, title } = usePlanCopy();
+  const locale = useLocale();
   const { currency, ready } = useCurrency();
   return (
-    <article className={`plan-card ${highlight ? 'featured' : ''}`}>
-      <div className="plan-top">
+    <article className={`plan-card ${highlight ? 'featured' : ''}`} dir={localeDirection(locale)}>
+      <div className="plan-top" dir="ltr">
         <span className="plan-globe">
           <Globe2 size={22} />
         </span>
-        {highlight && <span className="small-badge">BEST VALUE / GB</span>}
+        {highlight && <span className="small-badge">{s('bestValue')}</span>}
       </div>
-      <h3>{plan.name}</h3>
+      <h3>{title(plan)}</h3>
       <p className="muted">
         {plan.countries.length === 1
-          ? countryName(plan.countries[0])
-          : `${plan.countries.length} destinations`}{' '}
-        · Data only
+          ? destinationName(plan.countries[0], locale)
+          : s('destinationsCount', { count: plan.countries.length })}{' '}
+        · {s('dataOnly')}
       </p>
-      <div className="plan-data">
+      <div className="plan-data" dir="ltr">
         {plan.dataType === 'fixed' ? (
-          <span className="plan-fixed-allowance">{dataLabel(plan)}</span>
+          <span className="plan-fixed-allowance">{allowance(plan)}</span>
         ) : (
-          <span className="plan-allowance">{dataLabel(plan)}</span>
+          <span className="plan-allowance">{allowance(plan)}</span>
         )}
         <span className="plan-days">{t('days', { count: plan.days })}</span>
       </div>
       {plan.dataType !== 'fixed' && <p className="muted">{plan.fairUse}</p>}
       <div className="plan-coverage">
-        <Check size={15} /> {coverageLabel(plan)}
+        <Check size={15} /> {s('coverage', { count: plan.countries.length })}
       </div>
-      <div className="plan-bottom">
+      <div className="plan-bottom" dir="ltr">
         <div>
-          <strong>
+          <strong dir="ltr">
             {!ready || plan.currency === currency ? money(plan.priceCents, plan.currency) : '—'}
           </strong>
           <span>
             {' '}
             {ready ? currency : plan.currency}
-            {plan.demo ? ' · sample price' : ''}
+            {plan.demo ? ' · ' + s('samplePrice') : ''}
           </span>
         </div>
         <Link href={`/plans/${plan.id}`} className="button small">

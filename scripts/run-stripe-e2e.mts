@@ -71,6 +71,9 @@ const api = await createApp({
   repository: { plans: async () => [plan], orders: async () => [], order: async () => null },
   payments: null,
   commerce: service,
+  // This disposable local API simulates the existing one-hop platform proxy.
+  // Browser cases use different documentation-only IPs, like distinct customers.
+  trustPlatformProxy: true,
   fulfillment: null,
   demo: false,
   origins: ['http://localhost:3100'],

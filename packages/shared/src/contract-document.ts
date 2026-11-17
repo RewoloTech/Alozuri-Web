@@ -1,7 +1,9 @@
 import { orderLocale, requirePublishedLocale, LocaleUnavailableError } from './i18n/locales.ts';
+import { transactionCopy } from './i18n/transaction-copy.ts';
+import type { Messages } from './i18n/messages.ts';
 import type PDFDocument from 'pdfkit';
 import { BUSINESS } from './legal.ts';
-import { countryName, dataLabel } from './index.ts';
+import { drawArabicPdfText } from './pdf-text.ts';
 import {
   validateContractOrder,
   contractMoney as confirmationMoney,
@@ -16,12 +18,18 @@ export function drawContractPdf(doc: InstanceType<typeof PDFDocument>, order: Co
   validateContractOrder(order);
   const locale = requirePublishedLocale(orderLocale(order.locale));
   if (orderLocale(order.legal.locale) !== locale) throw new LocaleUnavailableError();
+  const { t, plan: copy, isolate } = transactionCopy(locale);
+  const tr = (key: keyof Messages['transactionUi']) => t(`transactionUi.${key}`);
   const business = order.legal.business ?? BUSINESS;
   const width = doc.page.width - 88;
   const room = (height = 48) => {
     if (doc.y + height > doc.page.height - 54) doc.addPage();
   };
   const paragraph = (text: string) => {
+    if (locale === 'ar') {
+      drawArabicPdfText(doc, text, { width, size: 10, color: navy });
+      return;
+    }
     doc
       .font('Inter')
       .fontSize(10)
@@ -30,11 +38,25 @@ export function drawContractPdf(doc: InstanceType<typeof PDFDocument>, order: Co
   };
   const heading = (text: string) => {
     room(62);
+    if (locale === 'ar') {
+      doc.y += 8;
+      drawArabicPdfText(doc, text, { width, size: 14, bold: true, color: purple, gap: 6 });
+      return;
+    }
     doc.moveDown(0.6).font('InterBold').fontSize(14).fillColor(purple).text(text, { width });
     doc.moveDown(0.4);
   };
-  const row = (label: string, value: string) => {
+  const row = (label: string, value: string, technical = false) => {
     room(32);
+    if (locale === 'ar') {
+      drawArabicPdfText(doc, `${label}: ${technical ? isolate(value) : value}`, {
+        width,
+        size: 10,
+        color: navy,
+        gap: 6,
+      });
+      return;
+    }
     doc
       .font('InterBold')
       .fontSize(10)
@@ -43,6 +65,7 @@ export function drawContractPdf(doc: InstanceType<typeof PDFDocument>, order: Co
     doc.font('Inter').text(value, { width, lineGap: 3, paragraphGap: 6 });
   };
   const legal = (text: string) => {
+    // Render the immutable order snapshot, never today's translated policy.
     for (const block of text.split(/\n\n/)) {
       const [first, ...rest] = block.split('\n');
       if (first && /^\d+\.\s/.test(first)) {
@@ -51,79 +74,92 @@ export function drawContractPdf(doc: InstanceType<typeof PDFDocument>, order: Co
       } else paragraph(block);
     }
   };
-  doc
-    .font('InterBold')
-    .fontSize(22)
-    .fillColor(navy)
-    .text('Alozuri — Order Confirmation & Contract', { width });
-  doc.moveDown(0.5);
+  if (locale === 'ar')
+    drawArabicPdfText(doc, tr('title'), { width, size: 22, bold: true, color: navy, gap: 8 });
+  else {
+    doc.font('InterBold').fontSize(22).fillColor(navy).text(tr('title'), { width });
+    doc.moveDown(0.5);
+  }
   paragraph(business.identity);
-  paragraph(`Registered office: ${business.address}\nContact: ${business.email}`);
-  heading('Your confirmed purchase');
-  row('Order reference', orderReference(order.id));
-  row('Order placed', order.createdAt);
-  row('Payment confirmed at', order.paidAt ?? 'Timestamp not included in this order response');
-  row(
-    'Payment status',
-    order.test
-      ? 'Successful test payment — no real charge or eSIM'
-      : order.status === 'refunded'
-        ? 'Refunded'
-        : 'Paid',
+  paragraph(
+    `${t('site.office')}: ${isolate(business.address)}\n${tr('contact')}: ${isolate(business.email)}`,
   );
-  if (order.customerName) row('Customer name', order.customerName);
-  row('Customer email', order.email);
-  heading('Purchased plans');
+  heading(tr('confirmedPurchase'));
+  row(tr('orderReference'), orderReference(order.id), true);
+  row(tr('orderPlaced'), order.createdAt, true);
+  row(tr('paidAt'), order.paidAt ?? tr('timestampMissing'), Boolean(order.paidAt));
+  row(
+    tr('paymentStatus'),
+    order.test
+      ? tr('testPayment')
+      : order.status === 'refunded'
+        ? t('status.refunded')
+        : t('status.paid'),
+  );
+  if (order.customerName) row(tr('customerName'), order.customerName);
+  row(t('authUi.email'), order.email, true);
+  heading(tr('purchasedPlans'));
   for (const { plan, quantity } of order.items) {
     room(64);
-    doc
-      .font('InterBold')
-      .fontSize(12)
-      .fillColor(navy)
-      .text(`${quantity} × ${plan.name}`, { width });
-    doc.moveDown(0.5);
-    row('Plan reference', plan.id);
+    if (locale === 'ar')
+      drawArabicPdfText(doc, `${isolate(String(quantity))} × ${copy.title(plan)}`, {
+        width,
+        size: 12,
+        bold: true,
+        color: navy,
+        gap: 7,
+      });
+    else {
+      doc
+        .font('InterBold')
+        .fontSize(12)
+        .fillColor(navy)
+        .text(`${quantity} × ${copy.title(plan)}`, { width });
+      doc.moveDown(0.5);
+    }
+    row(tr('planReference'), plan.id, true);
     row(
-      'Included countries',
-      plan.countries.map((code) => `${countryName(code)} (${code})`).join(', '),
+      tr('includedCountries'),
+      plan.countries
+        .map((code) => `${copy.country(code)} ${isolate('(' + code + ')')}`)
+        .join(locale === 'ar' ? '، ' : ', '),
     );
-    row('Data allowance', dataLabel(plan));
-    row('Validity', `${plan.days} days`);
-    row('Activation rule', plan.activation);
-    row('Restrictions / fair use', plan.fairUse || 'No additional restriction recorded.');
-    if (plan.supplierNotes) row('Supplier conditions', plan.supplierNotes);
-    row('Quantity', String(quantity));
-    row('Unit price', confirmationMoney(plan.priceCents, order.currency));
-    row('Line total', confirmationMoney(plan.priceCents * quantity, order.currency));
+    row(t('plans.allowance'), copy.allowance(plan));
+    row(t('plans.validity'), t('plans.days', { count: plan.days }));
+    row(tr('activationRule'), copy.activation(plan.activation));
+    row(tr('restrictions'), plan.fairUse ? copy.fairUse(plan.fairUse) : tr('noRestrictions'));
+    if (plan.supplierNotes) row(tr('supplierConditions'), copy.notes(plan.supplierNotes));
+    row(tr('quantity'), String(quantity), true);
+    row(tr('unitPrice'), confirmationMoney(plan.priceCents, order.currency), true);
+    row(tr('lineTotal'), confirmationMoney(plan.priceCents * quantity, order.currency), true);
     doc.moveDown(0.7);
   }
-  heading('Payment total');
+  heading(tr('paymentTotal'));
   if (order.subtotalCents !== undefined)
-    row('Subtotal', confirmationMoney(order.subtotalCents, order.currency));
+    row(t('cart.subtotal'), confirmationMoney(order.subtotalCents, order.currency), true);
   row(
-    'Separately charged tax',
+    tr('tax'),
     order.taxCents === undefined
-      ? 'Not recorded separately'
+      ? tr('taxMissing')
       : confirmationMoney(order.taxCents, order.currency),
+    order.taxCents !== undefined,
   );
-  row('Total paid', confirmationMoney(order.totalCents, order.currency));
-  paragraph(
-    'No tax rate or VAT registration is recorded on this order. This is an order confirmation and contract.',
-  );
-  heading('Recorded legal acceptance');
-  row('Accepted at', order.legal.acceptedAt);
-  row('Terms and Conditions version', order.legal.termsVersion ?? order.legal.version);
-  row('Refund and Cancellation Policy version', order.legal.refundVersion ?? order.legal.version);
-  row('Policy effective date', order.legal.effectiveDate);
+  row(tr('totalPaid'), confirmationMoney(order.totalCents, order.currency), true);
+  paragraph(tr('taxDoc'));
+  heading(tr('legalAcceptance'));
+  row(tr('acceptedAt'), order.legal.acceptedAt, true);
+  row(tr('termsVersion'), order.legal.termsVersion ?? order.legal.version, true);
+  row(tr('refundVersion'), order.legal.refundVersion ?? order.legal.version, true);
+  row(tr('effectiveDate'), order.legal.effectiveDate, true);
   for (const text of [
     order.legal.noticeText,
     order.legal.requestText,
     order.legal.acknowledgementText,
   ])
     if (text) paragraph(text);
-  heading('Terms and Conditions');
+  heading(t('legal.terms'));
   legal(order.legal.termsText);
-  heading('Refund and Cancellation Policy');
+  heading(t('legal.refunds'));
   legal(order.legal.refundText);
   const pages = doc.bufferedPageRange();
   for (let index = 0; index < pages.count; index++) {
@@ -132,12 +168,12 @@ export function drawContractPdf(doc: InstanceType<typeof PDFDocument>, order: Co
     doc.strokeColor('#ffffff').lineWidth(1.2).circle(58, 40, 9).stroke();
     doc.ellipse(58, 40, 4, 9).stroke().moveTo(49, 40).lineTo(67, 40).stroke();
     doc.moveTo(51, 35).lineTo(65, 35).stroke().moveTo(51, 45).lineTo(65, 45).stroke().restore();
-    doc.font('InterBold').fontSize(21).fillColor(navy).text('alo', 80, 27, { continued: true });
+    doc.font('LatinBold').fontSize(21).fillColor(navy).text('alo', 80, 27, { continued: true });
     doc.fillColor(purple).text('zuri', { lineBreak: false });
     const bottom = doc.page.margins.bottom;
     doc.page.margins.bottom = 0;
     doc
-      .font('Inter')
+      .font('Latin')
       .fontSize(7)
       .fillColor(muted)
       .text(

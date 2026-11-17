@@ -1,4 +1,8 @@
 'use client';
+import { useLocale, useTranslations } from 'next-intl';
+import { localePath } from '@alozuri/shared/i18n';
+import type { Messages } from '@alozuri/shared/i18n/messages';
+import { authClient } from '@/lib/firebase';
 import { safeAccountDestination } from '@alozuri/shared';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -6,13 +10,15 @@ import { useLocalizedRouter as useRouter } from '@/lib/localized-router';
 import { sendEmailVerification } from 'firebase/auth';
 import { useAuth } from './auth-provider';
 export function VerifyEmail() {
+  const t = useTranslations('authUi');
+  const locale = useLocale();
   const { user, loading, logout } = useAuth(),
     router = useRouter(),
     search = useSearchParams();
   const destination = safeAccountDestination(search.get('next'));
   const [busy, setBusy] = useState(false),
-    [error, setError] = useState(''),
-    [notice, setNotice] = useState('');
+    [error, setError] = useState<keyof Messages['authUi'] | ''>(''),
+    [notice, setNotice] = useState<keyof Messages['authUi'] | ''>('');
   useEffect(() => {
     if (loading) return;
     if (!user) router.replace('/login?next=' + encodeURIComponent(destination));
@@ -40,10 +46,9 @@ export function VerifyEmail() {
       await user.reload();
       await user.getIdToken(true);
       if (user.emailVerified) router.replace(destination);
-      else
-        setNotice('Your email is not verified yet. Open the verification link, then check again.');
+      else setNotice('verifyNotYet');
     } catch {
-      setError('Could not check verification. Please try again.');
+      setError('verifyCheckError');
     } finally {
       setBusy(false);
     }
@@ -53,50 +58,54 @@ export function VerifyEmail() {
     setBusy(true);
     setError('');
     try {
+      authClient().languageCode = locale === 'zh-Hans' ? 'zh-CN' : locale;
       await sendEmailVerification(user, {
-        url: window.location.origin + '/verify-email?next=' + encodeURIComponent(destination),
+        url:
+          window.location.origin +
+          localePath('/verify-email?next=' + encodeURIComponent(destination), locale),
       });
-      setNotice('Verification email sent. Check your inbox and spam folder.');
+      setNotice('verifySent');
     } catch {
-      setError('Could not send the email. Please wait a moment and try again.');
+      setError('verifySendError');
     } finally {
       setBusy(false);
     }
   }
-  if (loading || !user) return <div className="loading-page">Checking your account…</div>;
+  if (loading || !user) return <div className="loading-page">{t('checkingAccess')}</div>;
   return (
     <section className="container section">
       <div className="surface" style={{ maxWidth: 600, margin: '0 auto' }}>
-        <span className="eyebrow">VERIFY YOUR EMAIL</span>
-        <h1 className="compact-title">Check your inbox</h1>
+        <span className="eyebrow">{t('verifyEyebrow')}</span>
+        <h1 className="compact-title">{t('verifyTitle')}</h1>
         <p>
-          Open the Firebase verification email sent to <strong>{user.email}</strong>. Verify your
-          email before accessing your account or checking out.
+          {t('verifyIntro', {
+            email: locale === 'ar' ? '\u2066' + user.email + '\u2069' : (user.email ?? ''),
+          })}
         </p>
-        <p>If you have just signed up, your email may take a moment to arrive. Check spam too.</p>
-        <div className="inline-actions">
+        <p>{t('verifyDelay')}</p>
+        <div className="inline-actions" dir="ltr">
           <button className="button primary" disabled={busy} onClick={check}>
-            I’ve verified my email
+            {t('verifiedButton')}
           </button>
           <button className="button" disabled={busy} onClick={resend}>
-            Resend email
+            {t('resend')}
           </button>
           <button
             className="text-link"
             disabled={busy}
             onClick={() => void logout().then(() => router.replace('/login'))}
           >
-            Use another account
+            {t('another')}
           </button>
         </div>
         {notice && (
           <p className="success-message" role="status">
-            {notice}
+            {t(notice)}
           </p>
         )}
         {error && (
           <p className="error-message" role="alert">
-            {error}
+            {t(error)}
           </p>
         )}
       </div>

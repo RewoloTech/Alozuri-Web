@@ -164,7 +164,7 @@ function OperationsAccount() {
       ) : (
         <>
           <p>
-            <Link href="/operations/languages">Language review and previews</Link>
+            <Link href="/operations/languages">Language review and email samples</Link>
           </p>
           <div
             className="operations-tabs"

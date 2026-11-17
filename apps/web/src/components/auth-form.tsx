@@ -1,6 +1,10 @@
 'use client';
+import { useLocale, useTranslations } from 'next-intl';
+import { localeDirection, localePath } from '@alozuri/shared/i18n';
+import type { Messages } from '@alozuri/shared/i18n/messages';
+import { LinkedMessage, MESSAGE_LINKS } from './linked-message';
 import { useState } from 'react';
-import { authErrorMessage } from '@/lib/auth-errors';
+import { authErrorKey } from '@/lib/auth-errors';
 import { GoogleIcon } from './google-icon';
 import Link from '@/components/localized-link';
 import { useSearchParams } from 'next/navigation';
@@ -19,13 +23,23 @@ import { accountName, safeAccountDestination } from '@alozuri/shared';
 import { authClient, firebaseConfigured } from '@/lib/firebase';
 import { api } from '@/lib/api';
 export function AuthForm({ mode }: { mode: 'login' | 'register' | 'reset' }) {
+  const t = useTranslations('authUi');
+  const navigation = useTranslations('navigation');
+  const site = useTranslations('site');
+  const legal = useTranslations('legal');
+  const locale = useLocale();
+  const dir = localeDirection(locale);
+  const agreementLinks = {
+    terms: { href: '/terms', label: legal('terms') },
+    privacy: { href: '/privacy', label: legal('privacy') },
+  };
   const router = useRouter();
   const search = useSearchParams();
   const next = search.get('next');
   const destination = safeAccountDestination(next);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [error, setError] = useState<keyof Messages['authUi'] | ''>('');
+  const [success, setSuccess] = useState(false);
   const [visible, setVisible] = useState(false);
   async function google() {
     setBusy(true);
@@ -33,10 +47,11 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' | 'reset' }) {
     try {
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
+      authClient().languageCode = locale === 'zh-Hans' ? 'zh-CN' : locale;
       await signInWithPopup(authClient(), provider);
       router.push(destination);
     } catch (e) {
-      setError(authErrorMessage(e));
+      setError(authErrorKey(e));
     } finally {
       setBusy(false);
     }
@@ -49,11 +64,12 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' | 'reset' }) {
     const email = String(data.get('email')).trim();
     const password = String(data.get('password') || '');
     try {
+      authClient().languageCode = locale === 'zh-Hans' ? 'zh-CN' : locale;
       if (mode === 'reset') {
         await sendPasswordResetEmail(authClient(), email, {
-          url: window.location.origin + '/login',
+          url: window.location.origin + localePath('/login', locale),
         });
-        setSuccess('If an account exists for that email, you’ll receive a password reset link.');
+        setSuccess(true);
       } else if (mode === 'register') {
         const displayName = accountName(data.get('firstName'), data.get('lastName'));
         const credential = await createUserWithEmailAndPassword(authClient(), email, password);
@@ -76,7 +92,9 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' | 'reset' }) {
         }
         try {
           await sendEmailVerification(credential.user, {
-            url: window.location.origin + '/verify-email?next=' + encodeURIComponent(destination),
+            url:
+              window.location.origin +
+              localePath('/verify-email?next=' + encodeURIComponent(destination), locale),
           });
         } catch {
           /* Dashboard offers resend if delivery fails. */
@@ -91,64 +109,55 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' | 'reset' }) {
         );
       }
     } catch (e) {
-      setError(authErrorMessage(e));
+      setError(authErrorKey(e));
     } finally {
       setBusy(false);
     }
   }
   const title =
-    mode === 'register'
-      ? 'Your next adventure starts here.'
-      : mode === 'reset'
-        ? 'A fresh start.'
-        : 'Welcome back, wanderer.';
+    mode === 'register' ? t('registerTitle') : mode === 'reset' ? t('resetTitle') : t('loginTitle');
   return (
-    <div className="auth-page container">
-      <aside className="auth-art">
-        <span className="eyebrow">YOUR WORLD. CONNECTED.</span>
+    <div className="auth-page container" dir="ltr">
+      <aside className="auth-art" dir={dir}>
+        <span className="eyebrow">{t('artEyebrow')}</span>
         <h2>
-          Less searching
+          {t('artTitleA')}
           <br />
-          for Wi-Fi.
-          <br />
-          <em>More being there.</em>
+          <em>{t('artTitleB')}</em>
         </h2>
         <div className="auth-art-bottom">
           <Globe2 size={38} />
-          <span>
-            One account.
-            <br />
-            Every adventure.
-          </span>
+          <span>{t('artFooter')}</span>
         </div>
       </aside>
-      <section className="auth-panel">
+      <section className="auth-panel" dir={dir}>
         <span className="eyebrow">
           {mode === 'register'
-            ? 'JOIN THE JOURNEY'
+            ? t('joinEyebrow')
             : mode === 'reset'
-              ? 'RESET YOUR PASSWORD'
-              : 'GOOD TO SEE YOU'}
+              ? t('resetEyebrow')
+              : t('loginEyebrow')}
         </span>
         <h1>{title}</h1>
         <p>
           {mode === 'register'
-            ? 'Keep all your eSIMs, plans and adventures in one place.'
+            ? t('registerHint')
             : mode === 'reset'
-              ? 'Enter your email and we’ll send you a reset link.'
-              : 'Log in to find your eSIMs and pick up where you left off.'}
+              ? t('resetHint')
+              : t('loginHint')}
         </p>
-        <p className="fine-print">
-          Accounts and purchases are intended for adults aged 18 and over. Read our{' '}
-          <Link href="/terms">Terms</Link> and <Link href="/privacy">Privacy Policy</Link>. Signing
-          in does not opt you into marketing or optional support tracking.
-        </p>
-        {!firebaseConfigured && (
-          <div className="notice">
-            Account access will be available when Firebase Authentication is connected. You can
-            explore the storefront in the meantime.
-          </div>
+        {mode === 'register' && (
+          <p className="fine-print">
+            <LinkedMessage
+              message={t('ageNotice', {
+                terms: MESSAGE_LINKS.terms,
+                privacy: MESSAGE_LINKS.privacy,
+              })}
+              links={agreementLinks}
+            />
+          </p>
         )}
+        {!firebaseConfigured && <div className="notice">{t('unconfigured')}</div>}
         {mode !== 'reset' && (
           <>
             <button
@@ -157,51 +166,54 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' | 'reset' }) {
               disabled={busy || !firebaseConfigured}
             >
               <GoogleIcon />
-              {busy ? 'Please wait…' : 'Continue with Google'}
+              {busy ? t('wait') : t('google')}
             </button>
             <div className="divider">
-              <span>or continue with email</span>
+              <span>{t('orEmail')}</span>
             </div>
           </>
         )}
         <form onSubmit={submit}>
           {mode === 'register' && (
-            <div className="name-fields">
-              <label>
-                First name
+            <div className="name-fields" dir="ltr">
+              <label dir={dir}>
+                {t('first')}
                 <input
                   name="firstName"
+                  dir="auto"
                   autoComplete="given-name"
                   required
                   maxLength={50}
-                  placeholder="First name"
+                  placeholder={t('first')}
                 />
               </label>
-              <label>
-                Last name
+              <label dir={dir}>
+                {t('last')}
                 <input
                   name="lastName"
+                  dir="auto"
                   autoComplete="family-name"
                   required
                   maxLength={50}
-                  placeholder="Last name"
+                  placeholder={t('last')}
                 />
               </label>
             </div>
           )}
           <label>
-            Email address
+            {t('email')}
             <input
               name="email"
+              dir="ltr"
               type="email"
               autoComplete="email"
               required
-              placeholder="you@example.com"
+              placeholder={t('email')}
             />
           </label>
           {mode !== 'reset' && (
             <label>
-              Password
+              {t('password')}
               <div className="password-field">
                 <input
                   name="password"
@@ -210,11 +222,11 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' | 'reset' }) {
                   required
                   minLength={mode === 'register' ? 8 : 1}
                   maxLength={128}
-                  placeholder={mode === 'register' ? 'At least 8 characters' : 'Your password'}
+                  placeholder={mode === 'register' ? t('passwordHint') : t('passwordPlaceholder')}
                 />
                 <button
                   type="button"
-                  aria-label={visible ? 'Hide password' : 'Show password'}
+                  aria-label={visible ? t('hide') : t('show')}
                   onClick={() => setVisible(!visible)}
                 >
                   {visible ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -224,62 +236,67 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' | 'reset' }) {
           )}
           {mode === 'login' && (
             <Link className="forgot-link" href="/forgot-password">
-              Forgot password?
+              {t('forgot')}
             </Link>
           )}
           {mode === 'register' && (
-            <label className="checkbox-label">
+            <label className="checkbox-label" dir="ltr">
               <input type="checkbox" required />
-              <span>
-                I agree to the <Link href="/terms">Terms</Link> and{' '}
-                <Link href="/privacy">Privacy Policy</Link>.
+              <span dir={dir}>
+                <LinkedMessage
+                  message={t('registerAgreement', {
+                    terms: MESSAGE_LINKS.terms,
+                    privacy: MESSAGE_LINKS.privacy,
+                  })}
+                  links={agreementLinks}
+                />
               </span>
             </label>
           )}
           <button className="button primary full-width" disabled={busy || !firebaseConfigured}>
             {busy
-              ? 'Please wait…'
+              ? t('wait')
               : mode === 'register'
-                ? 'Create my account'
+                ? t('create')
                 : mode === 'reset'
-                  ? 'Send reset link'
-                  : 'Log in'}
+                  ? t('sendReset')
+                  : navigation('login')}
             <ArrowRight size={17} />
           </button>
         </form>
         {error && (
           <p role="alert" className="error-message">
-            {error}
+            {t(error)}
           </p>
         )}
         {success && (
           <p role="status" className="success-message">
-            {success}
-            {mode === 'register' && <Link href={destination}> Continue to your account →</Link>}
+            {t('resetSuccess')}
+            {mode === 'register' && <Link href={destination}> {t('continueAccount')} →</Link>}
           </p>
         )}
         <p className="auth-switch">
           {mode === 'login' ? (
             <>
-              New around here?{' '}
+              {t('newHere')}{' '}
               <Link href={`/register${next ? `?next=${encodeURIComponent(destination)}` : ''}`}>
-                Create an account
+                {site('createAccount')}
               </Link>
             </>
           ) : mode === 'register' ? (
             <>
-              Already part of the journey?{' '}
+              {t('alreadyMember')}{' '}
               <Link href={`/login${next ? `?next=${encodeURIComponent(destination)}` : ''}`}>
-                Log in
+                {navigation('login')}
               </Link>
             </>
           ) : (
-            <Link href="/login">Back to log in</Link>
+            <Link href="/login">{t('backLogin')}</Link>
           )}
         </p>
         <div className="auth-secure">
           <ShieldCheck size={15} />
-          Your next adventure, securely connected.
+          {t('secure')}
         </div>
       </section>
     </div>

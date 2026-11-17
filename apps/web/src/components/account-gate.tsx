@@ -1,4 +1,5 @@
 'use client';
+import { useTranslations } from 'next-intl';
 import { useEffect } from 'react';
 import { useLocalizedRouter as useRouter } from '@/lib/localized-router';
 import { useAuth } from './auth-provider';
@@ -9,6 +10,7 @@ export function AccountGate({
   children: React.ReactNode;
   next?: string;
 }) {
+  const t = useTranslations('authUi');
   const { user, loading } = useAuth(),
     router = useRouter();
   useEffect(() => {
@@ -19,7 +21,7 @@ export function AccountGate({
   if (loading || !user?.emailVerified)
     return (
       <div className="loading-page" role="status">
-        Checking account access…
+        {t('checkingAccess')}
       </div>
     );
   return children;

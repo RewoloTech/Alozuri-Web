@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { BUSINESS } from '../../../../packages/shared/src/legal.ts';
 import { orderReference } from './confirmation-order.js';
+import type { Locale } from '../../../../packages/shared/src/i18n/locales.ts';
+import { transactionCopy } from '../../../../packages/shared/src/i18n/transaction-copy.ts';
 
 export const STRIPE_APP_INFO = { name: BUSINESS.brand, url: BUSINESS.site };
 // Stored with a purchase so retries send the exact same request even after a deployment.
@@ -20,10 +22,13 @@ export const stripeAttributionSchema = z
   })
   .strict();
 export type StripeAttribution = z.infer<typeof stripeAttributionSchema>;
-export function newStripeAttribution(id: string): StripeAttribution {
+export function newStripeAttribution(id: string, locale: Locale = 'en'): StripeAttribution {
   const reference = orderReference(id);
   return stripeAttributionSchema.parse({
-    description: `Alozuri eSIM order ${reference}`,
+    description:
+      locale === 'en'
+        ? `Alozuri eSIM order ${reference}`
+        : `${BUSINESS.brand} eSIM — ${transactionCopy(locale).t('transactionUi.orderReference')}: ${reference}`,
     metadata: {
       alozuriPurchaseId: id,
       app: 'alozuri',

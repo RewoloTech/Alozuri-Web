@@ -1,3 +1,4 @@
+import { POLICIES_V4 } from './policies-v4.ts';
 import { POLICIES_V3 } from './policies-v3.ts';
 import { POLICIES_V1 } from './policies-v1.ts';
 import { POLICIES_V2 } from './policies-v2.ts';
@@ -213,7 +214,7 @@ export const POLICIES: Record<string, Policy> = {
         title: 'Accounts, support and browser storage',
         paragraphs: [
           'You can buy as a guest or use our account service. Keep your account details and private order links confidential. Optional Tawk.to chat is contacted only after you allow support and open it; it receives what you choose to enter, without your profile or order details being automatically attached. Email support remains available without optional consent.',
-          'Cookies and similar storage support sign-in, shopping, payment security and your preferences. Withdrawing chat consent prevents future loading; it does not automatically erase earlier conversations.',
+          'Cookies and similar storage support sign-in, shopping, payment security and your preferences. We store your requested language separately from your currency; a signed-in language preference may also be saved to your account. Withdrawing chat consent prevents future loading; it does not automatically erase earlier conversations.',
         ],
         links: [
           {
@@ -307,6 +308,12 @@ export const POLICIES: Record<string, Policy> = {
               'Alozuri',
               'Remembers your selected currency.',
               'Until changed or cleared.',
+            ],
+            [
+              'alozuri_locale / alozuri_locale_explicit',
+              'Alozuri',
+              'Remembers the requested language and whether you selected it explicitly. Language and currency preferences are independent.',
+              'Up to 180 days; replaced when you change language or cleared by the browser.',
             ],
             [
               'alozuri-search',
@@ -655,6 +662,7 @@ export const POLICY_VERSIONS: Record<string, Record<string, Policy>> = {
   '2026-11-11.1': POLICIES_V1,
   '2026-11-11.2': POLICIES_V2,
   '2026-11-11.3': POLICIES_V3,
+  '2026-11-13.1': POLICIES_V4,
   [LEGAL_VERSION]: POLICIES,
 };
 export function policyText(policy: Policy, version: string = LEGAL_VERSION): string {

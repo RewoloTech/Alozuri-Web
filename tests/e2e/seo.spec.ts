@@ -50,7 +50,7 @@ test('Europe landing states its actual itinerary and guides remain readable on m
 }) => {
   await page.goto('/destinations/europe');
   await expect(page.locator('h1')).toContainText('Europe');
-  await expect(page.getByText('France, Germany and Italy', { exact: true })).toBeVisible();
+  await expect(page.locator('.page-intro')).toContainText('France, Germany and Italy');
   await expect(page.locator('.country-plan-conditions')).toContainText('France, Germany, Italy');
   for (const width of [375, 390, 768, 1440]) {
     await page.setViewportSize({ width, height: 950 });

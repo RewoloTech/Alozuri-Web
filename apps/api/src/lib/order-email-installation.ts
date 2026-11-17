@@ -1,3 +1,4 @@
+import { transactionCopy } from '../../../../packages/shared/src/i18n/transaction-copy.ts';
 import { transactionLocale } from './transaction-locale.js';
 import QRCode from 'qrcode';
 import { z } from 'zod';
@@ -17,18 +18,16 @@ export const emailInstallationSchema = z.object({
 });
 export type EmailInstallation = z.infer<typeof emailInstallationSchema>;
 const e = escapeEmailHtml;
-const instructions =
-  'Connect to Wi-Fi before installing. Follow your plan’s activation rule and keep these details private.';
-const keepProfile =
-  'Do not delete the eSIM after installing unless support asks you to. Some profiles can only be installed once.';
-
 export async function installationConfirmationEmail(
   input: ConfirmationOrder,
   url: string,
   inputUnits: EmailInstallation[],
 ) {
   const order = confirmationOrderSchema.parse(input);
-  transactionLocale(order);
+  const locale = transactionLocale(order);
+  const { t, plan: copy, dir } = transactionCopy(locale);
+  const instructions = t('display.installIntro');
+  const keepProfile = t('display.installWarning');
   const units = z
     .array(emailInstallationSchema)
     .min(1)
@@ -56,12 +55,12 @@ export async function installationConfirmationEmail(
     const item = order.items.find((item) => item.plan.id === unit.planId);
     if (!item) throw new Error('Installation plan is unavailable.');
     const { plan } = item;
-    const title = `eSIM ${index + 1} — ${plan.name}`;
+    const title = `eSIM ${index + 1} — ${copy.title(plan)}`;
     const [, address, code, confirmation] = unit.activation.ac.split('$');
     const fields = [
-      ['SM-DP+ address', address],
-      ['Activation code', code],
-      ...(confirmation ? [['Confirmation code', confirmation]] : []),
+      [t('display.smdp'), address],
+      [t('display.activationCode'), code],
+      ...(confirmation ? [[t('display.confirmationCode'), confirmation]] : []),
       ['ICCID', unit.activation.iccid],
     ];
     const contentId = `alozuri-esim-${index + 1}`;
@@ -80,7 +79,7 @@ export async function installationConfirmationEmail(
       content_id: contentId,
     });
     html.push(
-      `<div role="group" aria-label="Installation details for eSIM ${index + 1}" style="margin:16px 0 24px;padding:14px;border:1px solid #e2e3ed;border-radius:10px;background:#ffffff"><h3 style="font-size:17px;line-height:1.5;margin:0 0 12px">${e(title)}</h3><img src="cid:${contentId}" alt="Private installation QR code for eSIM ${index + 1}" width="240" height="240" style="display:block;width:240px;max-width:100%;height:auto;margin:12px auto;background:#ffffff">${fields.map(([label, value]) => `<p style="margin:0 0 12px;font-size:15px;line-height:1.6;overflow-wrap:anywhere;word-break:break-word"><strong>${e(label)}:</strong><br>${e(value)}</p>`).join('')}</div>`,
+      `<div role="group" aria-label="${e(t('installation.unitDetails', { number: index + 1 }))}" dir="${dir}" style="margin:16px 0 24px;padding:14px;border:1px solid #e2e3ed;border-radius:10px;background:#ffffff"><h3 style="font-size:17px;line-height:1.5;margin:0 0 12px">${e(title)}</h3><img src="cid:${contentId}" alt="${e(t('installation.unitQr', { number: index + 1 }))}" dir="ltr" width="240" height="240" style="display:block;width:240px;max-width:100%;height:auto;margin:12px auto;background:#ffffff">${fields.map(([label, value]) => `<p style="margin:0 0 12px;font-size:15px;line-height:1.6;overflow-wrap:anywhere;word-break:break-word"><strong>${e(label)}:</strong><br><bdi dir="ltr">${e(value)}</bdi></p>`).join('')}</div>`,
     );
     text.push(title, ...fields.map(([label, value]) => `${label}: ${value}`));
   }

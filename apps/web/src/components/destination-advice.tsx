@@ -1,15 +1,17 @@
-import Link from '@/components/localized-link';
+import { LinkedMessage, MESSAGE_LINKS } from './linked-message';
+import { serverTranslations } from '@/lib/server-translations';
 import type { DestinationContent } from '@/lib/destination-content';
-export function DestinationAdvice({ content }: { content: DestinationContent }) {
+export async function DestinationAdvice({ content }: { content: DestinationContent }) {
+  const { t } = await serverTranslations();
   return (
     <section className="section destination-advice">
-      <h2>Plan your mobile data before travelling</h2>
+      <h2>{t('regionUi.adviceTitle')}</h2>
       <ul>
         {content.tips.map((tip) => (
           <li key={tip}>{tip}</li>
         ))}
       </ul>
-      <h2>Common questions</h2>
+      <h2>{t('regionUi.questions')}</h2>
       <div className="faq-list">
         {content.faq.map((faq) => (
           <details key={faq.question}>
@@ -19,11 +21,21 @@ export function DestinationAdvice({ content }: { content: DestinationContent }) 
         ))}
       </div>
       <p>
-        Check <Link href="/esim-compatibility">device compatibility</Link>, read{' '}
-        <Link href="/guides/install-esim-before-travel">when to install your eSIM</Link>, or review
-        the <Link href="/refund-policy">refund and cancellation policy</Link>. Installation and
-        activation can affect cancellation eligibility; the policy explains exceptions and consumer
-        rights.
+        <LinkedMessage
+          message={t('regionUi.adviceLinks', {
+            compatibility: MESSAGE_LINKS.compatibility,
+            installation: MESSAGE_LINKS.installation,
+            refunds: MESSAGE_LINKS.refunds,
+          })}
+          links={{
+            compatibility: { href: '/esim-compatibility', label: t('regionUi.compatibility') },
+            installation: {
+              href: '/guides/install-esim-before-travel',
+              label: t('regionUi.installation'),
+            },
+            refunds: { href: '/refund-policy', label: t('legal.refunds') },
+          }}
+        />
       </p>
     </section>
   );

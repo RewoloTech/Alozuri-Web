@@ -281,7 +281,10 @@ test('legal pages have usable headings, a scrollable cookie inventory and groupe
     'Purpose',
     'Duration',
   ]);
-  await expect(table.getByRole('row')).toHaveCount(13);
+  await expect(table.getByRole('row')).toHaveCount(14);
+  await expect(
+    table.getByRole('row').filter({ hasText: 'alozuri_locale / alozuri_locale_explicit' }),
+  ).toContainText('180 days');
   for (const width of [375, 390, 768, 1440]) {
     await page.setViewportSize({ width, height: 950 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
@@ -376,10 +379,9 @@ test('sign-up hover keeps readable text and checkbox labels align on desktop and
     await page.goto('/register');
     const terms = page.locator('label.checkbox-label').filter({ hasText: 'I agree to the' });
     await aligned(terms);
-    await expect(terms.getByRole('link', { name: 'Terms', exact: true })).toHaveAttribute(
-      'href',
-      '/terms',
-    );
+    await expect(
+      terms.getByRole('link', { name: 'Terms and Conditions', exact: true }),
+    ).toHaveAttribute('href', '/terms');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );

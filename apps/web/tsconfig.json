@@ -10,7 +10,11 @@
     "allowJs": true,
     "isolatedModules": true,
     "allowImportingTsExtensions": true,
-    "plugins": [{ "name": "next" }],
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
     "paths": {
       "@/*": ["./src/*"],
       "@alozuri/shared": ["../../packages/shared/src/index.ts"],
@@ -22,7 +26,8 @@
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",
-    ".next/dev/types/**/*.ts"
+    ".next/dev/types/**/*.ts",
+    "../../packages/shared/src/types/**/*.d.ts"
   ],
   "exclude": ["node_modules"]
 }

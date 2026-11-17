@@ -39,7 +39,7 @@
     "operations:supplier-cost": "node --import tsx scripts/reconcile-supplier-cost.mts",
     "test:seo": "node --import tsx --test tests/unit/seo.test.ts && node --import tsx tests/seo-production.mts && playwright test tests/e2e/seo.spec.ts",
     "test:meta": "node --import tsx --test tests/unit/meta-events.test.ts && playwright test tests/e2e/shopping.spec.ts --grep Meta",
-    "test:i18n": "node --import tsx --test tests/unit/i18n.test.ts tests/unit/language-release.test.ts",
+    "test:i18n": "node --import tsx --test tests/unit/i18n.test.ts tests/unit/language-release.test.ts tests/unit/supplier-copy.test.ts",
     "i18n:check-release": "node --import tsx scripts/check-language-release.mts"
   },
   "devDependencies": {

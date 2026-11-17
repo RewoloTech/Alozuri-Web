@@ -1,4 +1,6 @@
-import { destinationContent } from '@/lib/destination-content';
+import { localizedDestinations } from '@/lib/localized-destinations';
+import { serverTranslations } from '@/lib/server-translations';
+import { destinationName, regionDisplayName } from '@alozuri/shared/i18n/destinations';
 import { DestinationAdvice } from '@/components/destination-advice';
 import { CountryOffers } from '@/components/country-offers';
 import { getPublicCountries, getCountryPlans } from '@/lib/catalogue-server';
@@ -12,15 +14,15 @@ export const revalidate = 300;
 export async function generateMetadata({ params }: { params: Promise<{ code: string }> }) {
   const { code } = await params,
     iso = code.toUpperCase();
-  if (!isCountryCode(iso)) return { title: 'Destination not found', robots: { index: false } };
+  const { locale, t } = await serverTranslations();
+  if (!isCountryCode(iso)) return { title: t('regionUi.notFound'), robots: { index: false } };
   const verified = (await getPublicCountries()).some((c) => c.code === iso);
-  const name = countryName(iso),
+  const name = destinationName(iso, locale),
     path = '/destinations/' + iso.toLowerCase();
-  const advice = destinationContent[iso];
+  const advice = (await localizedDestinations(locale))[iso];
   const metadata = await publicMetadata(
-    advice?.title ?? `${name} travel eSIM`,
-    advice?.description ??
-      `Compare ${name} travel data plans, allowance, validity and activation rules. Find local coverage or build a multi-country itinerary.`,
+    advice?.title ?? t('regionUi.genericTitle', { country: name }),
+    advice?.description ?? t('regionUi.genericDescription', { country: name }),
     path,
   );
   return {
@@ -42,25 +44,30 @@ export default async function Destination({ params }: { params: Promise<{ code: 
   if (!country) notFound();
   if (code !== code.toLowerCase())
     permanentRedirect(localePath('/destinations/' + code.toLowerCase(), await requestLocale()));
-  const advice = destinationContent[iso];
+  const { locale, t } = await serverTranslations();
+  const name = destinationName(iso, locale);
+  const region = regionDisplayName(country.region, locale);
+  const advice = (await localizedDestinations(locale))[iso];
   const initialPlans = await getCountryPlans(iso);
   return (
     <section className="container section">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: jsonLd(breadcrumbs(country.name, '/destinations/' + iso.toLowerCase())),
+          __html: jsonLd(
+            breadcrumbs(name, localePath('/destinations/' + iso.toLowerCase(), locale)),
+          ),
         }}
       />
       <div className="page-intro">
-        <span className="eyebrow">{country.region} · TRAVEL DATA</span>
+        <span className="eyebrow">
+          {region ? region + ' · ' : ''}
+          {t('countryUi.travelData')}
+        </span>
         <h1>
-          {country.flag} Stay connected in {country.name}.
+          <bdi>{country.flag}</bdi> {t('countryUi.connected', { country: name })}
         </h1>
-        <p>
-          {advice?.intro ??
-            `Compare data allowances and validity for your trip to ${country.name}. Open a plan to read its supplier-reported coverage and activation rule, or add more countries to compare a multi-stop itinerary.`}
-        </p>
+        <p>{advice?.intro ?? t('countryUi.intro', { country: name })}</p>
       </div>
       <CountryOffers code={iso} initial={initialPlans} />
       <Planner key={code} initialCountries={[country.code]} destinationMode />

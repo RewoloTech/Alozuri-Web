@@ -1,9 +1,13 @@
+import { LocalizedLoading } from '@/components/localized-loading';
+import { privateMetadata } from '@/lib/server-translations';
 import { Suspense } from 'react';
 import { PurchaseStatus } from '@/components/purchase-status';
-export const metadata = { title: 'Your order', robots: { index: false } };
+export async function generateMetadata() {
+  return privateMetadata('orderUi.title');
+}
 export default function Page() {
   return (
-    <Suspense fallback={<div className="loading-page">Opening your order…</div>}>
+    <Suspense fallback={<LocalizedLoading message="orderUi.confirming" />}>
       <PurchaseStatus />
     </Suspense>
   );

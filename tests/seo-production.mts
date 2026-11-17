@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import assert from 'node:assert/strict';
+import { LOCALES, localePath } from '../packages/shared/src/i18n/locales.ts';
+import { loadMessages } from '../packages/shared/src/i18n/catalogs.ts';
 import { chromium } from '@playwright/test';
 import { createSeoApi } from './fixtures/seo-api.ts';
 const source = process.cwd(),
@@ -88,6 +90,11 @@ try {
     '/plans/seo-us',
   ])
     assert.ok(map.includes('https://alozuri.com' + p));
+  for (const locale of LOCALES) {
+    assert.ok(map.includes('https://alozuri.com' + localePath('/plans/seo-us', locale)));
+    assert.ok(map.includes('hreflang="' + locale + '"'));
+  }
+  assert.ok(map.includes('hreflang="x-default"'));
   assert.ok(!map.includes('/operations'));
   assert.ok(!map.includes('/checkout'));
   for (const p of [
@@ -131,7 +138,39 @@ try {
     }
     console.info('PASS public production metadata/HTML/schema', p);
   }
-  for (const p of ['/operations', '/account/orders', '/checkout', '/cart', '/api/currency'])
+  for (const locale of LOCALES) {
+    const p = localePath('/plans/seo-us', locale);
+    const response = await get(p),
+      html = await response.text();
+    assert.equal(response.status, 200, p);
+    assert.ok(html.includes('lang="' + (locale === 'en' ? 'en-GB' : locale) + '"'), p);
+    assert.ok(html.includes('dir="' + (locale === 'ar' ? 'rtl' : 'ltr') + '"'), p);
+    assert.ok(html.includes('rel="canonical" href="https://alozuri.com' + p + '"'), p);
+    assert.ok(html.includes('name="robots" content="index, follow"'), p);
+    for (const alternate of [...LOCALES, 'x-default'])
+      assert.ok(
+        html.includes('hrefLang="' + alternate + '"') ||
+          html.includes('hreflang="' + alternate + '"'),
+        p + ' ' + alternate,
+      );
+    const product = [...html.matchAll(/<script type="application\/ld\+json">(.*?)<\/script>/gs)]
+      .map((m) => JSON.parse(m[1]))
+      .find((s) => s['@type'] === 'Product');
+    assert.equal(product.offers.price, '12.00');
+    assert.equal(product.offers.priceCurrency, 'USD');
+    assert.equal(product.url, 'https://alozuri.com' + p);
+    assert.equal(product.additionalProperty[0].name, (await loadMessages(locale)).plans.allowance);
+    console.info('PASS native production metadata/schema/sitemap', locale);
+  }
+  for (const p of [
+    '/operations',
+    '/account/orders',
+    '/checkout',
+    '/checkout/seo-us',
+    '/ar/checkout/seo-us',
+    '/cart',
+    '/api/currency',
+  ])
     assert.ok((await get(p)).headers.get('x-robots-tag')?.includes('noindex'), p);
   assert.ok(
     (await get('/destinations/us?countries=US')).headers.get('x-robots-tag')?.includes('noindex'),

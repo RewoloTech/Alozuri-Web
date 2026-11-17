@@ -1,3 +1,8 @@
+'use client';
+import { useLocale, useTranslations } from 'next-intl';
+import { placeName } from '@alozuri/shared/i18n/places';
+import { destinationName } from '@alozuri/shared/i18n/destinations';
+import { localeDirection } from '@alozuri/shared/i18n';
 import Link from '@/components/localized-link';
 import {
   ArrowRight,
@@ -14,53 +19,63 @@ import {
 import { Planner } from './planner';
 import { SeasonalDestinations } from './seasonal-destinations';
 import { seasonalInspiration } from '@alozuri/shared/destination-inspiration';
-export function Home({ featuredBundles }: { featuredBundles?: React.ReactNode }) {
+export function Home({
+  featuredBundles,
+  initialInspiration,
+}: {
+  featuredBundles?: React.ReactNode;
+  initialInspiration: ReturnType<typeof seasonalInspiration>;
+}) {
+  const t = useTranslations('home');
+  const site = useTranslations('site');
+  const locale = useLocale();
+  const dir = localeDirection(locale);
   return (
     <>
       <section className="hero">
         <div className="container">
-          <div className="hero-grid">
-            <div className="hero-copy">
+          <div className="hero-grid" dir="ltr">
+            <div className="hero-copy" dir={dir}>
               <h1>
-                One eSIM.
+                {t('heroTitleA')}
                 <br />
-                <span>Every stop.</span>
+                <span dir={dir}>{t('heroTitleB')}</span>
               </h1>
               <div className="hero-benefits">
-                <span>Instant delivery</span>
-                <span>No roaming surprises</span>
+                <span dir={dir}>{t('instant')}</span>
+                <span dir={dir}>{t('noRoaming')}</span>
               </div>
             </div>
             <div className="journey-card">
-              <div className="journey-card-top">
+              <div className="journey-card-top" dir="ltr">
                 <span>
                   <Globe2 size={17} />
-                  YOUR TRIP, CONNECTED
+                  {t('tripConnected')}
                 </span>
-                <span className="small-badge">ONE eSIM</span>
+                <span className="small-badge">{t('oneEsim')}</span>
               </div>
-              <div className="journey-stops">
+              <div className="journey-stops" dir="ltr">
                 <div>
                   <span className="journey-flag">🇫🇷</span>
-                  <strong>France</strong>
-                  <span>Paris</span>
+                  <strong dir={dir}>{destinationName('FR', locale)}</strong>
+                  <span dir={dir}>{placeName('paris', locale)}</span>
                 </div>
                 <span className="journey-line" />
                 <div>
                   <span className="journey-flag">🇨🇭</span>
-                  <strong>Switzerland</strong>
-                  <span>Zürich</span>
+                  <strong dir={dir}>{destinationName('CH', locale)}</strong>
+                  <span dir={dir}>{placeName('zurich', locale)}</span>
                 </div>
                 <span className="journey-line" />
                 <div>
                   <span className="journey-flag">🇮🇹</span>
-                  <strong>Italy</strong>
-                  <span>Rome</span>
+                  <strong dir={dir}>{destinationName('IT', locale)}</strong>
+                  <span dir={dir}>{placeName('rome', locale)}</span>
                 </div>
               </div>
-              <div className="journey-confirmation">
+              <div className="journey-confirmation" dir="ltr">
                 <ShieldCheck size={18} />
-                <span>Covers all your selected countries</span>
+                <span dir={dir}>{t('coversAll')}</span>
                 <Check size={17} />
               </div>
             </div>
@@ -69,92 +84,92 @@ export function Home({ featuredBundles }: { featuredBundles?: React.ReactNode })
         </div>
       </section>
       <section className="promise-strip">
-        <div className="container">
-          <span>
+        <div className="container" dir="ltr">
+          <span dir={dir}>
             <Globe2 />
-            One plan across borders
+            {t('onePlan')}
           </span>
           <span>
             <Smartphone />
-            No physical SIM to swap
+            {t('noSim')}
           </span>
           <span>
             <ShieldCheck />
             {process.env.NEXT_PUBLIC_DEMO_MODE === 'false' &&
             process.env.NEXT_PUBLIC_PAYMENT_MODE === 'live'
-              ? 'Secure Stripe checkout'
-              : 'Compare travel data plans'}
+              ? t('secure')
+              : t('compare')}
           </span>
           <span className="desktop-data-promise">
             <Signal />
-            Data, without the detours
+            {t('dataNoDetours')}
           </span>
           <span className="mobile-number-benefit">
             <Check />
-            Keep your number
+            {t('keepNumber')}
           </span>
         </div>
       </section>
       {featuredBundles}
       <section className="section container destinations-section">
-        <div className="section-heading">
-          <div>
-            <span className="eyebrow">FIND YOUR NEXT CONNECTION</span>
-            <h2>Where to next?</h2>
-            <p>From a weekend away to the trip you’ve been planning for years.</p>
+        <div className="section-heading" dir="ltr">
+          <div dir={dir}>
+            <span className="eyebrow">{t('destinationsEyebrow')}</span>
+            <h2>{t('destinationsTitle')}</h2>
+            <p>{t('destinationsDescription')}</p>
           </div>
           <Link href="/destinations" className="text-link">
-            All destinations <ArrowUpRight size={18} />
+            {site('allDestinations')} <ArrowUpRight size={18} />
           </Link>
         </div>
-        <SeasonalDestinations initial={seasonalInspiration(new Date())} />
-        <div className="europe-banner">
+        <SeasonalDestinations initial={initialInspiration} />
+        <div className="europe-banner" dir="ltr">
           <span className="europe-icon">
             <MapPin size={25} />
           </span>
-          <div>
-            <h3>France, Switzerland and Italy? Yes, all three.</h3>
-            <p>Our trip matcher checks every destination, so you don’t have to.</p>
+          <div dir={dir}>
+            <h3>{t('europeTitle')}</h3>
+            <p>{t('europeDescription')}</p>
           </div>
           <a href="#planner" className="text-link">
-            Match my itinerary <ArrowRight size={18} />
+            {t('matchItinerary')} <ArrowRight size={18} />
           </a>
         </div>
       </section>
       <section className="how-section" id="how-it-works">
         <div className="container">
-          <div className="section-heading">
-            <div>
-              <span className="eyebrow">THREE STEPS. ONE LESS THING TO THINK ABOUT.</span>
-              <h2>Connected before you know it.</h2>
+          <div className="section-heading" dir="ltr">
+            <div dir={dir}>
+              <span className="eyebrow">{t('stepsEyebrow')}</span>
+              <h2>{t('stepsTitle')}</h2>
             </div>
             <Link href="/help#compatibility" className="text-link">
-              Check your device <ArrowUpRight size={18} />
+              {t('checkDevice')} <ArrowUpRight size={18} />
             </Link>
           </div>
-          <div className="steps-grid">
+          <div className="steps-grid" dir="ltr">
             {[
               {
                 n: '01',
                 icon: <Globe2 />,
-                title: 'Choose your destinations',
-                text: 'Add every country on your itinerary. Compare plans that cover all your selected stops.',
+                title: t('stepChooseTitle'),
+                text: t('stepChooseText'),
               },
               {
                 n: '02',
                 icon: <QrCode />,
-                title: 'Install your eSIM',
-                text: 'Find your eSIM in your account once it’s ready. Scan the QR code on a stable Wi-Fi connection.',
+                title: t('stepInstallTitle'),
+                text: t('stepInstallText'),
               },
               {
                 n: '03',
                 icon: <Signal />,
-                title: 'Land. Connect. Go.',
-                text: 'Set your eSIM for mobile data and enable its data roaming. Follow the activation rules for your plan.',
+                title: t('stepConnectTitle'),
+                text: t('stepConnectText'),
               },
             ].map((s) => (
-              <div className="step" key={s.n}>
-                <div className="step-header">
+              <div className="step" key={s.n} dir={dir}>
+                <div className="step-header" dir="ltr">
                   <span className="step-icon">{s.icon}</span>
                   <span className="step-number">{s.n}</span>
                 </div>
@@ -165,43 +180,35 @@ export function Home({ featuredBundles }: { featuredBundles?: React.ReactNode })
           </div>
         </div>
       </section>
-      <section className="section container faq-section">
-        <div>
-          <span className="eyebrow">BEFORE YOU GO</span>
-          <h2>
-            A few good
-            <br />
-            questions.
-          </h2>
-          <p>
-            Travel plans have enough moving parts.
-            <br />
-            Your connection should be simple.
-          </p>
+      <section className="section container faq-section" dir="ltr">
+        <div dir={dir}>
+          <span className="eyebrow">{t('faqEyebrow')}</span>
+          <h2>{t('faqTitle')}</h2>
+          <p>{t('faqIntro')}</p>
           <Link href="/help" className="text-link">
-            Visit the help centre <ArrowUpRight size={18} />
+            {t('faqLink')} <ArrowUpRight size={18} />
           </Link>
         </div>
-        <div className="faq-list">
+        <div className="faq-list" dir={dir}>
           {[
             {
-              q: 'Will one eSIM work in all my countries?',
-              a: 'When a plan includes every selected country, yes. Our trip matcher only shows plans that cover your complete itinerary. Switzerland and the UK are checked individually; we don’t assume “Europe” means every European country.',
+              q: t('faqCoverageQuestion'),
+              a: t('faqCoverageAnswer'),
             },
             {
-              q: 'Is my phone compatible?',
-              a: 'Your phone must support eSIM and be unlocked. Check for “Add eSIM” in your mobile network settings, and confirm support for your exact model and purchase region with the manufacturer before buying.',
+              q: t('faqPhoneQuestion'),
+              a: t('faqPhoneAnswer'),
             },
             {
-              q: 'Can I keep my WhatsApp and phone number?',
-              a: 'Yes. Keep your existing SIM for calls and your usual WhatsApp number. Select Alozuri for mobile data, and disable data roaming on your home SIM to avoid carrier charges.',
+              q: t('faqNumberQuestion'),
+              a: t('faqNumberAnswer'),
             },
             {
-              q: 'When does my plan start?',
-              a: 'It depends on the package. Some plans start on installation; others start with the first supported network connection. The plan details and installation page explain the activation rule.',
+              q: t('faqStartQuestion'),
+              a: t('faqStartAnswer'),
             },
-          ].map((f) => (
-            <details key={f.q}>
+          ].map((f, index) => (
+            <details key={index}>
               <summary>
                 {f.q}
                 <ChevronDown size={18} />
@@ -212,14 +219,14 @@ export function Home({ featuredBundles }: { featuredBundles?: React.ReactNode })
         </div>
       </section>
       <section className="last-call">
-        <div className="container">
-          <div>
-            <span className="eyebrow">YOUR NEXT TRIP, SIMPLIFIED</span>
-            <h2>Less roaming. More going.</h2>
-            <p>Your next connection starts with your destinations.</p>
+        <div className="container" dir="ltr">
+          <div dir={dir}>
+            <span className="eyebrow">{t('finalEyebrow')}</span>
+            <h2>{t('finalTitle')}</h2>
+            <p>{t('finalText')}</p>
           </div>
           <a href="#planner" className="button primary">
-            Find my eSIM <ArrowRight size={18} />
+            {t('findEsim')} <ArrowRight size={18} />
           </a>
         </div>
       </section>

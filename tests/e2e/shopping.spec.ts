@@ -1,3 +1,5 @@
+import { LOCALES } from '../../packages/shared/src/i18n/locales';
+import { loadMessages } from '../../packages/shared/src/i18n/catalogs';
 import { sampleConfirmation } from '../fixtures/order-confirmation';
 import { readFile } from 'node:fs/promises';
 import type { Plan } from '../../packages/shared/src/index';
@@ -347,7 +349,12 @@ async function mockStripe(
           calls++;
           sessionStorage.setItem('stripeConfirmCalls', String(calls));
           return calls === 1
-            ? { error: { message: 'Your card was declined. Try another payment method.' } }
+            ? {
+                error: {
+                  code: 'card_declined',
+                  message: 'Provider wording is not customer-facing copy.',
+                },
+              }
             : { paymentIntent: { status: 'succeeded' } };
         },
       };
@@ -373,7 +380,7 @@ async function openCheckout(page: Page) {
     await checkbox.check();
   }
   await expect(page.locator('.checkout-policy-notice')).toContainText(
-    'By continuing, you agree to our Terms & Conditions',
+    'By continuing, you agree to our Terms and Conditions',
   );
   await expect(page.getByText('Your agreement and supply choices')).toHaveCount(0);
   for (const width of [320, 375, 390, 430, 768, 1440]) {
@@ -406,7 +413,7 @@ async function openCheckout(page: Page) {
   await page.screenshot({ path: '/tmp/alozuri-checkout-consent-mobile.png', fullPage: true });
   if (viewport) await page.setViewportSize(viewport);
   const summary = page.locator('.checkout-summary');
-  await expect(summary).toContainText('Data-only');
+  await expect(summary).toContainText('Data only');
   await expect(summary.locator('details')).not.toHaveAttribute('open', '');
   await summary.getByText('Plan details', { exact: true }).click();
   await expect(summary).toContainText(plan.activation);
@@ -791,7 +798,7 @@ test('an empty data filter explains existing multi-country coverage and can show
   ).toBeVisible();
   await expect(
     page.getByText(
-      '1 plan covers all your selected countries, but none match the selected data allowance.',
+      'Plans covering your selected destinations: 1. None match the selected data allowance.',
     ),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Show all data plans', exact: true }).click();
@@ -841,7 +848,7 @@ test('rapid quantity updates keep the summary stable and checkout available whil
   await page.getByRole('button', { name: 'Add to cart', exact: true }).click();
   await expect(page.getByRole('link', { name: 'Shopping cart, 1 item' })).toBeVisible();
   await page.goto('/cart');
-  const checkout = page.getByRole('link', { name: 'Secure checkout →', exact: true });
+  const checkout = page.getByRole('link', { name: 'Secure checkout', exact: true });
   await expect(checkout).toHaveAttribute('aria-disabled', 'false');
   const summary = page.locator('.commerce-summary');
   await summary.evaluate((node) => node.setAttribute('data-stability-marker', 'same-summary'));
@@ -910,7 +917,7 @@ test('customers can open checkout during a slow cart check, but payment waits fo
   });
   await page.goto('/cart');
   await expect.poll(() => quotes).toBeGreaterThan(0);
-  const checkout = page.getByRole('link', { name: 'Secure checkout →', exact: true });
+  const checkout = page.getByRole('link', { name: 'Secure checkout', exact: true });
   await expect(checkout).toHaveAttribute('aria-disabled', 'false');
   await checkout.click();
   await expect(page).toHaveURL(/\/checkout$/);
@@ -1653,7 +1660,7 @@ test('Meta Purchase requires a server-confirmed live order and survives reload w
       orderId +
       '&payment_intent_client_secret=secret&redirect_status=succeeded#access=private-browser-fixture',
   );
-  await expect(page.getByText('Payment: pending payment', { exact: true })).toBeVisible();
+  await expect(page.getByText('Payment: Awaiting payment', { exact: true })).toBeVisible();
   expect(calls.filter((c) => c[0] === 'track' && c[1] === 'Purchase')).toHaveLength(0);
   await expect(page).not.toHaveURL(/client_secret/);
   paid = true;
@@ -1665,9 +1672,9 @@ test('Meta Purchase requires a server-confirmed live order and survives reload w
   expect(purchase?.[2]).toEqual({ value: 1.13, currency: 'GBP' });
   expect(purchase?.[3]).toMatchObject({ eventID: expect.stringMatching(/^alozuri_[a-f0-9]{64}$/) });
   await page.reload();
-  await expect(page.getByText('Payment: paid', { exact: true })).toBeVisible();
+  await expect(page.getByText('Payment: Paid', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Refresh order status' }).click();
-  await expect(page.getByText('Payment: paid', { exact: true })).toBeVisible();
+  await expect(page.getByText('Payment: Paid', { exact: true })).toBeVisible();
   expect(calls.filter((c) => c[0] === 'track' && c[1] === 'Purchase')).toHaveLength(1);
 });
 test('Meta never loads for refused consent or a private credential URL', async ({ page }) => {
@@ -1841,4 +1848,143 @@ test('editing a code during Continue validation cancels automatic payment progre
   await expect(page.getByRole('heading', { name: 'Secure payment', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Pay $12.00', exact: true })).toBeEnabled();
   expect(checkouts).toBe(1);
+});
+
+test('changing all thirteen languages preserves delivery details, compatibility, cart and unpaid promotion input', async ({
+  page,
+}) => {
+  await setup(page);
+  await page.goto('/en/plans/' + plan.id);
+  await page.getByRole('button', { name: 'Add to cart', exact: true }).click();
+  await expect(page.locator('.cart-badge')).toHaveText('1');
+  await page.goto('/checkout?source=language-test');
+  await page.locator('input[type="email"]').fill('traveller@example.com');
+  await page.locator('input[type="checkbox"][required]').check();
+  await page.locator('.checkout-promo-entry summary').click();
+  await page.locator('#promotion-code').fill('NOT-APPLIED');
+  for (const locale of LOCALES) {
+    const messages = await loadMessages(locale);
+    await page.locator('.site-header .language-selector select').selectOption(locale);
+    await expect(page).toHaveURL(
+      (url) => url.pathname === (locale === 'en' ? '/checkout' : '/' + locale + '/checkout'),
+    );
+    await expect(page.locator('input[type="email"]')).toHaveValue('traveller@example.com');
+    await expect(page.locator('input[type="checkbox"][required]')).toBeChecked();
+    await expect(page.locator('#promotion-code')).toHaveValue('NOT-APPLIED');
+    await expect(page.locator('.checkout-promo-entry')).toHaveAttribute('open', '');
+    await expect(page.locator('h1')).toHaveText(messages.checkout.title);
+    await expect(page.locator('form h2')).toHaveText(messages.checkout.deliveryEmail);
+    await expect(page.locator('.checkout-summary')).toContainText('$12.00');
+    await expect(page.locator('.site-header .currency-select')).toHaveValue('USD');
+    await expect(page.locator('.cart-badge')).toHaveText('1');
+    expect(new URL(page.url()).searchParams.get('source')).toBe('language-test');
+  }
+  await page.locator('.site-header .language-selector select').selectOption('ar');
+  await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+  for (const width of [375, 390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    const summary = await page.locator('.checkout-summary').boundingBox();
+    const email = await page.locator('input[type="email"]').boundingBox();
+    const submit = await page
+      .locator('form button[type="submit"], form > button:last-of-type')
+      .boundingBox();
+    expect(summary).not.toBeNull();
+    expect(email).not.toBeNull();
+    expect(submit).not.toBeNull();
+    if (width > 768) expect(summary!.x).toBeGreaterThan(email!.x + email!.width);
+    else expect(summary!.y + summary!.height).toBeLessThan(submit!.y);
+    await page.screenshot({ path: `/tmp/alozuri-ar-checkout-${width}.png`, fullPage: true });
+  }
+});
+
+test('every locale reaches payment with compatibility validation, native errors and an immutable currency', async ({
+  page,
+}) => {
+  test.setTimeout(300_000);
+  await mockStripe(page, false);
+  await setup(page);
+  for (const locale of LOCALES) {
+    const m = await loadMessages(locale);
+    const prefix = locale === 'en' ? '' : '/' + locale;
+    await page.goto(prefix + '/plans/' + plan.id);
+    if (locale === 'en') {
+      await page.getByRole('button', { name: m.plans.add, exact: true }).click();
+      await expect(page.locator('.cart-badge')).toHaveText('1');
+    }
+    await page.goto(prefix + '/checkout');
+    await page.locator('input[type="email"]').fill('guest@example.com');
+    const submit = page.getByRole('button', { name: m.checkout.continue, exact: true });
+    await expect(submit).toBeDisabled();
+    await page.locator('input[type="checkbox"][required]').check();
+    await page.route('http://127.0.0.1:8189/v2/checkout', async (route) => {
+      if (route.request().method() !== 'POST') return route.fallback();
+      const input = route.request().postDataJSON();
+      expect(input.locale).toBe(locale);
+      expect(input.currency).toBe('USD');
+      expect(input.expectedTotalCents).toBe(1200);
+      await route.fulfill({
+        headers: { 'Access-Control-Allow-Origin': 'http://localhost:3100' },
+        json: {
+          orderId,
+          locale,
+          accessToken: 'private-browser-fixture',
+          clientSecret: 'pi_browser_secret',
+          paymentMode: 'test',
+          quote: {
+            items: [{ plan, quantity: 1 }],
+            currency: 'USD',
+            subtotalCents: 1200,
+            taxCents: 0,
+            totalCents: 1200,
+          },
+        },
+      });
+    });
+    await submit.click();
+    await expect(
+      page.getByRole('heading', { name: m.checkout.securePayment, exact: true }),
+    ).toBeVisible();
+    await expect(page.locator('.site-header .currency-select')).toHaveValue('USD');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await page.unroute('http://127.0.0.1:8189/v2/checkout');
+  }
+});
+
+test('native private orders download their saved language PDF even while the website is English', async ({
+  page,
+}) => {
+  test.setTimeout(300_000);
+  await setup(page);
+  const { legalSnapshot } = await import('../../apps/api/src/lib/legal');
+  for (const locale of LOCALES) {
+    const source = {
+      ...sampleConfirmation(),
+      locale,
+      legal: legalSnapshot(CHECKOUT_LEGAL_ACCEPTANCE, '2026-11-16T12:00:00.000Z', locale),
+    };
+    await page.route('http://127.0.0.1:8189/v2/orders/' + source.id, async (route) => {
+      if (route.request().method() === 'OPTIONS') return route.fallback();
+      await route.fulfill({
+        json: { ...source, status: 'paid', allocations: [], contractDownloadAvailable: true },
+        headers: { 'Access-Control-Allow-Origin': 'http://localhost:3100' },
+      });
+    });
+    await page.goto('/en/checkout/success?order=' + source.id + '#access=synthetic-contract-only');
+    await expect(page.locator('.support-shortcut')).toHaveCSS('position', 'static');
+    await page.getByText('Order documents', { exact: true }).click();
+    const pending = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Download your contract PDF', exact: true }).click();
+    const download = await pending;
+    const file = await download.path();
+    const bytes = await readFile(file!);
+    expect(bytes.subarray(0, 5).toString()).toBe('%PDF-');
+    expect(bytes.length).toBeLessThan(5 * 1024 * 1024);
+    await download.saveAs(`/tmp/alozuri-browser-saved-${locale}.pdf`);
+    await page.unroute('http://127.0.0.1:8189/v2/orders/' + source.id);
+  }
 });

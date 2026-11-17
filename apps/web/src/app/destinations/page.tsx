@@ -1,24 +1,23 @@
+import { serverTranslations } from '@/lib/server-translations';
 import { getPublicCountries } from '@/lib/catalogue-server';
 import { localizedMetadata as publicMetadata } from '@/lib/localized-metadata';
 import Link from '@/components/localized-link';
 import { DestinationDirectory } from '@/components/destination-directory';
 export async function generateMetadata() {
-  return await publicMetadata(
-    'eSIM destinations',
-    'Find travel eSIM coverage by country or compare one plan for a multi-country itinerary.',
-    '/destinations',
-  );
+  const { t } = await serverTranslations();
+  return publicMetadata(t('seoUi.destTitle'), t('seoUi.destDescription'), '/destinations');
 }
 export default async function Destinations() {
   const initial = await getPublicCountries();
+  const { t } = await serverTranslations();
   return (
     <section className="container section">
       <div className="page-intro">
-        <span className="eyebrow">YOUR WORLD. CONNECTED.</span>
-        <h1>Where will you go next?</h1>
-        <p>Choose one destination, or build an itinerary to find one plan for every stop.</p>
+        <span className="eyebrow">{t('authUi.artEyebrow')}</span>
+        <h1>{t('countryUi.directoryTitle')}</h1>
+        <p>{t('countryUi.directoryHint')}</p>
         <Link className="button primary" href="/#planner">
-          Build my itinerary →
+          {t('countryUi.buildItinerary')} →
         </Link>
       </div>
       <DestinationDirectory initial={initial} />

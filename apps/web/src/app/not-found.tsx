@@ -1,13 +1,15 @@
+import { serverTranslations } from '@/lib/server-translations';
 import Link from '@/components/localized-link';
-export default function NotFound() {
+export default async function NotFound() {
+  const { t } = await serverTranslations();
   return (
     <section className="container section">
       <div className="page-intro">
-        <span className="eyebrow">A SMALL DETOUR</span>
-        <h1>This stop isn’t on the map.</h1>
-        <p>We couldn’t find this page. Let’s get you back to your trip.</p>
+        <span className="eyebrow">{t('pageUi.notFoundEyebrow')}</span>
+        <h1>{t('pageUi.notFoundTitle')}</h1>
+        <p>{t('pageUi.notFoundText')}</p>
         <Link className="button primary" href="/">
-          Back to Alozuri →
+          {t('pageUi.backHome')}
         </Link>
       </div>
     </section>

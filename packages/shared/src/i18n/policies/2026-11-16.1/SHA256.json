@@ -1,0 +1,119 @@
+{
+  "en": {
+    "terms": "9ca04c47e4cf95e294bea49fad6729bd135e99dc0d7f883b4efc8580bfd83ad9",
+    "privacy": "6c3e6182685aeb458c2f9f2cc6b0dd50462c2033d458aec89ef7c783a1b96ab8",
+    "cookies": "3b9078561d2bc6aca3713a353a34b7f1dc0e4df91c461619a6d2b83de330bbe7",
+    "refunds": "e8930584e689408f8e3d7ddafed82606d54fbac8dd49cf4c3db6cb7911ae38e0",
+    "compatibility": "36b0b09bbab8a8bf111673207196015b3c392af125435e307fe01ed65a0187ad",
+    "acceptable-use": "020457e748f9e1f96351776f11d75881e833c676e953ea8c6100f4e93ebc1b55",
+    "contact": "aa2b16ea7bc4bc8619137cb1c0d14ba5ddf6f2f599af09d6405b7cac745dcb3d"
+  },
+  "es": {
+    "terms": "53026c2ec9a90651f1a343c8299b8beec8474dd00fc75ae3a0e3012564a84f1e",
+    "privacy": "c5b641886969b29e1f6fca87ace8f65e750477c03dfc44a86c5684eb4b1f7505",
+    "cookies": "18e7ad8afa9c60565d1b886ee9c7b5f1a872a3d9c99b7241d6fabb9e3bfee054",
+    "refunds": "32cd00a39ca7a15664b63b7779248fcf843a02e58bce30eecffcf6b076805b87",
+    "compatibility": "fef54f446b6868a4f6621d820a57c6b3cbc0a9ea7c7dc1c4e294915e7e9ab4f2",
+    "acceptable-use": "432edddf43ba443e2406532245b1d9473623eaf02db130918a483d93ae16c21a",
+    "contact": "9a5ceed12f28747627bef45fb115a1d762ea556bfd01f779a0c3268b1953ea79"
+  },
+  "de": {
+    "terms": "130ae537c7c7c68157ff378c17b0153dedc6851815f218ddcac05ab2773e20c1",
+    "privacy": "21e70cc67ea924830b51fc8553c4fcb8bc2ce1bf172fa13971bed26bfa5bdc73",
+    "cookies": "70b19593a6b5d63634f9845f44d64db1f4bfdd5022d64de2a8ec56984a489b0d",
+    "refunds": "81e33175de2d65cdee58217401cfba9943b1640a553b4261112c629c842fdb68",
+    "compatibility": "75cf655f5e27b99c9b541a50de225cddd692785ec4fc8dc1e18f41931e5efaa6",
+    "acceptable-use": "2ad1340bade17fd3f3a19fe22fdf7b7609ac982db6b27f4274bc12c1f0f7a3ff",
+    "contact": "2fbf044d068fefd4f91ae3f3f3419d85bfc2f46df34f303ef213bda7dbbbc732"
+  },
+  "fr": {
+    "terms": "b3e1ef2621c5febf16322694398d6de2367cf11f056a4415d29439bcf4464513",
+    "privacy": "2525ba032cc1278a6574f3ba0f2ead83f2d924b5e34787dea5c5e83a588e65bd",
+    "cookies": "439f083e7c3ebe6cefbdd535faf03bb78a664fdc16d325b350627b9a87defd1e",
+    "refunds": "7a872fd10b856612e8fd73cf5baf3f1650ee24d0c7ed325ea623854648f03544",
+    "compatibility": "0e808951ca566f9a1ea5ef15309ca5fdd58287760a71ea2ea1c14c9fbd661bc8",
+    "acceptable-use": "9b937a1345a742cb9dcfc5e953f135edf42ceca2445701cb686cae65be02ccad",
+    "contact": "9555073f596b1bad6c91f70eba4890e70875180b614a76c3a64c21a00000895d"
+  },
+  "it": {
+    "terms": "6172300efd0c4c85b422b8fcfd3403e20fe7753cf5962e818fc66f4ed00feac2",
+    "privacy": "dbaeccebe902aa839d70227b907c9a01e2ec54fc91afbc51d0d34174c74b3ec7",
+    "cookies": "55a010df55424714750b54eedf0a85ee0e61d2a23d24d55addee2cb9812093c7",
+    "refunds": "1d9ed8babd0bf0f8270e4f6c77f6194f297c6d9272777e62bacac778f918cc7c",
+    "compatibility": "46bf4b56144a216679f7f6019421b961536c834b5a3fee9c46badda23c4a6e9f",
+    "acceptable-use": "f998a898249e5530d234c6656b00fdeeff10b229dea6baac99a27f14e06aaff8",
+    "contact": "9a8282441f3424d8a44d62b18c232a353eb0bcbc5f322ed7392998fb171fd850"
+  },
+  "pt-BR": {
+    "terms": "608e98326f0246477c00eb1e37b4036242eb0d9b8f54cfa8329d273686d77676",
+    "privacy": "c1068ffc696593f6a617f1f56cef1db4e00765488a3464fe02cd88d4d26ca38f",
+    "cookies": "b12e99d83527b0fa40565164893055ea74dd48b04caeece257e4b603f3d3f27f",
+    "refunds": "b46f51bdc675705ae0cd81efc93183602cb37bd488e1f0f664b3b0fa0704f1cf",
+    "compatibility": "13f08cdd42650d85a6a76a4d415ee373788fe23ca73300c6394e68d92df48512",
+    "acceptable-use": "42fd2816871617fda197bcb2f1a30921b0018c07cb92d348e2340a287f1d0123",
+    "contact": "66b54a28007accf16692a2d4c1373986ad7d95e202bbfaa1fa0004f620f60cbe"
+  },
+  "ro": {
+    "terms": "ea5d37ab2d0a5e173c0b8dfe6cd7c76252892af56b8b64782034b576d4ef615f",
+    "privacy": "cf3425748344cd05fcec42e7befb1b1ee34ac38a6246e96de8744fbe948a14a1",
+    "cookies": "11d3b24e425609736ef9f1d2002a370df502c1c740ac19833d360602d32a37b0",
+    "refunds": "f9c5f6cbcd1fed28261f99455ab73c63191968f84d77d24b30c07ae14ab492df",
+    "compatibility": "4b7ab35f3955093de028bd00d07c040eacb22ff6bdc93250d408977ae4a31491",
+    "acceptable-use": "5b5c1af58f659d19b729e033df57dc0aedfa5d410ca646f7ed97f96c49f82948",
+    "contact": "ba7bb7026db4f50be74a8269047f82f5e8ddc1a1bc789939af62b842a8934658"
+  },
+  "ja": {
+    "terms": "2cf06e503a9bd0abe122223590201dc3f3001eb0668bac385ca3e48d658f09c7",
+    "privacy": "e319857bf65a957bd5391f88724dbb838ac1f09771cd8941a1385466f7be6d09",
+    "cookies": "2184d3d68f6172e72e7aeca4f5ffa38b5e8336068143c36b203decbd4f1f589e",
+    "refunds": "6746f34ce99c33ae086dc5b101863039c1e45ec91a227e1a0a22f811d6aec278",
+    "compatibility": "177c6b4204f80e617e46ecaf61a9828c9ba1804d3372336428887d0577c28bf8",
+    "acceptable-use": "c608c6599d2b3ba70a9d0fd987f87eedb4c7a591d48408330dd8aea055e73339",
+    "contact": "1180d60ac8242fec48ea047d2a5bf85af69d53bd5d9be6a55130256bfb5796e8"
+  },
+  "ko": {
+    "terms": "7c8d841406ff3f6f5799fa365012d6e2f07cf5e5818b113f5630037c4cba33e9",
+    "privacy": "8adb3367da2743358ef8a63a151c48f9e47c97058296214b58bb2ddc0850880f",
+    "cookies": "3fe6557a59d4374173e79e2addc1093736dab1c3e4910ea17e78facf0589cbae",
+    "refunds": "fa12c225f3b45c29f79450adb6915b2e55c7c7cbfc9a15d78f8fef3722ab525d",
+    "compatibility": "fb511064755e3b9b61ef5edf1b97fd5d3139eba4f92f4470aba5dc288fef3a9b",
+    "acceptable-use": "8047b2316ab2e3b150ef75a4fdb885fe0c8a2316ff56dc564c61ef23ec6baf9e",
+    "contact": "48dc1620282b05198710b4b1be49e8ac0193bd2a8c0ad7da3f7a03d2ac6e1dd1"
+  },
+  "zh-Hans": {
+    "terms": "c3c0ad1642cbfdb4505b97dc76a3e2adfef2c6de8bd4d88f7c59f5c583fdef7d",
+    "privacy": "eb730b791cbb14c7d8466e9f9cf0584f5a171c6edbe25445bd624e74b86827a6",
+    "cookies": "5501dbcf5720ad305adab4ed6b03a581cd9834ab33607a892cbc72f2de6607a3",
+    "refunds": "18339c3cadb10f31f8971884d1082f5b1d825566b4c4b6eecbe8b353617826aa",
+    "compatibility": "3106ed1aa6fc80cecdc9a01a1fb6f099e952f413deee1bc80e7db748278c2aaf",
+    "acceptable-use": "6fd2eb91c6de6350d7bc19ce1d9cbfcf6e9161e95bced74ed8cb951b64d268ef",
+    "contact": "b302534020ff9443d5212a37a2e593005780431287fc20272998818973b0331c"
+  },
+  "ar": {
+    "terms": "d6621b862d4062687631afd3e6a8178359905e7468557d652f461d27ee09fb32",
+    "privacy": "01c0bef242f81a5dcf4087e504dc528655a288595365b59b2531c8c8faa31cd5",
+    "cookies": "f6f2f5dd71ddd78d9f16b1a440d8c289756efbb09b216d50ee9802b15e738c5a",
+    "refunds": "6b9f23bd5bb1a4a1697ec6c41c3f4ef00313007ef2cca1abb40db7e09ada5812",
+    "compatibility": "7704b427510339bf489a8d7d38275657c36071ef320d9d89a7638be8fa360e0d",
+    "acceptable-use": "5e0f77c45a07019ea4ecd0d736e1ed025195f03560bcf99d929b3146bb077a05",
+    "contact": "2ae87fb568d8cb29ea2927369f992a2d12b24c795456b93ce6ef4f7196a3b0b6"
+  },
+  "nl": {
+    "terms": "a6fad0c56a8711037e3c2a9dfaa5058cac12c6d9233ea93de378725f75478815",
+    "privacy": "945bc9ab034423556c63db5623e3da4e047dc7bddf0e051e752931383bd88c3c",
+    "cookies": "5b093a7c9eea279e6465d2338943ca7da93b207913c3a028d5a6db6b6dc29368",
+    "refunds": "8546c6f7f7c66bd3425822ffb4f8d50208ee73f3b26cb7e91f2f5751285ce975",
+    "compatibility": "4eb8d14b57c481c8091e102272178a81e5bbaa7317f9d734a1a66df7bb95e029",
+    "acceptable-use": "0c346c6f5d8f9e1c705823da78436a441430fb771fe1107dca5935ab85692101",
+    "contact": "95bd0f0e0d793e65fc33d86cdb1c5f1ca5c9f228032c6d5a6592ef07c2a39ff0"
+  },
+  "pl": {
+    "terms": "2239e9da1dc5271e5ee1a0a61145ea274a04b867cc54d3a3abebf760cfee7610",
+    "privacy": "9629fccf5f7f65d178b0d4dc4ce6fd537b09946a021191504a94de489cf02478",
+    "cookies": "f4d59e439b00632a6db59f9766e02fb8071bcf16fd7eb6d95ae11f76a62c2dea",
+    "refunds": "ebe9f3cfdc474184c16c1831ed341d94f0b8dab0e04f692ebcd66a20186bcb0f",
+    "compatibility": "fbf1331f46fb08da7cca3ad6b3ff7bd84616a2e67eea7eaa4b6cd13ef2f71379",
+    "acceptable-use": "c99a888161b5abc4057d031768cf5b94c7ab0fcc240f4b2bc4398ea2a8af6fdd",
+    "contact": "ebfbf524e6bbe58a8c939d0ab167a18048259dd61d2f4dd87abd4c26dc3671b9"
+  }
+}

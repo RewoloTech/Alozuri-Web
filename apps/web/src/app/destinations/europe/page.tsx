@@ -1,72 +1,67 @@
-import Link from '@/components/localized-link';
 import { Planner } from '@/components/planner';
 import { CountryOffers } from '@/components/country-offers';
 import { DestinationAdvice } from '@/components/destination-advice';
+import { LinkedMessage, MESSAGE_LINKS } from '@/components/linked-message';
 import { getItineraryPlans } from '@/lib/catalogue-server';
+import { serverTranslations } from '@/lib/server-translations';
+import { destinationName } from '@alozuri/shared/i18n/destinations';
+import { localePath } from '@alozuri/shared/i18n';
 import { breadcrumbs, jsonLd } from '@/lib/seo';
 import { localizedMetadata as publicMetadata } from '@/lib/localized-metadata';
 export const revalidate = 300;
 const itinerary = ['FR', 'DE', 'IT'];
 export async function generateMetadata() {
-  return await publicMetadata(
-    'Europe multi-country travel eSIMs',
-    'Compare Europe travel eSIM data plans for a multi-country trip. Check each plan’s countries, current price, validity and activation; regional coverage varies.',
-    '/destinations/europe',
-  );
+  const { t } = await serverTranslations();
+  return publicMetadata(t('regionUi.title'), t('regionUi.description'), '/destinations/europe');
 }
 export default async function Europe() {
+  const { locale, t } = await serverTranslations();
   const plans = await getItineraryPlans(itinerary);
+  const names = new Intl.ListFormat(locale === 'en' ? 'en-GB' : locale, {
+    style: 'long',
+    type: 'conjunction',
+  }).format(itinerary.map((code) => destinationName(code, locale)));
   return (
     <section className="container section">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: jsonLd(breadcrumbs('Europe travel eSIMs', '/destinations/europe')),
+          __html: jsonLd(
+            breadcrumbs(t('regionUi.title'), localePath('/destinations/europe', locale)),
+          ),
         }}
       />
       <div className="page-intro">
-        <span className="eyebrow">MULTI-COUNTRY TRAVEL DATA</span>
-        <h1>Europe eSIMs for your itinerary</h1>
-        <p>
-          Travelling from the USA or elsewhere to several European countries? Compare one data plan
-          against your actual stops. Europe is a regional label, not a guarantee that every European
-          country is included.
-        </p>
-        <p>
-          The example plans below cover <strong>France, Germany and Italy</strong>. Open each
-          country list for its full coverage, or change the itinerary in the planner. No plan is
-          labelled as covering all of Europe.
-        </p>
+        <span className="eyebrow">{t('regionUi.eyebrow')}</span>
+        <h1>{t('regionUi.heading')}</h1>
+        <p>{t('regionUi.intro')}</p>
+        <p>{t('regionUi.example', { countries: names })}</p>
       </div>
       <CountryOffers code={itinerary.join(',')} coverage="all" initial={plans} />
       <Planner initialCountries={itinerary} />
       <DestinationAdvice
         content={{
-          title: 'Europe travel data',
-          description: '',
-          intro: '',
-          tips: [
-            'Add every country you will visit, including stopovers where you need mobile data.',
-            'Do not assume the UK, Switzerland or Turkey is included just because a package says Europe.',
-            'For a Europe eSIM 10 GB comparison, select that allowance and compare validity and the full coverage list. Check hotspot support in the supplied plan conditions if you need it.',
-          ],
+          title: t('regionUi.title'),
+          description: t('regionUi.description'),
+          intro: t('regionUi.intro'),
+          tips: [t('regionUi.tip1'), t('regionUi.tip2'), t('regionUi.tip3')],
           faq: [
-            {
-              question: 'Can one eSIM cover multiple European countries?',
-              answer:
-                'Yes, when its verified coverage list includes every country in your trip. The planner requires every selected country to be covered; a local plan for only one stop is not a complete match.',
-            },
-            {
-              question: 'Do I need to install a separate eSIM in each country?',
-              answer:
-                'A single regional profile may cover multiple countries, according to that package’s coverage and activation conditions. Check the plan rather than assuming the same network operator or speed everywhere.',
-            },
+            { question: t('regionUi.question1'), answer: t('regionUi.answer1') },
+            { question: t('regionUi.question2'), answer: t('regionUi.answer2') },
           ],
         }}
       />
       <p>
-        Visiting one country? Compare <Link href="/destinations/gb">UK travel eSIMs</Link> or{' '}
-        <Link href="/destinations">all destinations</Link>.
+        <LinkedMessage
+          message={t('regionUi.oneCountry', {
+            gb: MESSAGE_LINKS.gb,
+            destinations: MESSAGE_LINKS.destinations,
+          })}
+          links={{
+            gb: { href: '/destinations/gb', label: destinationName('GB', locale) },
+            destinations: { href: '/destinations', label: t('site.allDestinations') },
+          }}
+        />
       </p>
     </section>
   );

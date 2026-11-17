@@ -1,10 +1,13 @@
 'use client';
 
+import { useLocale, useTranslations } from 'next-intl';
+import type { Messages } from '@alozuri/shared/i18n/messages';
+import { LinkedMessage, MESSAGE_LINKS } from './linked-message';
 import { useId, useRef, useState } from 'react';
 import Link from '@/components/localized-link';
 import { Eye, EyeOff } from 'lucide-react';
-import { authErrorMessage } from '@/lib/auth-errors';
-import { firebaseConfigured } from '@/lib/firebase';
+import { authErrorKey } from '@/lib/auth-errors';
+import { firebaseConfigured, authClient } from '@/lib/firebase';
 import { checkoutAccountActions, type CheckoutAccountActions } from '@/lib/checkout-account';
 import { GoogleIcon } from './google-icon';
 
@@ -27,11 +30,16 @@ export function CheckoutAccount({
   configured?: boolean;
   returnTo?: string;
 }) {
+  const t = useTranslations('authUi');
+  const locale = useLocale();
+  const navigation = useTranslations('navigation');
+  const site = useTranslations('site');
+  const legal = useTranslations('legal');
   const [mode, setMode] = useState<'register' | 'login' | null>(null);
   const [password, setPassword] = useState('');
   const [visible, setVisible] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<keyof Messages['authUi'] | ''>('');
   const emailInput = useRef<HTMLInputElement>(null);
   const running = useRef(false);
   const id = useId();
@@ -42,11 +50,7 @@ export function CheckoutAccount({
       if (!mode) return;
       if (!emailInput.current?.reportValidity()) return;
       if (!password || (mode === 'register' && password.length < 8)) {
-        setError(
-          mode === 'register'
-            ? 'Choose a password of at least 8 characters.'
-            : 'Enter your password.',
-        );
+        setError(mode === 'register' ? 'passwordLength' : 'passwordRequired');
         return;
       }
     }
@@ -54,12 +58,14 @@ export function CheckoutAccount({
     setBusy(true);
     onBusyChange(true);
     try {
+      if (actions === checkoutAccountActions)
+        authClient().languageCode = locale === 'zh-Hans' ? 'zh-CN' : locale;
       if (method === 'google') await actions.google();
       else if (mode) await actions.email(mode, email.trim(), password);
       setPassword('');
       setMode(null);
     } catch (e) {
-      setError(authErrorMessage(e));
+      setError(authErrorKey(e));
     } finally {
       running.current = false;
       setBusy(false);
@@ -67,7 +73,7 @@ export function CheckoutAccount({
     }
   }
   return (
-    <div className="checkout-account stack" aria-busy={busy}>
+    <div className="checkout-account stack" aria-busy={busy} dir={locale === 'ar' ? 'rtl' : 'ltr'}>
       {!user && (
         <>
           <button
@@ -77,21 +83,22 @@ export function CheckoutAccount({
             onClick={() => void authenticate('google')}
           >
             <GoogleIcon />
-            {busy ? 'Please wait…' : 'Continue with Google'}
+            {busy ? t('wait') : t('google')}
           </button>
           <p className="checkout-guest-intro">
-            <strong>Or check out as a guest</strong>
-            <span>No account needed.</span>
+            <strong>{t('guestTitle')}</strong>
+            <span>{t('guestHint')}</span>
           </p>
         </>
       )}
       <label htmlFor={id + '-email'}>
-        Email address
+        {t('email')}
         <input
           id={id + '-email'}
           ref={emailInput}
           className="commerce-input"
           type="email"
+          dir="ltr"
           required
           autoComplete="email"
           maxLength={254}
@@ -103,21 +110,21 @@ export function CheckoutAccount({
       {user ? (
         !user.emailVerified && (
           <p className="fine-print" role="status">
-            You can pay now.{' '}
-            <Link href={'/verify-email?next=' + encodeURIComponent(returnTo)}>
-              Verify your email
-            </Link>{' '}
-            to access your orders in My eSIMs.
+            <LinkedMessage
+              message={t('verifyNotice', { verify: MESSAGE_LINKS.verify })}
+              links={{
+                verify: {
+                  href: '/verify-email?next=' + encodeURIComponent(returnTo),
+                  label: site('verifyEmail'),
+                },
+              }}
+            />
           </p>
         )
       ) : (
         <>
-          {!configured && (
-            <p className="fine-print">
-              Account sign-in is unavailable here. You can continue as a guest.
-            </p>
-          )}
-          <div className="checkout-account-options">
+          {!configured && <p className="fine-print">{t('guestUnconfigured')}</p>}
+          <div className="checkout-account-options" dir="ltr">
             <button
               type="button"
               className="text-link"
@@ -130,7 +137,7 @@ export function CheckoutAccount({
                 setError('');
               }}
             >
-              Create an account
+              {site('createAccount')}
             </button>
             <button
               type="button"
@@ -144,15 +151,15 @@ export function CheckoutAccount({
                 setError('');
               }}
             >
-              Log in
+              {navigation('login')}
             </button>
           </div>
           <div id={id + '-password'} hidden={!mode} className="stack">
             {mode && (
               <>
                 <label>
-                  Password
-                  <div className="password-field">
+                  {t('password')}
+                  <div className="password-field" dir="ltr">
                     <input
                       className="commerce-input"
                       type={visible ? 'text' : 'password'}
@@ -170,7 +177,7 @@ export function CheckoutAccount({
                     />
                     <button
                       type="button"
-                      aria-label={visible ? 'Hide password' : 'Show password'}
+                      aria-label={visible ? t('hide') : t('show')}
                       onClick={() => setVisible(!visible)}
                     >
                       <span>{visible ? <EyeOff size={18} /> : <Eye size={18} />}</span>
@@ -179,13 +186,20 @@ export function CheckoutAccount({
                 </label>
                 {mode === 'register' ? (
                   <p className="fine-print">
-                    By creating an account, you agree to our <Link href="/terms">Terms</Link> and{' '}
-                    <Link href="/privacy">Privacy Policy</Link>. Accounts are for adults aged 18 and
-                    over.
+                    <LinkedMessage
+                      message={t('checkoutRegisterAgreement', {
+                        terms: MESSAGE_LINKS.terms,
+                        privacy: MESSAGE_LINKS.privacy,
+                      })}
+                      links={{
+                        terms: { href: '/terms', label: legal('terms') },
+                        privacy: { href: '/privacy', label: legal('privacy') },
+                      }}
+                    />
                   </p>
                 ) : (
                   <Link className="text-link" href="/forgot-password">
-                    Forgot password?
+                    {t('forgot')}
                   </Link>
                 )}
                 <button
@@ -195,10 +209,10 @@ export function CheckoutAccount({
                   onClick={() => void authenticate('email')}
                 >
                   {busy
-                    ? 'Please wait…'
+                    ? t('wait')
                     : mode === 'register'
-                      ? 'Create account and stay at checkout'
-                      : 'Log in and stay at checkout'}
+                      ? t('createCheckout')
+                      : t('loginCheckout')}
                 </button>
               </>
             )}
@@ -207,7 +221,7 @@ export function CheckoutAccount({
       )}
       {error && (
         <p role="alert" className="error-message">
-          {error} You can also continue as a guest.
+          {t(error)} {t('guestAlternative')}
         </p>
       )}
     </div>

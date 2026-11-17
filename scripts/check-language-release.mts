@@ -11,6 +11,7 @@ import {
 import { loadMessages } from '../packages/shared/src/i18n/catalogs.ts';
 import { validateMessages } from '../packages/shared/src/i18n/validation.ts';
 import { legalDocuments } from '../packages/shared/src/i18n/legal-documents.ts';
+import { POLICY_TRANSLATION_REVIEW } from '../packages/shared/src/i18n/policies/catalogs.ts';
 
 export type UntranslatedLiteral = { file: string; line: number; text: string };
 const customerAttributes = new Set(['aria-label', 'placeholder', 'alt', 'title']);
@@ -110,7 +111,17 @@ export async function languageReleaseReport(root: string) {
   );
   const untranslated = await scan(root, path.join(root, 'apps/web/src'));
   return {
-    ready: locales.every((locale) => locale.ready) && untranslated.length === 0,
+    // Content availability and a shipping decision are distinct. This audit
+    // never claims human legal review from passing static checks.
+    ready:
+      locales.every((locale) => locale.ready) &&
+      untranslated.length === 0 &&
+      POLICY_TRANSLATION_REVIEW.professionalReviewCompleted,
+    contentComplete: locales.every((locale) => locale.ready) && untranslated.length === 0,
+    professionalLegalReview: POLICY_TRANSLATION_REVIEW,
+    blockers: POLICY_TRANSLATION_REVIEW.professionalReviewCompleted
+      ? []
+      : ['professional_legal_review_required'],
     locales,
     customerLiteralsRequiringExtraction: untranslated.length,
     untranslated,

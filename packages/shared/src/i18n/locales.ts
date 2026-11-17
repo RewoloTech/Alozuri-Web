@@ -48,27 +48,18 @@ export function isLocale(value: unknown): value is Locale {
   return typeof value === 'string' && LOCALES.some((locale) => locale === value);
 }
 export function localeReview(locale: Locale): Record<ContentDomain, ReviewStatus> {
-  // English is the existing production baseline. New languages cannot be promoted
-  // by an environment variable or a browser preference alone.
-  return locale === 'en'
-    ? {
-        website: 'published',
-        checkout: 'published',
-        errors: 'published',
-        installation: 'published',
-        email: 'published',
-        legal: 'published',
-        documents: 'published',
-      }
-    : {
-        website: 'draft',
-        checkout: 'draft',
-        errors: 'draft',
-        installation: 'draft',
-        email: 'draft',
-        legal: 'missing',
-        documents: 'missing',
-      };
+  if (!isLocale(locale)) throw new LocaleUnavailableError();
+  // Complete content is enabled in this build. Deployment and professional
+  // legal approval are separate; see POLICY_TRANSLATION_REVIEW.
+  return {
+    website: 'published',
+    checkout: 'published',
+    errors: 'published',
+    installation: 'published',
+    email: 'published',
+    legal: 'published',
+    documents: 'published',
+  };
 }
 export function isPublishedLocale(value: unknown): value is Locale {
   return (
@@ -109,7 +100,7 @@ export function negotiateLocale(
   for (const raw of values) {
     const value = raw.trim().toLowerCase();
     const exact = LOCALES.find((locale) => locale.toLowerCase() === value);
-    const alias = value.startsWith('pt')
+    const alias = /^pt(?:-|$)/.test(value)
       ? 'pt-BR'
       : /^zh(?:-|$)/.test(value) && !/^zh-(?:hant|tw|hk|mo)(?:-|$)/.test(value)
         ? 'zh-Hans'
@@ -134,6 +125,11 @@ export function localePath(path: string, locale: Locale): string {
   const clean = /^[?#]/.test(stripped) ? '/' + stripped : stripped;
   if (/^\/(?:api|operations|admin|_next)(?:[/?#]|$)/.test(clean)) return clean;
   return locale === 'en' ? clean : '/' + locale + (clean === '/' ? '' : clean);
+}
+/** An explicitly language-prefixed link keeps the language requested by its author. */
+export function navigationLocalePath(path: string, locale: Locale): string {
+  const first = path.split(/[/?#]/)[1];
+  return isLocale(first) ? path : localePath(path, locale);
 }
 export function unlocalizedPath(path: string): string {
   const first = path.split('/')[1];

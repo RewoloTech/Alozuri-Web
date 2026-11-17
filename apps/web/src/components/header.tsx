@@ -8,21 +8,26 @@ import type { RootState } from '@/lib/store';
 import { useId, useState } from 'react';
 import { useLocalizedRouter as useRouter } from '@/lib/localized-router';
 import { AccountMenu } from './account-menu';
+import { BUSINESS } from '@alozuri/shared/legal';
 import { SUPPORTED_CURRENCIES } from '@alozuri/shared';
 import { useCurrency } from './currency-provider';
 import { useAuth } from './auth-provider';
 export function Brand() {
+  const t = useTranslations('site');
+  const wordmark = BUSINESS.brand.toLowerCase();
   return (
-    <Link href="/" className="brand" aria-label="Alozuri home" dir="ltr">
+    <Link href="/" className="brand" aria-label={t('home')} dir="ltr">
       <span className="brand-icon">
         <Globe2 size={22} />
       </span>
-      alo<span className="brand-span">zuri</span>
+      {wordmark.slice(0, 3)}
+      <span className="brand-span">{wordmark.slice(3)}</span>
     </Link>
   );
 }
 export function Header() {
   const t = useTranslations('navigation');
+  const s = useTranslations('site');
   const { user, logout, admin } = useAuth();
   const router = useRouter();
   const { currency, ready, setCurrency, available, locked } = useCurrency();
@@ -31,12 +36,12 @@ export function Header() {
   const navigationId = useId();
   return (
     <header className="site-header">
-      <div className="container nav-wrap">
+      <div className="container nav-wrap" dir="ltr">
         <Brand />
         <nav
           id={navigationId}
           className={open ? 'main-nav is-open' : 'main-nav'}
-          aria-label="Main navigation"
+          aria-label={s('mainNav')}
         >
           <Link href="/destinations" onClick={() => setOpen(false)}>
             {t('destinations')}
@@ -54,10 +59,10 @@ export function Header() {
                 className="button mobile-menu-login"
                 onClick={() => setOpen(false)}
               >
-                Log in
+                {t('login')}
               </Link>
               <Link href="/register" className="button primary" onClick={() => setOpen(false)}>
-                Sign up
+                {t('signup')}
               </Link>
             </div>
           )}
@@ -66,19 +71,19 @@ export function Header() {
           <Link
             href="/cart"
             className="header-cart"
-            aria-label={`Shopping cart, ${quantity} ${quantity === 1 ? 'item' : 'items'}`}
+            aria-label={s('cartCount', { count: quantity })}
           >
             <ShoppingBag size={21} />
             {quantity > 0 && (
               <span className="cart-badge" aria-live="polite" aria-atomic="true">
-                {quantity}
+                <bdi dir="ltr">{quantity}</bdi>
               </span>
             )}
           </Link>
           <select
             className="currency-select"
             dir="ltr"
-            aria-label="Currency"
+            aria-label={s('currency')}
             disabled={locked}
             value={ready ? currency : ''}
             aria-busy={!ready}
@@ -108,17 +113,17 @@ export function Header() {
             />
           ) : (
             <Link href="/login" className="nav-login header-login">
-              Log in <ArrowUpRight size={16} />
+              {t('login')} <ArrowUpRight size={16} />
             </Link>
           )}
           {!user && (
             <Link href="/register" className="nav-login nav-signup">
-              Sign up
+              {t('signup')}
             </Link>
           )}
           <button
             className="mobile-toggle"
-            aria-label={open ? 'Close menu' : 'Open menu'}
+            aria-label={s(open ? 'closeMenu' : 'openMenu')}
             aria-expanded={open}
             aria-controls={navigationId}
             onClick={() => setOpen(!open)}

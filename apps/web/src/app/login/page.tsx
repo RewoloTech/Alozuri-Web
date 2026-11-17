@@ -1,9 +1,13 @@
+import { LocalizedLoading } from '@/components/localized-loading';
+import { privateMetadata } from '@/lib/server-translations';
 import { Suspense } from 'react';
 import { AuthForm } from '@/components/auth-form';
-export const metadata = { title: 'Log in', robots: { index: false } };
+export async function generateMetadata() {
+  return privateMetadata('navigation.login');
+}
 export default function Page() {
   return (
-    <Suspense fallback={<div className="loading-page">Getting your journey ready…</div>}>
+    <Suspense fallback={<LocalizedLoading message="authUi.wait" />}>
       <AuthForm mode="login" />
     </Suspense>
   );

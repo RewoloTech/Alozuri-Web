@@ -1,82 +1,66 @@
+import { serverTranslations } from '@/lib/server-translations';
+import { LinkedMessage, MESSAGE_LINKS } from '@/components/linked-message';
 import { localizedMetadata as publicMetadata } from '@/lib/localized-metadata';
 import Link from '@/components/localized-link';
 import { BUSINESS } from '@alozuri/shared/legal';
 export async function generateMetadata() {
-  return await publicMetadata(
-    'Help and eSIM installation',
-    'Get help checking device compatibility, installing your travel eSIM, understanding activation and contacting Alozuri.',
-    '/help',
-  );
+  const { t } = await serverTranslations();
+  return publicMetadata(t('seoUi.helpTitle'), t('seoUi.helpDescription'), '/help');
 }
-export default function Help() {
+export default async function Help() {
+  const { t, dir } = await serverTranslations();
   return (
     <section className="container section help-page">
       <div className="page-intro">
-        <span className="eyebrow">A LITTLE HELP FOR THE JOURNEY</span>
-        <h1>Let’s get you connected.</h1>
-        <p>Check your device, understand your plan and install with confidence.</p>
+        <span className="eyebrow">{t('helpUi.eyebrow')}</span>
+        <h1>{t('helpUi.title')}</h1>
+        <p>{t('helpUi.intro')}</p>
       </div>
       <div className="surface" id="compatibility">
-        <h2>Is my phone compatible?</h2>
-        <p>
-          Your device must support eSIM and be carrier unlocked. Look for “Add eSIM” in cellular
-          settings. Compatibility depends on the exact model and country of purchase; confirm with
-          your manufacturer or carrier before buying.
-        </p>
-        <p>
-          On iPhone, look under Settings → General → About for carrier lock information. On Android,
-          check with your carrier if unlock status is unclear.
-        </p>
+        <h2>{t('home.faqPhoneQuestion')}</h2>
+        <p>{t('helpUi.compatibility')}</p>
+        <p>{t('helpUi.unlock')}</p>
       </div>
-      <div className="steps-grid">
-        <div className="surface">
-          <h2>1. Before installation</h2>
-          <p>
-            Connect to reliable Wi-Fi. Open your order from your account. Read when validity starts:
-            purchase, installation or first supported network connection, according to the plan.
-          </p>
+      <div className="steps-grid" dir="ltr">
+        <div className="surface" dir={dir}>
+          <h2>{t('helpUi.beforeTitle')}</h2>
+          <p>{t('helpUi.before')}</p>
         </div>
-        <div className="surface">
-          <h2>2. Add your eSIM</h2>
-          <p>
-            iPhone: Settings → Cellular / Mobile Service → Add eSIM. Android: Settings → Connections
-            / Network & internet → SIM manager / SIMs → Add eSIM. Menus vary by device.
-          </p>
-          <p>
-            Use the QR code or manual activation details provided with your order. Never share your
-            activation code.
-          </p>
+        <div className="surface" dir={dir}>
+          <h2>{t('helpUi.addTitle')}</h2>
+          <p>{t('helpUi.add')}</p>
+          <p>{t('helpUi.private')}</p>
         </div>
-        <div className="surface">
-          <h2>3. At your destination</h2>
-          <p>
-            Select your travel eSIM for mobile data and follow its roaming instructions. Turn off
-            data roaming and automatic data switching for your home SIM to avoid carrier charges.
-          </p>
+        <div className="surface" dir={dir}>
+          <h2>{t('helpUi.arrivalTitle')}</h2>
+          <p>{t('helpUi.arrival')}</p>
         </div>
       </div>
-      <div className="surface">
-        <h2>Connection not working?</h2>
-        <p>
-          Check your plan covers the country, your eSIM is selected for data, and its activation and
-          roaming instructions have been followed. Try airplane mode briefly. Only enter an APN if
-          your order supplies one. Avoid deleting an installed eSIM; reinstalling may not be
-          supported.
-        </p>
-        <p>
-          Where the supplier provides usage readings, your account can show the reported balance and
-          its check time. Readings can be delayed and are not a real-time guarantee.
-        </p>
+      <div className="surface" dir={dir}>
+        <h2>{t('helpUi.connectionTitle')}</h2>
+        <p>{t('helpUi.connection')}</p>
+        <p>{t('helpUi.readings')}</p>
       </div>
       <p>
-        For more preparation advice, read our <Link href="/guides">travel eSIM guides</Link>,
-        including <Link href="/guides/holiday-data-budget">a 7-day or 14-day data budget</Link>.
+        <LinkedMessage
+          message={t('helpUi.moreGuides', {
+            guides: MESSAGE_LINKS.guides,
+            budget: MESSAGE_LINKS.budget,
+          })}
+          links={{
+            guides: { href: '/guides', label: t('helpUi.guideLabel') },
+            budget: { href: '/guides/holiday-data-budget', label: t('helpUi.budgetLabel') },
+          }}
+        />
       </p>
       <div className="notice">
-        <strong>Need more help?</strong> Email{' '}
-        <a href={'mailto:' + BUSINESS.email}>{BUSINESS.email}</a> or visit our contact page.{' '}
+        <strong>{t('helpUi.needHelp')}</strong>{' '}
+        <LinkedMessage
+          message={t('helpUi.supportIntro', { support: MESSAGE_LINKS.support })}
+          links={{ support: { href: 'mailto:' + BUSINESS.email, label: BUSINESS.email } }}
+        />{' '}
         <Link className="text-link" href="/contact">
-          Contact support →
+          {t('helpUi.contact')}
         </Link>
       </div>
     </section>

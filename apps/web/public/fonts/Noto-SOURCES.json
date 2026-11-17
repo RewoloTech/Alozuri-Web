@@ -1,0 +1,62 @@
+{
+  "purpose": "On-demand locale-specific PDF fonts; no network fonts or customer data sent externally.",
+  "conversion": "CJK: FontTools 4.60.2 and Brotli 1.2.0 lossless WOFF2 compression. Arabic: original TrueType files. Original glyph repertoire and font copyright tables retained.",
+  "files": [
+    {
+      "name": "NotoSansSC-Regular.woff2",
+      "bytes": 6093048,
+      "sha256": "23fa81ff45b32f097a390ec1f9e4d99719f0b0cbcc91f838bacbb9f25997bfa8",
+      "source": "https://raw.githubusercontent.com/notofonts/noto-cjk/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/SubsetOTF/SC/NotoSansSC-Regular.otf",
+      "license": "OFL-CJK.txt"
+    },
+    {
+      "name": "NotoSansJP-Regular.woff2",
+      "bytes": 3350916,
+      "sha256": "1317bbfa9245d0995f0e6aa70a997859d729d3f96b2bbc954c3cb7bd4a76c388",
+      "source": "https://raw.githubusercontent.com/notofonts/noto-cjk/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/SubsetOTF/JP/NotoSansJP-Regular.otf",
+      "license": "OFL-CJK.txt"
+    },
+    {
+      "name": "NotoSansJP-Bold.woff2",
+      "bytes": 3492132,
+      "sha256": "db336df027a74e637b6626d8f768a05bb10d3a7ff3a788249b6c5da37a9235d5",
+      "source": "https://raw.githubusercontent.com/notofonts/noto-cjk/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/SubsetOTF/JP/NotoSansJP-Bold.otf",
+      "license": "OFL-CJK.txt"
+    },
+    {
+      "name": "NotoSansSC-Bold.woff2",
+      "bytes": 6398280,
+      "sha256": "ceab605137412eff3b95310257166c5db94a45ccacb42cf5fb61e9bfeb55fcdf",
+      "source": "https://raw.githubusercontent.com/notofonts/noto-cjk/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/SubsetOTF/SC/NotoSansSC-Bold.otf",
+      "license": "OFL-CJK.txt"
+    },
+    {
+      "name": "NotoSansKR-Bold.woff2",
+      "bytes": 3333448,
+      "sha256": "29d0574c1e98853840a9802b59003291e105518037f520c20d337c2c2ffc438e",
+      "source": "https://raw.githubusercontent.com/notofonts/noto-cjk/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/SubsetOTF/KR/NotoSansKR-Bold.otf",
+      "license": "OFL-CJK.txt"
+    },
+    {
+      "name": "NotoSansArabic-Bold.ttf",
+      "bytes": 248468,
+      "sha256": "ed2711b387750ae991b6a980b8dd16fdd65e6702b97e9f52adf3a8edf09ef4df",
+      "source": "https://raw.githubusercontent.com/notofonts/noto-fonts/ffebf8c1ee449e544955a7e813c54f9b73848eac/hinted/ttf/NotoSansArabic/NotoSansArabic-Bold.ttf",
+      "license": "OFL-Arabic.txt"
+    },
+    {
+      "name": "NotoSansArabic-Regular.ttf",
+      "bytes": 240456,
+      "sha256": "ceea25b464a656dc3b26849bab9356740401af62aedf1bfa8b7f0d9b75925b1b",
+      "source": "https://raw.githubusercontent.com/notofonts/noto-fonts/ffebf8c1ee449e544955a7e813c54f9b73848eac/hinted/ttf/NotoSansArabic/NotoSansArabic-Regular.ttf",
+      "license": "OFL-Arabic.txt"
+    },
+    {
+      "name": "NotoSansKR-Regular.woff2",
+      "bytes": 3175512,
+      "sha256": "c28a743d0ac15528462c2ae66486dadf39f92ec825189dfcff008a0226759fe5",
+      "source": "https://raw.githubusercontent.com/notofonts/noto-cjk/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/SubsetOTF/KR/NotoSansKR-Regular.otf",
+      "license": "OFL-CJK.txt"
+    }
+  ]
+}

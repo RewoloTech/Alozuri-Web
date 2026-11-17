@@ -8,7 +8,7 @@ import {
 } from '../src/lib/notification-snapshot.js';
 import { confirmationPayloadHash } from '../src/lib/order-email.js';
 
-test('draft language preview requires a verified administrator and returns no customer records', async () => {
+test('language email sample requires a verified administrator and returns no customer records', async () => {
   const app = await createApp({
     repository: { plans: async () => [], orders: async () => [], order: async () => null },
     payments: null,
@@ -30,8 +30,12 @@ test('draft language preview requires a verified administrator and returns no cu
       );
     const result = await app.inject({ url, headers: { authorization: 'Bearer admin' } });
     assert.equal(result.statusCode, 200);
-    assert.equal(result.json().published, false);
-    assert.equal(result.json().legal.status, 'missing');
+    assert.equal(result.json().published, true);
+    assert.equal(result.json().legal.status, 'published');
+    assert.equal(result.json().legal.professionalReviewRequired, true);
+    assert.equal(result.json().legal.documents.length, 7);
+    assert.match(result.json().email.html, /SYNTHETIC-NOT-INSTALLABLE/);
+    assert.equal(result.json().email.text.includes('sample@example.test'), true);
     assert.match(result.json().email.html, /dir="rtl"/);
     assert.match(result.headers['cache-control'] ?? '', /no-store/);
     const invalid = await app.inject({

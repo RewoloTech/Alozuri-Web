@@ -1,16 +1,19 @@
 'use client';
+import { useTranslations } from 'next-intl';
 import Link from '@/components/localized-link';
 import { useSearchParams } from 'next/navigation';
 import { OrderDetails } from './order-details';
 export function OrderLookup() {
+  const t = useTranslations('legacyOrder');
+  const site = useTranslations('site');
   const id = useSearchParams().get('id');
   if (!id || !/^[a-zA-Z0-9_-]{1,100}$/.test(id))
     return (
       <section className="container section">
-        <h1 className="compact-title">Choose an order</h1>
-        <p>Open an order from your account to see its status.</p>
+        <h1 className="compact-title">{t('choose')}</h1>
+        <p>{t('chooseHint')}</p>
         <Link className="button" href="/dashboard">
-          My eSIMs
+          {site('myEsims')}
         </Link>
       </section>
     );

@@ -89,7 +89,7 @@ test('private order displays the supplier reading, expiry and delay notice at mo
   await expect(panel).toContainText('26111300000001');
   await expect(panel).toContainText('3 GB');
   await expect(panel).toContainText('2 GB');
-  await expect(panel.getByRole('progressbar', { name: 'Data used' })).toHaveAttribute(
+  await expect(panel.getByRole('progressbar', { name: 'Used data' })).toHaveAttribute(
     'max',
     String(5 * gb),
   );

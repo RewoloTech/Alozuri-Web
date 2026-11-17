@@ -14,7 +14,9 @@ import './globals.css';
 import { headers } from 'next/headers';
 import { isLocale, localeDirection } from '@alozuri/shared/i18n';
 import { loadMessages } from '@alozuri/shared/i18n/catalogs';
-export const metadata: Metadata = {
+import { createTranslator } from 'use-intl/core';
+import { serverTranslations } from '@/lib/server-translations';
+const baseMetadata: Metadata = {
   metadataBase: new URL(BUSINESS.site),
   title: { default: 'Alozuri — One eSIM. Every stop.', template: '%s | Alozuri' },
   description:
@@ -34,10 +36,19 @@ export const metadata: Metadata = {
       : {},
   },
 };
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await serverTranslations();
+  return {
+    ...baseMetadata,
+    title: { default: t('seoUi.tagline'), template: '%s | Alozuri' },
+    description: t('seoUi.homeDescription'),
+  };
+}
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const requestLocale = (await headers()).get('x-alozuri-locale');
   const locale = isLocale(requestLocale) ? requestLocale : 'en';
   const messages = await loadMessages(locale);
+  const t = createTranslator({ locale, messages });
   // Extensions such as ColorZilla can add body attributes before React hydrates.
   // Suppression is limited to this element; descendant checks stay enabled.
   return (
@@ -54,24 +65,24 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         />
       </head>
       <body suppressHydrationWarning>
-        <PrivacyProvider>
-          <Suspense fallback={null}>
-            <MetaTracking />
-          </Suspense>
-          <StoreProvider>
-            <AuthProvider>
-              <LanguageProvider initialLocale={locale} initialMessages={messages}>
+        <AuthProvider>
+          <LanguageProvider initialLocale={locale} initialMessages={messages}>
+            <PrivacyProvider>
+              <Suspense fallback={null}>
+                <MetaTracking />
+              </Suspense>
+              <StoreProvider>
                 <CartSync />
                 <a className="skip-link" href="#main">
-                  Skip to content
+                  {t('site.skip')}
                 </a>
                 <Header />
                 <main id="main">{children}</main>
                 <Footer />
-              </LanguageProvider>
-            </AuthProvider>
-          </StoreProvider>
-        </PrivacyProvider>
+              </StoreProvider>
+            </PrivacyProvider>
+          </LanguageProvider>
+        </AuthProvider>
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{

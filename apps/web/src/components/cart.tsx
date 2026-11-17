@@ -1,18 +1,14 @@
 'use client';
+import { useTranslations } from 'next-intl';
+import { usePlanCopy } from '@/lib/use-plan-copy';
+import { StoreApiError } from '@/lib/api-error';
+import { ERROR_MESSAGES, type ErrorCode } from '@alozuri/shared/i18n/errors';
+import type { Messages } from '@alozuri/shared/i18n/messages';
 import Link from '@/components/localized-link';
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector, useStore } from 'react-redux';
 import { ShoppingBag, Trash2, Minus, Plus, LockKeyhole } from 'lucide-react';
-import {
-  cartItems,
-  previewCartPrices,
-  coverageLabel,
-  countryName,
-  dataLabel,
-  money,
-  type CartLine,
-  type Currency,
-} from '@alozuri/shared';
+import { cartItems, previewCartPrices, money, type CartLine, type Currency } from '@alozuri/shared';
 import { quantityChanged, removeFromCart, restoreCart, type RootState } from '@/lib/store';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/firebase';
@@ -29,20 +25,21 @@ export type Quote = {
   currency: Currency;
 };
 export function LineDescription({ line }: { line: CartLine }) {
+  const t = useTranslations('cart');
+  const plans = useTranslations('plans');
+  const copy = usePlanCopy();
   return (
     <>
-      <h3>{line.plan.name}</h3>
+      <h3>{copy.title(line.plan)}</h3>
       <p>
-        {dataLabel(line.plan)} · {line.plan.days} days · {coverageLabel(line.plan)}
+        {copy.allowance(line.plan)} · {plans('days', { count: line.plan.days })} ·{' '}
+        {copy.coverage(line.plan)}
       </p>
-      <p>Activation: {line.plan.activation}</p>
-      <p>{line.plan.fairUse}</p>
+      <p>{t('activation', { rule: copy.activation(line.plan.activation) })}</p>
+      <p>{copy.fairUse(line.plan.fairUse)}</p>
       <details>
-        <summary>
-          Coverage: {line.plan.countries.length}{' '}
-          {line.plan.countries.length === 1 ? 'destination' : 'destinations'}
-        </summary>
-        <p>{line.plan.countries.map(countryName).join(', ')}</p>
+        <summary>{copy.coverage(line.plan)}</summary>
+        <p>{line.plan.countries.map(copy.country).join(', ')}</p>
       </details>
     </>
   );
@@ -64,36 +61,47 @@ export function OrderSummary({
   showPlanDetails?: boolean;
   children?: React.ReactNode;
 }) {
+  const t = useTranslations('cart');
+  const plans = useTranslations('plans');
+  const search = useTranslations('search');
+  const copy = usePlanCopy();
   return (
     <aside
       className={`surface commerce-summary${compact ? ' compact-summary' : ''}${showPlanDetails ? ' checkout-summary' : ''}`}
       aria-busy={updating}
+      dir={copy.dir}
     >
-      <span className="eyebrow">YOUR ORDER</span>
+      <span className="eyebrow">{t('orderTitle')}</span>
       {lines.map((line) => (
-        <div className="summary-line" key={line.plan.id}>
-          <div>
-            <strong>{line.plan.name}</strong>
+        <div className="summary-line" dir="ltr" key={line.plan.id}>
+          <div dir={copy.dir}>
+            <strong>{copy.title(line.plan)}</strong>
             <p>
-              {dataLabel(line.plan)} · {line.plan.days} days · Qty {line.quantity}
+              {t('summaryLine', {
+                allowance: copy.allowance(line.plan),
+                validity: plans('days', { count: line.plan.days }),
+                quantity: line.quantity,
+              })}
             </p>
             {showPlanDetails && (
               <>
-                <small>Data-only</small>
+                <small>{search('dataOnly')}</small>
                 <details className="checkout-plan-details">
-                  <summary>Plan details</summary>
-                  <p>Activation: {line.plan.activation}</p>
-                  <p>{line.plan.fairUse}</p>
-                  <p>Coverage: {line.plan.countries.map(countryName).join(', ')}</p>
+                  <summary>{t('details')}</summary>
+                  <p>{t('activation', { rule: copy.activation(line.plan.activation) })}</p>
+                  <p>{copy.fairUse(line.plan.fairUse)}</p>
+                  <p>
+                    {t('coverage', { countries: line.plan.countries.map(copy.country).join(', ') })}
+                  </p>
                   {line.plan.networks.length > 0 && (
-                    <p>Networks: {line.plan.networks.join(', ')}</p>
+                    <p>{t('networks', { networks: line.plan.networks.join(', ') })}</p>
                   )}
-                  {line.plan.supplierNotes && <p>{line.plan.supplierNotes}</p>}
+                  {line.plan.supplierNotes && <p>{copy.notes(line.plan.supplierNotes)}</p>}
                 </details>
               </>
             )}
           </div>
-          <strong>
+          <strong dir="ltr">
             {line.plan.currency === currency
               ? money(line.plan.priceCents * line.quantity, line.plan.currency)
               : '—'}
@@ -101,36 +109,36 @@ export function OrderSummary({
         </div>
       ))}
       {(!compact || !showPlanDetails || lines.length > 1) && (
-        <dl className="spec-list">
+        <dl className="spec-list" dir="ltr">
           <div>
-            <dt>Subtotal</dt>
-            <dd>{total === null ? '—' : money(total, currency)}</dd>
+            <dt dir={copy.dir}>{t('subtotal')}</dt>
+            <dd dir="ltr">{total === null ? '—' : money(total, currency)}</dd>
           </div>
         </dl>
       )}
-      <div className="commerce-total">
-        <strong>Total · {currency}</strong>
-        <strong>{total === null ? '—' : money(total, currency)}</strong>
+      <div className="commerce-total" dir="ltr">
+        <strong dir={copy.dir}>{t('total', { currency: copy.isolate(currency) })}</strong>
+        <strong dir="ltr">{total === null ? '—' : money(total, currency)}</strong>
       </div>
-      {!compact && (
-        <p className="fine-print">
-          Prices are verified before payment. No additional checkout fees.
-        </p>
-      )}
+      {!compact && <p className="fine-print">{t('priceNote')}</p>}
       <p className="quote-status" role="status" aria-live="polite">
-        {updating ? 'Confirming latest prices…' : ''}
+        {updating ? t('confirming') : ''}
       </p>
       {children}
       {!showPlanDetails && (
         <p className="fine-print payment-security">
           <LockKeyhole size={13} aria-hidden="true" />
-          <span>Payment details are handled securely by Stripe.</span>
+          <span>{t('security')}</span>
         </p>
       )}
     </aside>
   );
 }
+type CartFailure = { key: keyof Messages['cart'] } | { code: ErrorCode };
 export function Cart() {
+  const t = useTranslations('cart');
+  const errors = useTranslations('errors');
+  const copy = usePlanCopy();
   const { currency, refresh, ready: currencyReady } = useCurrency();
   const { user } = useAuth();
   async function restoreSavedCart() {
@@ -147,7 +155,7 @@ export function Cart() {
       if (user) localStorage.removeItem('alozuri-cart-pending-' + user.uid);
       window.location.reload();
     } catch {
-      setError('The saved cart could not be loaded. Please try again.');
+      setError({ key: 'savedError' });
     }
   }
   const [mounted, setMounted] = useState(false);
@@ -157,7 +165,7 @@ export function Cart() {
     store = useStore<RootState>();
   const [quote, setQuote] = useState<Quote | null>(null),
     [pending, setPending] = useState(false),
-    [error, setError] = useState(''),
+    [error, setError] = useState<CartFailure | null>(null),
     [quoteAttempt, setQuoteAttempt] = useState(0),
     [quotedSignature, setQuotedSignature] = useState('');
   const signature = JSON.stringify(cartItems(cart.items));
@@ -169,7 +177,7 @@ export function Cart() {
     let active = true;
     const controller = new AbortController();
     setPending(true);
-    setError('');
+    setError(null);
     const timer = setTimeout(() => {
       void api<{ quote: Quote }>('/v2/quote', {
         method: 'POST',
@@ -186,7 +194,7 @@ export function Cart() {
         .catch((e) => {
           if (active) {
             setQuotedSignature('');
-            setError(e instanceof Error ? e.message : 'Could not validate cart.');
+            setError(e instanceof StoreApiError ? { code: e.code } : { key: 'validationError' });
           }
         })
         .finally(() => {
@@ -202,27 +210,27 @@ export function Cart() {
   if (!currencyReady || !mounted || !cart.ready)
     return (
       <section className="container section" role="status">
-        Loading your cart…
+        {t('loading')}
       </section>
     );
   if (!cart.items.length)
     return (
       <section className="container section empty-cart">
         <ShoppingBag size={48} />
-        <h1>Your cart is empty</h1>
-        <p>Explore eSIM plans for your next destination.</p>
+        <h1>{t('emptyTitle')}</h1>
+        <p>{t('emptyText')}</p>
         {cart.error && (
           <div role="alert">
-            <p className="error-message">{cart.error}</p>
+            <p className="error-message">{t('syncError')}</p>
             {user?.emailVerified && (
               <button className="button" onClick={() => void restoreSavedCart()}>
-                Use saved account cart
+                {t('useSaved')}
               </button>
             )}
           </div>
         )}
         <Link className="button primary" href="/destinations">
-          Explore destinations
+          {t('explore')}
         </Link>
       </section>
     );
@@ -241,28 +249,33 @@ export function Cart() {
   return (
     <section className="container section">
       <div className="page-intro">
-        <span className="eyebrow">READY FOR YOUR NEXT TRIP</span>
-        <h1>Your cart</h1>
-        <p>
-          {cart.items.reduce((sum, i) => sum + i.quantity, 0)} eSIMs · Prices in {currency}
-        </p>
+        <span className="eyebrow">{t('eyebrow')}</span>
+        <h1>{t('title')}</h1>
+        <p>{t('intro', { count: cart.items.reduce((sum, i) => sum + i.quantity, 0), currency })}</p>
       </div>
-      <div className="commerce-layout">
-        <div className="stack">
+      <div className="commerce-layout" dir="ltr">
+        <div className="stack" dir={copy.dir}>
           {displayedItems.map((line) => (
-            <article className="surface cart-line" key={line.plan.id}>
-              <div className="cart-plan">
+            <article className="surface cart-line" dir="ltr" key={line.plan.id}>
+              <div className="cart-plan" dir={copy.dir}>
                 <LineDescription line={line} />
-                <p>
-                  {line.unavailable ? 'Unavailable · last seen price: ' : ''}
-                  {line.plan.currency === currency
-                    ? money(line.plan.priceCents, line.plan.currency)
-                    : '—'}{' '}
-                  per eSIM
+                <p dir={copy.dir}>
+                  {line.unavailable ? t('unavailablePrice') + ' ' : ''}
+                  {t('unitPrice', {
+                    amount: copy.isolate(
+                      line.plan.currency === currency
+                        ? money(line.plan.priceCents, line.plan.currency)
+                        : '—',
+                    ),
+                  })}
                 </p>
-                <div className="quantity-controls" aria-label={'Quantity for ' + line.plan.name}>
+                <div
+                  className="quantity-controls"
+                  dir="ltr"
+                  aria-label={t('quantity', { plan: line.plan.name })}
+                >
                   <button
-                    aria-label={'Decrease quantity for ' + line.plan.name}
+                    aria-label={t('decrease', { plan: line.plan.name })}
                     disabled={cart.syncing || line.quantity <= 1}
                     onClick={() =>
                       dispatch(quantityChanged({ id: line.plan.id, quantity: line.quantity - 1 }))
@@ -272,7 +285,7 @@ export function Cart() {
                   </button>
                   <output aria-live="polite">{line.quantity}</output>
                   <button
-                    aria-label={'Increase quantity for ' + line.plan.name}
+                    aria-label={t('increase', { plan: line.plan.name })}
                     disabled={
                       cart.syncing ||
                       line.quantity >= 5 ||
@@ -286,29 +299,35 @@ export function Cart() {
                   </button>
                 </div>
               </div>
-              <div className="cart-line-end">
-                <strong>
+              <div className="cart-line-end" dir={copy.dir}>
+                <strong dir="ltr">
                   {line.plan.currency === currency
                     ? money(line.plan.priceCents * line.quantity, line.plan.currency)
                     : '—'}
                 </strong>
                 <button
                   className="text-link"
-                  aria-label={'Remove ' + line.plan.name}
+                  aria-label={t('removeLabel', { plan: line.plan.name })}
                   disabled={cart.syncing}
                   onClick={() => dispatch(removeFromCart(line.plan.id))}
                 >
-                  <Trash2 size={16} /> Remove
+                  <Trash2 size={16} /> {t('remove')}
                 </button>
               </div>
             </article>
           ))}
           <Link className="text-link" href="/destinations">
-            ← Continue shopping
+            {t('continueShopping')}
           </Link>
           {(error || cart.error) && (
             <div role="alert">
-              <p className="error-message">{error || cart.error}</p>
+              <p className="error-message">
+                {error
+                  ? 'code' in error
+                    ? errors(ERROR_MESSAGES[error.code])
+                    : t(error.key)
+                  : t('syncError')}
+              </p>
               {error && (
                 <button
                   type="button"
@@ -316,12 +335,12 @@ export function Cart() {
                   disabled={pending}
                   onClick={() => setQuoteAttempt((n) => n + 1)}
                 >
-                  Retry prices
+                  {t('retryPrices')}
                 </button>
               )}
               {user?.emailVerified && cart.error && (
                 <button className="button" onClick={() => void restoreSavedCart()}>
-                  Use saved account cart
+                  {t('useSaved')}
                 </button>
               )}
             </div>
@@ -342,15 +361,15 @@ export function Cart() {
               if (checkoutBlocked) event.preventDefault();
             }}
           >
-            {cart.syncing ? 'Saving your cart…' : 'Secure checkout →'}
+            {cart.syncing ? t('saving') : t('secureCheckout')}
           </Link>
           {checkoutBlocked && (
             <p className="fine-print" role="status">
               {cart.syncing
-                ? 'Your checkout will be ready when your saved cart finishes syncing.'
+                ? t('syncPending')
                 : cart.syncFailed
-                  ? 'Resolve the cart sync message above before continuing.'
-                  : 'Remove unavailable plans to continue to checkout.'}
+                  ? t('syncFailed')
+                  : t('removeUnavailable')}
             </p>
           )}
         </OrderSummary>

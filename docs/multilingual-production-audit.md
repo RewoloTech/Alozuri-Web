@@ -1,88 +1,111 @@
-# Multilingual production audit — 16 November 2026
+# Multilingual release audit — 16 November 2026
 
-**Result: not ready for a 13-language production release. Nothing deployed.**
+All 13 languages are implemented and enabled in this local build. **Nothing has
+been deployed.** The automated content audit is complete; professional legal and
+native-language approval has not been obtained. Browser regression verification is complete for the implemented flows. This report does not declare an unreviewed legal release
+production-ready.
 
-The existing live website returned HTTP 200 and the API health endpoint returned
-`status: ok`, catalogue mode and live payment mode. These are checks of the existing
-deployment, not verification that the uncommitted multilingual changes are live.
+## Implementation
 
-## Blocking work
+- The shared, strictly typed catalogue now covers the customer storefront,
+  destinations, regional plans, search/filter/sort controls, cart, checkout,
+  promotions, authentication, account/profile, order history, installation, usage,
+  help, guides, partnerships, consent and loading/error/empty states.
+- All seven current legal policies have full content in every language: 91
+  versioned documents, with source/structure/link checks and exact text hashes.
+  Version `2026-11-16.1` adds the actual language-preference disclosures; the prior
+  English master is archived without rewriting historical order evidence.
+- Complete confirmation subjects, email bodies, installation instructions, legal
+  text and PDF contracts use the saved order language and original amounts.
+  QR data and technical identifiers are unchanged. Stripe payment descriptions
+  are localized; frozen historical request bodies and notification retries remain
+  protected. This app provides confirmations/contracts, not new tax invoices.
+- All locales have working URLs, native metadata and product schema, canonical
+  links, 13 hreflang alternates, `x-default` and sitemap entries. Existing English
+  URLs remain unchanged. The production-only product-page static/dynamic error
+  found during this audit is corrected while retaining the catalogue data cache.
+- Arabic receives native document/text direction with the original structural
+  order. Technical values are isolated LTR. Header controls remain 44 pixels high.
+  Actual browser layouts and PDF pages were visually inspected. Chat uses normal flow on checkout, cart, private orders and account forms so it cannot obscure actions.
+- The protected Operations language screen now renders the actual email template
+  with synthetic order/QR data, all seven legal texts and an explicit review flag.
+  Administrator authorization remains required on every operation.
 
-`npm run i18n:check-release` correctly exits with a nonzero status. The current
-inventory contains 537 static customer-text candidates outside the translation
-system. It excludes exact technical values and internal Operations pages and is
-conservative: dynamic strings and complete email bodies require separate review.
-These are locations, not necessarily 537 distinct translation keys.
+The original 537-location conservative JSX inventory now reports **zero unresolved
+customer-facing literals**. No inventory exclusion was added to hide customer
+content. The audit additionally distinguishes complete content from professional
+legal approval; its nonzero exit currently reflects that review requirement.
+Dynamic content is checked separately through rendering and workflow tests.
 
-All 12 non-English languages remain incomplete. They have core draft catalogues,
-but lack complete website/checkout content, complete approved transactional
-templates, approved legal bundles and finished document rendering. Localised
-routes/SEO, full Arabic layouts and Arabic/CJK PDFs also remain unfinished.
+## Verification
 
-There are no reviewed non-English legal documents available. The required human
-review cannot be represented as complete by changing a flag or a label. New
-languages must not be enabled for real checkout until their complete transaction
-content exists and passes the release gate. English fallback cannot stand in for
-an accepted foreign-language contract.
+| Check                                                            | Observed result                                                                                                                             |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run lint`                                                   | Passed                                                                                                                                      |
+| `npm run typecheck`                                              | Passed in all workspaces                                                                                                                    |
+| `npm run typecheck:tests`                                        | Passed                                                                                                                                      |
+| Prettier on changed/new implementation files                     | Passed on changed/new implementation files                                                                                                  |
+| `npm run test:unit`                                              | 38 shared, 210 API and 15 i18n tests passed; focused catalogue/document checks rerun after the final copy addition                          |
+| `npm run test:jest`                                              | 22 passed                                                                                                                                   |
+| `npm run test:firestore` with isolated emulator                  | 125 passed                                                                                                                                  |
+| `npm run test:auth` equivalent isolated Auth integration command | 3 passed                                                                                                                                    |
+| Auth-emulator browser cases                                      | All 8 passed across focused runs, including every account language and revoked Operations access                                            |
+| Ordinary browser regression suite                                | 107 unique cases passed across the full suite and focused reruns; all 9 full-run failures passed in the 30-case follow-up                   |
+| `npm run test:stripe`                                            | 13 real Stripe sandbox cases passed, one per language; English also exercises decline/retry on the same intent                              |
+| Compiled API document/asset smoke test                           | All 13 languages rendered through production JavaScript with bundled fonts and correct PDF language metadata                                |
+| Native document matrix                                           | 15 passed: source/91 text hashes, all languages, original currencies, complete legal text, QR bytes, deduplicated snapshots and actual PDFs |
+| Product structured-data unit checks                              | 8 passed, including native labels with unchanged SKU/amount/currency                                                                        |
+| `npm run build`                                                  | Next.js and API production builds passed                                                                                                    |
+| Disposable production SEO build/server                           | All 13 language paths passed native HTML/metadata/schema/sitemap checks; private pages, aliases and removed URLs also passed                |
+| Release inventory                                                | Complete content in all 13 languages; 0 static customer literals; review requirement remains                                                |
 
-Counts by file and per-locale blockers are recorded in
-[`multilingual-release-audit.json`](multilingual-release-audit.json). Run the release
-check again after the implementation and content are completed. A passing code
-regression suite alone does not establish multilingual readiness.
+The additional account-form check visited login, registration and password-reset pages in every language at 375, 390, 768 and 1440 pixels, including password controls and legal links.
 
-## Corrections made during the full check
+The ordinary full run passed 97 cases and exposed 9 remaining text/structure regressions. The follow-up reran all affected files plus the native-language/document flows: **30 passed, zero failures**. The 8 Auth-emulator and 13 Stripe cases are conditional skips in the ordinary run and passed in their dedicated runs. This accounts for all 128 configured browser cases without treating skipped tests as passes.
 
-- Customer API error handling now exclusively uses translated catalogue messages.
-  Raw English API messages cannot become customer-facing fallbacks. Safe field,
-  request-ID and parameter metadata are retained.
-- Catalogue changes and invalid search cursors now have stable server error codes.
-  Search recovery no longer parses English sentences to decide when to discard
-  stale pages and offer a new search.
-- Controlled browser fixtures use the actual structured error contract. Their
-  assertions confirm generic or registered copy instead of private diagnostics.
-- Delivery-status lookup failures no longer attempt to write `undefined` to the
-  durable notification record. Retry recovery preserves the original notification
-  and does not send another message. Successful sends clear stale diagnostics.
-- Added a release checker and a tested static JSX/accessibility-text inventory.
-- New Stripe PaymentIntents record `alozuriLocale` from the immutable purchase
-  snapshot for traceability. The existing Payment Element receives that same
-  stored locale. Historical orders and payment calculations are unchanged.
+The real Stripe harness uses matching test keys, local Firestore, the existing
+server checkout code and verified/signed test payment state. It has no supplier
+connection. Distinct synthetic client IPs avoid treating 13 test customers as one
+rate-limited client; production limits and proxy trust behaviour were not changed.
 
-Pricing, currency selection/conversion, payment amounts and supplier ordering
-calculations were not modified.
+Browser checks cover mobile, tablet and desktop; language/currency/query/hash
+persistence; guest and authenticated carts; quantities and account merges;
+compatibility and legal validation; promotions and final payment totals; conditional
+wallet rendering/fallback; server-confirmed payment tracking; private orders;
+usage; current/legacy browser PDF downloads and retryable font failures. The native
+matrix also verifies that an English website preference cannot change a PDF's saved
+order language.
 
-## Actual verification
+Full native contract pages and email screenshots were inspected, including Arabic,
+Japanese, Korean, Simplified Chinese, Polish and Romanian. A font coverage check
+confirmed glyph availability for all catalogue/legal text in every language. The
+missing Latin extensions and Arabic punctuation detected during review were fixed
+using complete self-hosted fonts. Visual checks are engineering QA, not professional
+translation approval.
 
-| Command/check                                                             | Result                                                               |
-| ------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| `npm run lint`                                                            | Passed                                                               |
-| `npm run typecheck`                                                       | Passed, all workspaces                                               |
-| `npm run typecheck:tests`                                                 | Passed                                                               |
-| `npm run test:unit`                                                       | 38 shared, 193 API and 7 localisation/release-inventory tests passed |
-| `npm run test:jest`                                                       | 22 tests passed                                                      |
-| `npm run build`                                                           | Next.js and API production builds passed                             |
-| `npm run test:firestore` with isolated emulator                           | 124 tests passed                                                     |
-| Focused Firestore notification tests after the delivery-status correction | 2 tests passed                                                       |
-| `npm run test:auth` with isolated emulator                                | 3 integration tests passed                                           |
-| `npm run test:cart:browser` with isolated Auth emulator                   | 7 browser tests passed                                               |
-| `npm run test:e2e` after corrections                                      | 99 passed, 8 skipped by configured conditions                        |
-| `npm run i18n:check-release`                                              | Failed: required multilingual content/review is incomplete           |
-| Production container smoke test                                           | NOT RUN: Docker CLI unavailable locally                              |
-| Live Stripe charge, supplier purchase or customer email send              | NOT RUN                                                              |
-| Complete non-English checkout, email, contract and PDF journeys           | NOT RUN: required content is missing and publication is blocked      |
+## Release requirements and verification limits
 
-`npm run test:stripe` also passed with matching real Stripe test keys and local
-Firestore: a card decline, retry on the same intent and successful sandbox payment.
-The eight ordinary-suite skips were seven Auth-emulator cases and one real Stripe
-SDK case; all eight passed in their dedicated runs. This accounts for all 107
-configured browser cases across the three runs. The final locale-metadata
-Firestore regression also passed for USD, GBP and EUR.
+1. **Professional legal review remains required for Spanish, German, French,
+   Italian, Brazilian Portuguese, Romanian, Japanese, Korean, Simplified Chinese,
+   Arabic, Dutch and Polish.** `POLICY_TRANSLATION_REVIEW` records this honestly.
+   Native editorial sign-off is also not claimed. These flags do not disable the
+   completed languages in the local application.
+2. Explicit deployment authorization is still required. Release the matching API
+   before the website so native checkout never reaches an older English-only API.
+   Existing supported English checkout versions remain accepted. No database
+   migration, new service, scheduler or automatic deployment was introduced.
+3. Live supplier ordering, real customer email delivery and physical-device wallet
+   authorization were **NOT RUN** in this change. Fulfilment, QR readiness,
+   webhook replay, ownership, refunds and notification retries passed controlled
+   regression tests. Email and PDF contents were rendered locally; no real eSIM
+   or customer email was generated for QA.
+4. Full CJK PDF fonts load only when downloading a contract and add approximately
+   6–12 MB on first use, then cache locally. Normal storefront page loads do not
+   fetch these fonts. Output PDFs remain bounded by the existing 5 MB limit.
 
-The browser suite covered mobile/desktop, cart persistence/merge, currency totals,
-guest and authenticated checkout initiation, compatibility validation, promotional
-codes, wallet eligibility/fallback, private orders, contract downloads, consent and
-tracking, usage display, navigation and SEO for the existing published experience.
-It does not prove the unfinished foreign-language experience works.
-
-No preview release, production rollout, database migration, IAM change or scheduler
-change was made during this audit.
+Primary implementation locations: `packages/shared/src/i18n`, customer pages and
+components under `apps/web/src`, native metadata helpers, and the existing API
+legal/email/contract renderers. Currency state, conversion/pricing/promotion
+calculations, payment confirmation rules, supplier adapters, fulfilment scheduling,
+authentication permissions and Firestore business records retain their existing
+sources of truth.

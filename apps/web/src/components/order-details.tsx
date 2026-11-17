@@ -1,4 +1,7 @@
 'use client';
+import { useTranslations } from 'next-intl';
+import { usePlanCopy } from '@/lib/use-plan-copy';
+import { useStatusCopy } from '@/lib/use-status-copy';
 import Link from '@/components/localized-link';
 import { AccountGate } from './account-gate';
 import { useCallback, useEffect, useState } from 'react';
@@ -16,13 +19,25 @@ export function OrderDetails({ id }: { id: string }) {
   );
 }
 function AccountOrder({ id }: { id: string }) {
+  const t = useTranslations('orderUi');
+  const legacy = useTranslations('legacyOrder');
+  const site = useTranslations('site');
+  const auth = useTranslations('authUi');
+  const payment = useTranslations('paymentUi');
+  const checkout = useTranslations('checkout');
+  const emailCopy = useTranslations('emails');
+  const common = useTranslations('common');
+  const copy = usePlanCopy();
+  const status = useStatusCopy();
   const { user, loading } = useAuth();
   const [order, setOrder] = useState<CustomerOrder | null>(null);
   const [pending, setPending] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useState(false);
   const [refresh, setRefresh] = useState(0);
   const [checking, setChecking] = useState(false);
-  const [confirmationError, setConfirmationError] = useState('');
+  const [confirmationError, setConfirmationError] = useState<
+    'resume' | 'stripePending' | 'delayed' | ''
+  >('');
   const [canResume, setCanResume] = useState(false);
   const [clientSecret, setClientSecret] = useState('');
   const [resuming, setResuming] = useState(false);
@@ -46,8 +61,8 @@ function AccountOrder({ id }: { id: string }) {
           throw new Error('Invalid checkout URL.');
         window.location.assign(url.href);
       } else throw new Error('Checkout could not be resumed.');
-    } catch (e) {
-      setConfirmationError(e instanceof Error ? e.message : 'Checkout could not be resumed.');
+    } catch {
+      setConfirmationError('resume');
       setRefresh((n) => n + 1);
     } finally {
       setResuming(false);
@@ -83,28 +98,20 @@ function AccountOrder({ id }: { id: string }) {
         );
         if (!active) return;
         setOrder(latest);
-        setError('');
+        setError(false);
         const waiting = [
           'created',
           'checkout_pending',
           ...(!latest.test ? ['paid', 'fulfilling', 'provision_wait'] : []),
         ].includes(latest.status);
         if (!waiting) setCanResume(false);
-        setConfirmationError(
-          waiting && confirmationFailed
-            ? 'We could not check Stripe yet. Your payment may still be processing.'
-            : '',
-        );
+        setConfirmationError(waiting && confirmationFailed ? 'stripePending' : '');
         if (waiting) {
           if (++attempts < 40) timer = setTimeout(() => void load(), 3000);
-          else
-            setConfirmationError(
-              'Your order is taking longer than usual. Refresh its status or contact support before starting another payment.',
-            );
+          else setConfirmationError('delayed');
         }
       } catch {
-        if (active)
-          setError('This order could not be loaded. Check your connection and try again.');
+        if (active) setError(true);
       } finally {
         if (active) {
           setPending(false);
@@ -121,68 +128,69 @@ function AccountOrder({ id }: { id: string }) {
   return (
     <section className="container section">
       <Link className="text-link" href="/dashboard">
-        ← My eSIMs
+        {site('myEsims')}
       </Link>
       <div className="page-intro">
-        <h1>{order?.status === 'paid' && order.test ? 'Test payment complete' : 'Your order'}</h1>
+        <h1>{order?.status === 'paid' && order.test ? legacy('testComplete') : t('title')}</h1>
       </div>
       {clientSecret ? (
         <StripeCheckout clientSecret={clientSecret} orderId={id} onComplete={complete} />
       ) : loading ? (
-        <p role="status">Checking your account…</p>
+        <p role="status">{auth('checkingAccess')}</p>
       ) : !user ? (
         <Link
           className="button primary"
           href={`/login?next=${encodeURIComponent(`/dashboard/orders?id=${encodeURIComponent(id)}`)}`}
         >
-          Sign in to view this order
+          {t('signinPurchases')}
         </Link>
       ) : demoMode ? (
-        <div className="notice">
-          No purchased eSIM exists in this preview. Installation codes are only available after a
-          real order is fulfilled.
-        </div>
+        <div className="notice">{t('testNoUsage')}</div>
       ) : pending ? (
-        <p role="status">Loading order…</p>
+        <p role="status">{t('confirming')}</p>
       ) : error ? (
         <p role="alert" className="error-message">
-          {error}
+          {t('loadError')}
           <button className="button" onClick={() => setRefresh((n) => n + 1)}>
-            Try again
+            {common('retry')}
           </button>
         </p>
       ) : (
         order && (
           <div className="surface">
-            <h2>{order.plan.name}</h2>
-            <p>Status: {order.status.replaceAll('_', ' ')}</p>
-            <p>Order reference: {order.id}</p>
+            <h2>{copy.title(order.plan)}</h2>
+            <p>{t('unitStatus', { status: status.order(order.status) })}</p>
+            <p>{emailCopy('reference', { reference: copy.isolate(order.id) })}</p>
             <div className="notice">
               {order.test
                 ? order.status === 'paid'
-                  ? 'Your Stripe test payment is confirmed. No real money was charged and no eSIM was ordered.'
+                  ? t('testNotice')
                   : order.status === 'expired'
-                    ? 'This test checkout expired. No eSIM was issued.'
-                    : 'This is a Stripe test order. Payment confirmation will appear here after Stripe confirms it. No eSIM will be issued.'
+                    ? legacy('expired') + ' ' + t('testNotice')
+                    : t('testNotice') + ' ' + t('checkingTitle')
                 : order.status === 'ready'
-                  ? 'Your eSIM is ready. Open the installation details below.'
+                  ? t('readyTitle')
                   : order.status === 'refunded'
-                    ? 'Your payment has been refunded. Allow time for your bank to display the credit.'
+                    ? legacy('refunded')
                     : order.status === 'refund_pending'
-                      ? 'A refund is being processed. Contact support with your order reference if you need help.'
+                      ? t('refundNotice')
                       : order.status === 'provision_error'
-                        ? 'Your order needs attention. Contact support with your order reference.'
+                        ? t('deliveryIssue')
                         : order.status === 'expired'
-                          ? 'This checkout expired without a confirmed payment.'
-                          : 'Your payment will be verified and your eSIM will appear here after provisioning. You can return to this page at any time.'}
+                          ? legacy('expired')
+                          : legacy('paymentPending')}
             </div>
             {!order.test && order.status === 'ready' && <InstallationDetails orderId={id} />}
             {canResume && (
               <button className="button primary" disabled={resuming} onClick={resume}>
-                {resuming ? 'Opening payment…' : 'Continue payment'}
+                {resuming ? payment('preparing') : checkout('continue')}
               </button>
             )}
-            {confirmationError && <p role="status">{confirmationError}</p>}
+            {confirmationError && (
+              <p role="status">
+                {confirmationError === 'resume' ? payment('startError') : legacy(confirmationError)}
+              </p>
+            )}
             {[
               'created',
               'checkout_pending',
@@ -193,18 +201,18 @@ function AccountOrder({ id }: { id: string }) {
                 disabled={checking}
                 onClick={() => setRefresh((n) => n + 1)}
               >
-                {checking ? 'Checking payment…' : 'Check payment status'}
+                {checking ? t('checkingTitle') : t('checkAgain')}
               </button>
             )}
             {order.status === 'expired' && (
               <p>
-                This checkout expired without a confirmed payment.{' '}
+                {legacy('expired')}{' '}
                 <Link href={'/checkout/' + encodeURIComponent(order.plan.id)}>
-                  Try checkout again
+                  {common('retry')}
                 </Link>
               </p>
             )}
-            <Link href="/help">Installation guidance →</Link>
+            <Link href="/help">{t('guidance')}</Link>
           </div>
         )
       )}

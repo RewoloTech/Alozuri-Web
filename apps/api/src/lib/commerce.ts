@@ -369,7 +369,7 @@ export class CommerceService {
       taxCents: quote.taxCents,
       confirmationVersion: CONFIRMATION_VERSION,
       orderReference: orderReference(id),
-      stripeAttribution: newStripeAttribution(id),
+      stripeAttribution: newStripeAttribution(id, locale),
       ...(input.endorselyReferral
         ? { endorselyReferral: z.uuid().parse(input.endorselyReferral) }
         : {}),
@@ -379,7 +379,7 @@ export class CommerceService {
       accessHash: hash(accessToken),
       legal: acceptance,
     };
-    const purchase = await this.db.runTransaction(async (t) => {
+    const paymentSnapshot = await this.db.runTransaction(async (t) => {
       const doc = await t.get(ref);
       if (doc.exists) {
         const p = purchaseSchema.parse(doc.data());
@@ -425,7 +425,7 @@ export class CommerceService {
             409,
             'CHECKOUT_CHANGED',
           );
-        return p;
+        return { purchase: p, hasLocaleMetadata: doc.get('locale') !== undefined };
       }
       if (quote.promotion) await new Promotions(this.db).reserve(t, id, quote.promotion);
       const purchased = purchaseSchema.parse(proposed);
@@ -439,8 +439,9 @@ export class CommerceService {
         ),
       );
       t.create(ref, { ...purchased, financial });
-      return purchased;
+      return { purchase: purchased, hasLocaleMetadata: true };
     });
+    const purchase = paymentSnapshot.purchase;
     if (purchase.status !== 'pending_payment' && purchase.status !== 'payment_processing')
       throw new CommerceError('This order has already been processed. Check its status.');
     const stripeReference = stripePaymentReference(id, purchase.stripeAttribution);
@@ -455,7 +456,8 @@ export class CommerceService {
             ...stripeReference,
             metadata: {
               ...stripeReference.metadata,
-              alozuriLocale: purchase.locale,
+              // A locale-less historical retry must retain its original Stripe body.
+              ...(paymentSnapshot.hasLocaleMetadata ? { alozuriLocale: purchase.locale } : {}),
               ...(purchase.endorselyReferral
                 ? { endorsely_referral: purchase.endorselyReferral }
                 : {}),

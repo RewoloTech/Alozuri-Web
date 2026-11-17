@@ -1,3 +1,4 @@
+import { LOCALES } from '../../../packages/shared/src/i18n/locales.ts';
 import { Promotions, discountUnit } from '../src/lib/promotions.ts';
 import { contributionPreview } from '../src/lib/promotion-routes.ts';
 import { OperationsEsims } from '../src/lib/operations-esims.ts';
@@ -2337,9 +2338,12 @@ test('new payment requests identify Alozuri and retain frozen attribution for re
 test('a pre-attribution unbound payment retry preserves the old Stripe body and idempotency key', async () => {
   const f = fixture();
   const result = await f.service.checkout(f.input, null);
-  await db
-    .doc('purchases/' + result.orderId)
-    .update({ stripeAttribution: FieldValue.delete(), paymentIntentId: FieldValue.delete() });
+  await db.doc('purchases/' + result.orderId).update({
+    stripeAttribution: FieldValue.delete(),
+    paymentIntentId: FieldValue.delete(),
+    locale: FieldValue.delete(),
+    'legal.locale': FieldValue.delete(),
+  });
   await f.service.checkout(f.input, null);
   const request = f.paymentRequests[1];
   assert.deepEqual(request.params.metadata, { alozuriPurchaseId: result.orderId });
@@ -2902,7 +2906,9 @@ test('checkout freezes order and legal locale independently of the existing curr
     assert.equal(before.get('currency'), currency);
     assert.equal(before.get('totalCents'), f.input.expectedTotalCents);
     // A new browser/account preference cannot change an already-created request.
-    await assert.rejects(f.service.checkout({ ...f.input, locale: 'de' }, null), /language/);
+    await assert.rejects(f.service.checkout({ ...f.input, locale: 'de' }, null), {
+      code: 'CHECKOUT_CHANGED',
+    });
     assert.equal(f.getCreates(), 1);
     assert.deepEqual((await ref.get()).data(), before.data());
     f.intent.status = 'succeeded';
@@ -2914,20 +2920,41 @@ test('checkout freezes order and legal locale independently of the existing curr
       .get();
     assert.ok(children.docs.every((unit) => unit.get('locale') === 'en'));
   }
-  const draft = fixture();
-  await assert.rejects(draft.service.checkout({ ...draft.input, locale: 'ar' }, null), /language/);
-  assert.equal(draft.getCreates(), 0);
-  const server = await createApp({ commerce: draft.service, payments: null, fulfillment: null });
+  // Every enabled locale must reach the same server payment boundary and
+  // freeze its own legal copy without changing the currency or amount.
+  for (const locale of LOCALES) {
+    const native = fixture();
+    const result = await native.service.checkout({ ...native.input, locale }, null);
+    const stored = await db.doc('purchases/' + result.orderId).get();
+    assert.equal(result.locale, locale);
+    assert.equal(stored.get('locale'), locale);
+    assert.equal(stored.get('legal.locale'), locale);
+    assert.equal(stored.get('currency'), 'USD');
+    assert.equal(stored.get('totalCents'), native.input.expectedTotalCents);
+    assert.equal(native.paymentRequests[0].params.metadata?.alozuriLocale, locale);
+    assert.equal(native.getCreates(), 1);
+    native.intent.status = 'succeeded';
+    native.intent.amount_received = native.intent.amount;
+    await native.event();
+    await native.service.notify(result.orderId);
+    assert.equal(native.emails.length, 1);
+    assert.ok(native.emails[0].html.includes(`lang="${locale}"`));
+    await native.event();
+    await native.service.notify(result.orderId);
+    assert.equal(native.emails.length, 1);
+  }
+  const invalid = fixture();
+  const server = await createApp({ commerce: invalid.service, payments: null, fulfillment: null });
   try {
     const response = await server.inject({
       method: 'POST',
       url: '/v2/checkout',
       headers: { 'x-alozuri-error-format': '2' },
-      payload: { ...draft.input, locale: 'de' },
+      payload: { ...invalid.input, locale: 'unknown-locale' },
     });
-    assert.equal(response.statusCode, 409);
-    assert.equal(response.json().error.code, 'LOCALE_NOT_READY');
-    assert.equal(draft.getCreates(), 0);
+    assert.equal(response.statusCode, 400);
+    assert.equal(response.json().error.code, 'VALIDATION_FAILED');
+    assert.equal(invalid.getCreates(), 0);
   } finally {
     await server.close();
   }
@@ -2951,7 +2978,7 @@ test('locale-less historical confirmations remain English and unsupported transa
   imported.intent.amount_received = imported.intent.amount;
   await imported.event();
   const importedRef = db.doc('purchases/' + blocked.orderId);
-  await importedRef.update({ locale: 'de', 'legal.locale': 'de' });
+  await importedRef.update({ locale: 'unknown-locale', 'legal.locale': 'unknown-locale' });
   await imported.service.notify(blocked.orderId);
   assert.equal(imported.emails.length, 0);
   assert.equal((await importedRef.get()).get('confirmationStatus'), 'attention');
