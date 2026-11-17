@@ -1,0 +1,84 @@
+{
+  "purpose": "Self-hosted script coverage for Hindi, Thai, Cyrillic, Turkish and Vietnamese. No network fonts at runtime.",
+  "files": [
+    {
+      "file": "NotoSansDevanagari-Regular.ttf",
+      "bytes": 218236,
+      "sha256": "81171b8d583f990bccb92478babba34eb417ed48141a515a952955a85bca5345",
+      "source": "https://raw.githubusercontent.com/google/fonts/2bc5d431b584d89e646214bf6cfa75494e76ceea/ofl/notosansdevanagari/NotoSansDevanagari%5Bwdth%2Cwght%5D.ttf",
+      "license": "NotoSansDevanagari-OFL.txt"
+    },
+    {
+      "file": "NotoSansDevanagari-Regular.woff2",
+      "bytes": 63304,
+      "sha256": "53582b246348708529fe92b3ecbb3b887e306e12af910b0fe116787bf073781e",
+      "source": "https://raw.githubusercontent.com/google/fonts/2bc5d431b584d89e646214bf6cfa75494e76ceea/ofl/notosansdevanagari/NotoSansDevanagari%5Bwdth%2Cwght%5D.ttf",
+      "license": "NotoSansDevanagari-OFL.txt"
+    },
+    {
+      "file": "NotoSansDevanagari-Bold.ttf",
+      "bytes": 218828,
+      "sha256": "5f3a8b5bde3a37e0b3d287ef59455a2aed92e99eb019ffc29a64dc55aff1ed41",
+      "source": "https://raw.githubusercontent.com/google/fonts/2bc5d431b584d89e646214bf6cfa75494e76ceea/ofl/notosansdevanagari/NotoSansDevanagari%5Bwdth%2Cwght%5D.ttf",
+      "license": "NotoSansDevanagari-OFL.txt"
+    },
+    {
+      "file": "NotoSansDevanagari-Bold.woff2",
+      "bytes": 66948,
+      "sha256": "b792dfc4f2182e6c8f3d53bed0942bc7d78e2eb144c1f3d61eeaca051afec66c",
+      "source": "https://raw.githubusercontent.com/google/fonts/2bc5d431b584d89e646214bf6cfa75494e76ceea/ofl/notosansdevanagari/NotoSansDevanagari%5Bwdth%2Cwght%5D.ttf",
+      "license": "NotoSansDevanagari-OFL.txt"
+    },
+    {
+      "file": "NotoSansThai-Regular.ttf",
+      "bytes": 47788,
+      "sha256": "4d1d68de1a20fbdd05263057c087ae186187dda03d9a06b58d27111208e1f54f",
+      "source": "https://raw.githubusercontent.com/google/fonts/8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5/ofl/notosansthai/NotoSansThai%5Bwdth%2Cwght%5D.ttf",
+      "license": "NotoSansThai-OFL.txt"
+    },
+    {
+      "file": "NotoSansThai-Regular.woff2",
+      "bytes": 21532,
+      "sha256": "c80a41ea484c1cf88dec6227f7dde6db964a5695db8a2776620bca190e54c909",
+      "source": "https://raw.githubusercontent.com/google/fonts/8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5/ofl/notosansthai/NotoSansThai%5Bwdth%2Cwght%5D.ttf",
+      "license": "NotoSansThai-OFL.txt"
+    },
+    {
+      "file": "NotoSansThai-Bold.ttf",
+      "bytes": 47832,
+      "sha256": "912bab8f4b3da9e0874c0913ff686837266a62bdf1d52290f5a4142d5c675b4f",
+      "source": "https://raw.githubusercontent.com/google/fonts/8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5/ofl/notosansthai/NotoSansThai%5Bwdth%2Cwght%5D.ttf",
+      "license": "NotoSansThai-OFL.txt"
+    },
+    {
+      "file": "NotoSansThai-Bold.woff2",
+      "bytes": 21572,
+      "sha256": "c6237681487e55cde173a9bafa7f47d0083078c4b51600034951f0171a024543",
+      "source": "https://raw.githubusercontent.com/google/fonts/8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5/ofl/notosansthai/NotoSansThai%5Bwdth%2Cwght%5D.ttf",
+      "license": "NotoSansThai-OFL.txt"
+    },
+    {
+      "file": "manrope-extended.woff2",
+      "bytes": 53616,
+      "sha256": "10c0221388499d1174e1946f2681a89afc83fdadd0cbdfbaea2a200d83b5d036",
+      "source": "https://raw.githubusercontent.com/google/fonts/b31870aff700ab7a1d74fa0c6887d95beb9e0037/ofl/manrope/Manrope%5Bwght%5D.ttf",
+      "license": "manrope-OFL.txt"
+    },
+    {
+      "file": "inter-extended-400.woff2",
+      "bytes": 43904,
+      "sha256": "4c2016b308aa1d53066c2a9161e3f948fe755f53c9457b1f4cd1b501830cc5f2",
+      "source": "https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip",
+      "license": "inter-OFL.txt",
+      "conversion": "FontTools WOFF2 Unicode subset of the existing pinned Inter TrueType assets."
+    },
+    {
+      "file": "inter-extended-700.woff2",
+      "bytes": 45016,
+      "sha256": "8490f1d82871616e8740e021fbfb0e8512ecb09c829b193f7c699f2f5a576a37",
+      "source": "https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip",
+      "license": "inter-OFL.txt",
+      "conversion": "FontTools WOFF2 Unicode subset of the existing pinned Inter TrueType assets."
+    }
+  ]
+}

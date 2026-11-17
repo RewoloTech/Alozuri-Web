@@ -11,6 +11,15 @@ const IDENTICAL_NATIVE_WORDS: Partial<Record<Locale, readonly string[]>> = {
   it: ['display.asia'],
   ro: ['display.asia', 'cart.total'],
   'pt-BR': ['cart.total', 'orderUi.total'],
+  // Standard Indonesian financial words, preposition and geographic names.
+  id: [
+    'orderUi.unitStatus',
+    'orderUi.total',
+    'cart.total',
+    'cart.unitPrice',
+    'display.asia',
+    'display.global',
+  ],
 };
 
 function validatePluralCategories(message: string, locale: Locale) {
@@ -19,7 +28,7 @@ function validatePluralCategories(message: string, locale: Locale) {
       if (
         element.type === TYPE.plural &&
         element.pluralType !== 'ordinal' &&
-        ['ar', 'pl'].includes(locale)
+        ['ar', 'pl', 'ru', 'uk'].includes(locale)
       ) {
         const required = new Intl.PluralRules(locale).resolvedOptions().pluralCategories;
         if (required.some((category) => !(category in element.options)))

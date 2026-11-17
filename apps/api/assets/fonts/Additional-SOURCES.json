@@ -1,0 +1,33 @@
+{
+  "purpose": "Self-hosted script coverage for Hindi, Thai, Cyrillic, Turkish and Vietnamese. No network fonts at runtime.",
+  "files": [
+    {
+      "file": "NotoSansDevanagari-Regular.ttf",
+      "bytes": 218236,
+      "sha256": "81171b8d583f990bccb92478babba34eb417ed48141a515a952955a85bca5345",
+      "source": "https://raw.githubusercontent.com/google/fonts/2bc5d431b584d89e646214bf6cfa75494e76ceea/ofl/notosansdevanagari/NotoSansDevanagari%5Bwdth%2Cwght%5D.ttf",
+      "license": "NotoSansDevanagari-OFL.txt"
+    },
+    {
+      "file": "NotoSansDevanagari-Bold.ttf",
+      "bytes": 218828,
+      "sha256": "5f3a8b5bde3a37e0b3d287ef59455a2aed92e99eb019ffc29a64dc55aff1ed41",
+      "source": "https://raw.githubusercontent.com/google/fonts/2bc5d431b584d89e646214bf6cfa75494e76ceea/ofl/notosansdevanagari/NotoSansDevanagari%5Bwdth%2Cwght%5D.ttf",
+      "license": "NotoSansDevanagari-OFL.txt"
+    },
+    {
+      "file": "NotoSansThai-Regular.ttf",
+      "bytes": 47788,
+      "sha256": "4d1d68de1a20fbdd05263057c087ae186187dda03d9a06b58d27111208e1f54f",
+      "source": "https://raw.githubusercontent.com/google/fonts/8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5/ofl/notosansthai/NotoSansThai%5Bwdth%2Cwght%5D.ttf",
+      "license": "NotoSansThai-OFL.txt"
+    },
+    {
+      "file": "NotoSansThai-Bold.ttf",
+      "bytes": 47832,
+      "sha256": "912bab8f4b3da9e0874c0913ff686837266a62bdf1d52290f5a4142d5c675b4f",
+      "source": "https://raw.githubusercontent.com/google/fonts/8b0a1d0f5983c89bc2b93f1b5fb55f9e252744b5/ofl/notosansthai/NotoSansThai%5Bwdth%2Cwght%5D.ttf",
+      "license": "NotoSansThai-OFL.txt"
+    }
+  ]
+}

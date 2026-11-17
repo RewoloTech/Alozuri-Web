@@ -19,9 +19,17 @@ const middleEast: Record<Locale, string> = {
   ja: '中東',
   ko: '중동',
   'zh-Hans': '中东',
+  'zh-Hant': '中東',
   ar: 'الشرق الأوسط',
   nl: 'Midden-Oosten',
   pl: 'Bliski Wschód',
+  tr: 'Orta Doğu',
+  ru: 'Ближний Восток',
+  vi: 'Trung Đông',
+  id: 'Timur Tengah',
+  hi: 'मध्य पूर्व',
+  th: 'ตะวันออกกลาง',
+  uk: 'Близький Схід',
 };
 /** Geographic display names only; no inference about supplier coverage. */
 export function regionDisplayName(region: string, locale: Locale): string | undefined {

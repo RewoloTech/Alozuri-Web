@@ -82,7 +82,25 @@ try {
     assert.ok(robots.includes(bot));
   assert.ok(robots.includes('Disallow: /operations'));
   assert.ok(robots.includes('Sitemap: https://alozuri.com/sitemap.xml'));
-  const map = await (await get('/sitemap.xml')).text();
+  const index = await (await get('/sitemap.xml')).text();
+  assert.ok(index.includes('<sitemapindex'));
+  const shardPaths = [...index.matchAll(/<loc>([^<]+)<\/loc>/g)].map(
+    (match) => new URL(match[1]).pathname,
+  );
+  assert.equal(shardPaths.length, LOCALES.length);
+  const shards = await Promise.all(
+    shardPaths.map(async (path) => {
+      const response = await get(path);
+      assert.equal(response.status, 200, path);
+      const xml = await response.text();
+      assert.ok(xml.includes('<urlset'), path);
+      assert.ok((xml.match(/<url>/g) ?? []).length <= 5000, path);
+      assert.ok(Buffer.byteLength(xml) < 50 * 1024 * 1024, path);
+      return xml;
+    }),
+  );
+  const map = shards.join('\n');
+  assert.equal((await get('/sitemaps/sitemap/unsupported-0.xml')).status, 404);
   for (const p of [
     '/destinations/us',
     '/destinations/europe',

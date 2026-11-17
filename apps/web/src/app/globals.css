@@ -2,6 +2,62 @@
 @font-face {
   font-family: 'Inter';
   font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(/fonts/inter-extended-400.woff2) format('woff2');
+  unicode-range: U+0100-024F, U+0300-036F, U+0400-052F, U+1E00-1EFF;
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url(/fonts/inter-extended-700.woff2) format('woff2');
+  unicode-range: U+0100-024F, U+0300-036F, U+0400-052F, U+1E00-1EFF;
+}
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url(/fonts/manrope-extended.woff2) format('woff2');
+  unicode-range: U+0100-024F, U+0300-036F, U+0400-052F, U+1E00-1EFF;
+}
+@font-face {
+  font-family: 'Noto Sans Devanagari';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(/fonts/NotoSansDevanagari-Regular.woff2) format('woff2');
+  unicode-range: U+0900-097F, U+1CD0-1CFF, U+A8E0-A8FF;
+}
+@font-face {
+  font-family: 'Noto Sans Devanagari';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url(/fonts/NotoSansDevanagari-Bold.woff2) format('woff2');
+  unicode-range: U+0900-097F, U+1CD0-1CFF, U+A8E0-A8FF;
+}
+@font-face {
+  font-family: 'Noto Sans Thai';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(/fonts/NotoSansThai-Regular.woff2) format('woff2');
+  unicode-range: U+0E00-0E7F;
+}
+@font-face {
+  font-family: 'Noto Sans Thai';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url(/fonts/NotoSansThai-Bold.woff2) format('woff2');
+  unicode-range: U+0E00-0E7F;
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
   font-weight: 400 700;
   font-display: swap;
   src: url(/fonts/inter-latin.woff2) format('woff2');
@@ -323,6 +379,7 @@ h1 {
   letter-spacing: -0.055em;
 }
 .hero h1 {
+  overflow-wrap: anywhere;
   margin: 17px 0;
 }
 .hero h1 > span {
@@ -4365,4 +4422,19 @@ body:has(.operations-page) .support-shortcut {
   font-weight: 400;
   line-height: 1.35;
   color: var(--muted);
+}
+
+/* Script fonts apply only to the requested locale, preserving the existing header sizing. */
+html:lang(zh-Hant) :is(body, h1, h2, h3, h4, button, input, select, textarea, option) {
+  font-family: 'Inter', 'PingFang TC', 'Microsoft JhengHei', 'Noto Sans CJK TC', Arial, sans-serif;
+}
+html:lang(hi) :is(body, h1, h2, h3, h4, button, input, select, textarea, option) {
+  font-family: 'Noto Sans Devanagari', 'Inter', Arial, sans-serif;
+}
+html:lang(th) :is(body, h1, h2, h3, h4, button, input, select, textarea, option) {
+  font-family: 'Noto Sans Thai', 'Inter', Arial, sans-serif;
+}
+html:is(:lang(hi), :lang(th)) :is(h1, h2, h3, h4) {
+  line-height: 1.35;
+  letter-spacing: normal;
 }

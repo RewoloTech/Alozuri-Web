@@ -13,9 +13,17 @@ const openGraphLocale: Record<Locale, string> = {
   ja: 'ja_JP',
   ko: 'ko_KR',
   'zh-Hans': 'zh_CN',
+  'zh-Hant': 'zh_TW',
   ar: 'ar_AR',
   nl: 'nl_NL',
   pl: 'pl_PL',
+  tr: 'tr_TR',
+  ru: 'ru_RU',
+  vi: 'vi_VN',
+  id: 'id_ID',
+  hi: 'hi_IN',
+  th: 'th_TH',
+  uk: 'uk_UA',
 };
 import { isPublishedLocale, localePath, PUBLISHED_LOCALES } from '@alozuri/shared/i18n';
 import { publicMetadata } from './seo';

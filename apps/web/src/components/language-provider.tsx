@@ -20,6 +20,10 @@ import { englishMessages, type Messages } from '@alozuri/shared/i18n/messages';
 import { loadMessages } from '@alozuri/shared/i18n/catalogs';
 import { useAuth } from './auth-provider';
 import { api } from '@/lib/api';
+// Keep related Chinese options together without changing the shared locale registry order.
+const languageOptions = LOCALES.flatMap<Locale>((locale) =>
+  locale === 'zh-Hans' ? [locale, 'zh-Hant'] : locale === 'zh-Hant' ? [] : [locale],
+);
 const LanguageContext = createContext<{
   locale: Locale;
   changeLanguage: (locale: Locale) => Promise<void>;
@@ -265,7 +269,7 @@ export function LanguageSelector({ compact = false }: { compact?: boolean }) {
             if (isLocale(value)) void changeLanguage(value);
           }}
         >
-          {LOCALES.map((value) => (
+          {languageOptions.map((value) => (
             <option key={value} value={value}>
               {LOCALE_NAMES[value]}
             </option>

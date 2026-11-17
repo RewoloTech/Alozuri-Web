@@ -10,6 +10,14 @@ import { policies as policies8 } from './2026-11-16.1/zh-Hans.ts';
 import { policies as policies9 } from './2026-11-16.1/ar.ts';
 import { policies as policies10 } from './2026-11-16.1/nl.ts';
 import { policies as policies11 } from './2026-11-16.1/pl.ts';
+import { policies as policies12 } from './2026-11-16.1/tr.ts';
+import { policies as policies13 } from './2026-11-16.1/ru.ts';
+import { policies as policies14 } from './2026-11-16.1/vi.ts';
+import { policies as policies15 } from './2026-11-16.1/id.ts';
+import { policies as policies16 } from './2026-11-16.1/hi.ts';
+import { policies as policies17 } from './2026-11-16.1/th.ts';
+import { policies as policies18 } from './2026-11-16.1/uk.ts';
+import { policies as traditionalChinese } from './2026-11-16.1/zh-Hant.ts';
 import { POLICY_VERSIONS, type Policy } from '../../policies.ts';
 import { LEGAL_VERSION } from '../../legal.ts';
 import { LocaleUnavailableError, type Locale } from '../locales.ts';
@@ -29,6 +37,14 @@ const translationVersions: Record<string, Partial<Record<Locale, PolicyCatalogue
     ar: policies9,
     nl: policies10,
     pl: policies11,
+    tr: policies12,
+    ru: policies13,
+    vi: policies14,
+    id: policies15,
+    hi: policies16,
+    th: policies17,
+    uk: policies18,
+    'zh-Hant': traditionalChinese,
   },
 };
 function materialize(master: Policy, copy: readonly string[]): Policy {
@@ -83,7 +99,28 @@ export function localizedPolicies(
 export const POLICY_TRANSLATION_REVIEW = {
   sourceVersion: '2026-11-16.1',
   professionalReviewCompleted: false,
-  reviewRequired: ['es', 'de', 'fr', 'it', 'pt-BR', 'ro', 'ja', 'ko', 'zh-Hans', 'ar', 'nl', 'pl'],
+  reviewRequired: [
+    'es',
+    'de',
+    'fr',
+    'it',
+    'pt-BR',
+    'ro',
+    'ja',
+    'ko',
+    'zh-Hans',
+    'ar',
+    'nl',
+    'pl',
+    'tr',
+    'ru',
+    'vi',
+    'id',
+    'hi',
+    'th',
+    'uk',
+    'zh-Hant',
+  ],
 } as const;
 
 export const POLICY_TRANSLATION_SOURCE_DIGESTS = {

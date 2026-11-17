@@ -1,6 +1,6 @@
 'use client';
 import { useLocale, useTranslations } from 'next-intl';
-import { localePath } from '@alozuri/shared/i18n';
+import { firebaseAuthLocale, localePath } from '@alozuri/shared/i18n';
 import type { Messages } from '@alozuri/shared/i18n/messages';
 import { authClient } from '@/lib/firebase';
 import { safeAccountDestination } from '@alozuri/shared';
@@ -58,7 +58,7 @@ export function VerifyEmail() {
     setBusy(true);
     setError('');
     try {
-      authClient().languageCode = locale === 'zh-Hans' ? 'zh-CN' : locale;
+      authClient().languageCode = firebaseAuthLocale(locale);
       await sendEmailVerification(user, {
         url:
           window.location.origin +

@@ -151,6 +151,14 @@ for (const locale of [
   'ar',
   'nl',
   'pl',
+  'tr',
+  'ru',
+  'vi',
+  'id',
+  'hi',
+  'th',
+  'uk',
+  'zh-Hant',
 ] as const)
   test(`real Stripe sandbox completes a saved ${locale} order`, async ({ page }) => {
     test.setTimeout(120_000);

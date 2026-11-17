@@ -1,6 +1,6 @@
 'use client';
 import { useLocale, useTranslations } from 'next-intl';
-import { localeDirection, localePath } from '@alozuri/shared/i18n';
+import { firebaseAuthLocale, localeDirection, localePath } from '@alozuri/shared/i18n';
 import type { Messages } from '@alozuri/shared/i18n/messages';
 import { LinkedMessage, MESSAGE_LINKS } from './linked-message';
 import { useState } from 'react';
@@ -47,7 +47,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' | 'reset' }) {
     try {
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
-      authClient().languageCode = locale === 'zh-Hans' ? 'zh-CN' : locale;
+      authClient().languageCode = firebaseAuthLocale(locale);
       await signInWithPopup(authClient(), provider);
       router.push(destination);
     } catch (e) {
@@ -64,7 +64,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' | 'reset' }) {
     const email = String(data.get('email')).trim();
     const password = String(data.get('password') || '');
     try {
-      authClient().languageCode = locale === 'zh-Hans' ? 'zh-CN' : locale;
+      authClient().languageCode = firebaseAuthLocale(locale);
       if (mode === 'reset') {
         await sendPasswordResetEmail(authClient(), email, {
           url: window.location.origin + localePath('/login', locale),

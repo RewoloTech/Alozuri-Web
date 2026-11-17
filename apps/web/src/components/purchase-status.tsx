@@ -99,7 +99,8 @@ function PrivatePurchase({ id }: { id: string }) {
         if (
           value.status !== 'cancelled' &&
           value.status !== 'refunded' &&
-          (!value.allocations.length ||
+          (['pending_payment', 'payment_processing'].includes(value.status) ||
+            !value.allocations.length ||
             (!value.test &&
               value.allocations.some(
                 (a) => !['ready', 'refunded', 'provision_error'].includes(a.status),

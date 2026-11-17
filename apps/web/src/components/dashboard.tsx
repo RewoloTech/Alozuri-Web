@@ -1,5 +1,6 @@
 'use client';
 import { useLocale, useTranslations } from 'next-intl';
+import { firebaseAuthLocale } from '@alozuri/shared/i18n';
 import type { Messages } from '@alozuri/shared/i18n/messages';
 import { usePlanCopy } from '@/lib/use-plan-copy';
 import { useStatusCopy } from '@/lib/use-status-copy';
@@ -148,7 +149,7 @@ function AccountDashboard() {
               disabled={busy}
               onClick={() =>
                 accountAction(() => {
-                  authClient().languageCode = locale === 'zh-Hans' ? 'zh-CN' : locale;
+                  authClient().languageCode = firebaseAuthLocale(locale);
                   return sendEmailVerification(user);
                 }, 'verifySent')
               }

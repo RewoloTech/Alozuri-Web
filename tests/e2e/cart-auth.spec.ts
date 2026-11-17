@@ -1368,6 +1368,42 @@ test('verified customer can use every account language and begin checkout withou
   }
 });
 
+test('both Chinese manual preferences survive real login and logout with an opposing account language', async ({
+  page,
+}) => {
+  const state = await setup(page);
+  const user = await signup(page);
+  await page
+    .context()
+    .addInitScript(() => Object.defineProperty(navigator, 'languages', { value: ['zh-CN'] }));
+  for (const locale of ['zh-Hant', 'zh-Hans'] as const) {
+    const messages = await loadMessages(locale);
+    await page.locator('.site-header .language-selector select').selectOption(locale);
+    await expect(page.locator('html')).toHaveAttribute('lang', locale);
+    await expect.poll(() => [...state.profiles.values()][0]?.locale).toBe(locale);
+    await page.getByRole('button', { name: messages.site.myAccount, exact: true }).click();
+    await page.getByRole('button', { name: messages.navigation.logout, exact: true }).click();
+    await expect(
+      page.getByRole('button', { name: messages.site.myAccount, exact: true }),
+    ).toHaveCount(0);
+    // A changed account preference must not replace this browser's explicit choice.
+    [...state.profiles.values()][0].locale = locale === 'zh-Hant' ? 'zh-Hans' : 'zh-Hant';
+    await page.goto('/login?next=%2Fcart');
+    await expect(page.locator('html')).toHaveAttribute('lang', locale);
+    await page.getByLabel(messages.authUi.email, { exact: true }).fill(user.email);
+    await page.getByLabel(messages.authUi.password, { exact: true }).fill(user.password);
+    await page.getByRole('button', { name: messages.navigation.login, exact: true }).click();
+    await expect(page).toHaveURL('http://localhost:3100/' + locale + '/cart');
+    await expect(page.locator('html')).toHaveAttribute('lang', locale);
+    await expect(page.locator('.site-header .currency-select')).toHaveValue('USD');
+    await expect(page.locator('.quantity-controls output')).toHaveText('1');
+    await page.goto('/checkout');
+    await page.reload();
+    await expect(page.locator('html')).toHaveAttribute('lang', locale);
+    await expect(page.locator('input[type="email"]')).toHaveValue(user.email);
+  }
+});
+
 test('account language yields to manual English through real login, logout and checkout navigation', async ({
   page,
   browser,

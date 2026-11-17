@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { LOCALES, LOCALE_COOKIE } from '../../packages/shared/src/i18n/locales';
 import { loadMessages } from '../../packages/shared/src/i18n/catalogs';
 
-test('all thirteen localized home routes render native copy and preserve currency when switching', async ({
+test('all twenty-one localized home routes render native copy and preserve currency when switching', async ({
   page,
 }) => {
   const errors: string[] = [];
@@ -339,4 +339,125 @@ test('client navigation honours explicitly requested languages and keeps checkou
   await expect(page).toHaveURL(/\/ja\/checkout$/);
   await expect(page.locator('html')).toHaveAttribute('lang', 'ja');
   await expect(page.locator('.site-header .currency-select')).toHaveValue('EUR');
+});
+
+const additionalLocales = [
+  ['tr', 'tr-TR'],
+  ['ru', 'ru-RU'],
+  ['vi', 'vi-VN'],
+  ['id', 'id-ID'],
+  ['hi', 'hi-IN'],
+  ['th', 'th-TH'],
+  ['uk', 'uk-UA'],
+  ['zh-Hans', 'zh-CN'],
+  ['zh-Hant', 'zh-TW'],
+] as const;
+for (const [locale, regional] of additionalLocales) {
+  test(`${locale} browser detection, native selector, fonts and saved preference work on mobile and desktop`, async ({
+    browser,
+  }) => {
+    test.setTimeout(90_000);
+    const context = await browser.newContext({
+      locale: regional,
+      viewport: { width: 390, height: 900 },
+    });
+    const page = await context.newPage();
+    const messages = await loadMessages(locale);
+    await page.goto('/');
+    await expect(page).toHaveURL('http://localhost:3100/' + locale);
+    await expect(page.locator('html')).toHaveAttribute('lang', locale);
+    await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
+    const selector = page.locator('.site-header .language-selector select');
+    await expect(selector.locator('option')).toHaveCount(21);
+    await expect(selector.locator('option[value="zh-Hans"] + option')).toHaveAttribute(
+      'value',
+      'zh-Hant',
+    );
+    await expect(selector).toHaveValue(locale);
+    await expect(page.locator('h1')).toContainText(messages.home.heroTitleA);
+    await page.locator('.site-header .currency-select').selectOption('EUR');
+    for (const width of [375, 390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.evaluate(() => document.fonts.ready);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      const control = await page.locator('.site-header .language-selector-control').boundingBox();
+      expect(control?.width).toBe(44);
+      expect(control?.height).toBe(44);
+      if (width === 390 || width === 1440)
+        await page
+          .locator('.hero')
+          .screenshot({ path: `/tmp/alozuri-${locale}-hero-${width}.png` });
+    }
+    if (locale === 'hi' || locale === 'th') {
+      const family = locale === 'hi' ? 'Noto Sans Devanagari' : 'Noto Sans Thai';
+      expect(
+        await page.evaluate(
+          async ({ family, text }) => {
+            await document.fonts.load(`16px "${family}"`, text);
+            return document.fonts.check(`16px "${family}"`, text);
+          },
+          { family, text: messages.home.heroTitleA },
+        ),
+      ).toBe(true);
+    }
+    // Native selects supply browser-managed scrolling and keyboard navigation.
+    await selector.focus();
+    await page.keyboard.press('Home');
+    await page.keyboard.press('Enter');
+    await selector.selectOption('en');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en-GB');
+    await page.reload();
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en-GB');
+    await expect(page.locator('.site-header .currency-select')).toHaveValue('EUR');
+    await selector.selectOption(locale);
+    await expect(page.locator('html')).toHaveAttribute('lang', locale);
+    await page.reload();
+    await expect(page.locator('html')).toHaveAttribute('lang', locale);
+    await context.close();
+  });
+}
+
+test('Chinese regional detection yields to explicit URLs and a remembered manual script choice', async ({
+  browser,
+}) => {
+  test.setTimeout(120_000);
+  for (const [regional, detected, manual] of [
+    ['zh-HK', 'zh-Hant', 'zh-Hans'],
+    ['zh-MO', 'zh-Hant', 'zh-Hans'],
+    ['zh-SG', 'zh-Hans', 'zh-Hant'],
+  ] as const) {
+    const context = await browser.newContext({ locale: regional });
+    const page = await context.newPage();
+    await page.goto('/');
+    await expect(page.locator('html')).toHaveAttribute('lang', detected);
+    const select = page.locator('.site-header .language-selector select');
+    await expect(select.locator('option[value="zh-Hans"]')).toHaveText('简体中文');
+    await expect(select.locator('option[value="zh-Hant"]')).toHaveText('繁體中文');
+    await page.locator('.site-header .currency-select').selectOption('GBP');
+    await select.selectOption(manual);
+    await expect(page.locator('html')).toHaveAttribute('lang', manual);
+    await page.reload();
+    await expect(page.locator('html')).toHaveAttribute('lang', manual);
+    // Reopening the same browser profile retains localStorage as well as cookies;
+    // currency has always lived in localStorage independently of language cookies.
+    const storageState = await context.storageState();
+    await context.close();
+    const returning = await browser.newContext({
+      locale: regional === 'zh-SG' ? 'zh-CN' : 'zh-TW',
+      storageState,
+    });
+    const next = await returning.newPage();
+    await next.goto('/');
+    await expect(next.locator('html')).toHaveAttribute('lang', manual);
+    await expect(next.locator('.site-header .currency-select')).toHaveValue('GBP');
+    await next.goto('/' + detected + '/help');
+    await expect(next.locator('html')).toHaveAttribute('lang', detected);
+    await expect(next).toHaveURL('http://localhost:3100/' + detected + '/help');
+    await expect(next.locator('.site-header .currency-select')).toHaveValue('GBP');
+    await next.reload();
+    await expect(next.locator('html')).toHaveAttribute('lang', detected);
+    await returning.close();
+  }
 });

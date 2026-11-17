@@ -1,4 +1,10 @@
 import test from 'node:test';
+import {
+  sitemapEntries,
+  sitemapIds,
+  parseSitemapId,
+  SITEMAP_PATHS_PER_SHARD,
+} from '../../apps/web/src/lib/sitemap.ts';
 import { createTranslator } from 'use-intl/core';
 import { staticMessages } from '../../packages/shared/src/i18n/static-catalogs.ts';
 import { LOCALES } from '../../packages/shared/src/i18n/locales.ts';
@@ -77,4 +83,29 @@ test('native product schema localises descriptions and properties in every langu
     if (locale !== 'en')
       assert.notEqual(schema.description, productStructuredData(plan)!.description);
   }
+});
+
+test('sitemap shards keep a growing multilingual catalogue bounded without dropping URLs', () => {
+  const paths = Array.from({ length: SITEMAP_PATHS_PER_SHARD + 1 }, (_, i) => '/plans/sku-' + i);
+  const ids = sitemapIds(paths.length);
+  assert.equal(ids.length, LOCALES.length * 2);
+  assert.equal(new Set(ids).size, ids.length);
+  const first = sitemapEntries(paths, 'en', 0);
+  const second = sitemapEntries(paths, 'en', 1);
+  assert.equal(first.length, SITEMAP_PATHS_PER_SHARD);
+  assert.equal(second.length, 1);
+  assert.equal(new Set([...first, ...second].map((entry) => entry.url)).size, paths.length);
+  assert.deepEqual(sitemapEntries(paths, 'en', 2), []);
+  for (const locale of LOCALES) {
+    assert.deepEqual(parseSitemapId(locale + '-0'), { locale, page: 0 });
+    const [entry] = sitemapEntries(['/plans/stable-sku'], locale, 0);
+    assert.equal(Object.keys(entry.alternates?.languages ?? {}).length, LOCALES.length + 1);
+    assert.equal(
+      entry.alternates?.languages?.['x-default'],
+      'https://alozuri.com/plans/stable-sku',
+    );
+    assert.equal(entry.alternates?.languages?.[locale], entry.url);
+  }
+  for (const value of ['zh-Han-0', 'xx-0', 'en-00', 'en--1', 'en-1?x=1', 'en-999999999999'])
+    assert.equal(parseSitemapId(value), null);
 });

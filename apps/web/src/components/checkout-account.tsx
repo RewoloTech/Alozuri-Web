@@ -1,6 +1,7 @@
 'use client';
 
 import { useLocale, useTranslations } from 'next-intl';
+import { firebaseAuthLocale } from '@alozuri/shared/i18n';
 import type { Messages } from '@alozuri/shared/i18n/messages';
 import { LinkedMessage, MESSAGE_LINKS } from './linked-message';
 import { useId, useRef, useState } from 'react';
@@ -59,7 +60,7 @@ export function CheckoutAccount({
     onBusyChange(true);
     try {
       if (actions === checkoutAccountActions)
-        authClient().languageCode = locale === 'zh-Hans' ? 'zh-CN' : locale;
+        authClient().languageCode = firebaseAuthLocale(locale);
       if (method === 'google') await actions.google();
       else if (mode) await actions.email(mode, email.trim(), password);
       setPassword('');

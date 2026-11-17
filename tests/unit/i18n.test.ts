@@ -9,6 +9,7 @@ import {
   requirePublishedLocale,
   orderLocale,
   stripeElementsLocale,
+  firebaseAuthLocale,
   localePath,
   navigationLocalePath,
   localeReview,
@@ -23,9 +24,10 @@ import { localizationPreview } from '../../apps/api/src/lib/localization-preview
 import { storeApiError } from '../../apps/web/src/lib/api-error.ts';
 import { legalDocuments } from '../../packages/shared/src/i18n/legal-documents.ts';
 import { destinationName } from '../../packages/shared/src/i18n/destinations.ts';
+import { documentFontFiles } from '../../packages/shared/src/document-fonts.ts';
 
-test('all thirteen catalogues have exact typed keys, valid ICU and identical variables', async () => {
-  assert.equal(LOCALES.length, 13);
+test('all twenty-one catalogues have exact typed keys, valid ICU and identical variables', async () => {
+  assert.equal(LOCALES.length, 21);
   for (const locale of LOCALES) validateMessages(await loadMessages(locale), locale);
   const source = await loadMessages('de');
   const bad = { ...source, emails: { ...source.emails, reference: 'Bestellung {wrong}' } };
@@ -67,6 +69,24 @@ test('every manual language outranks account, browser and detection preferences'
   assert.equal(resolveLocale({ browser: ['unsupported', 'de-DE'] }), 'de');
   assert.equal(resolveLocale({ browser: ['unsupported'] }), 'en');
   assert.equal(resolveLocale({ browser: ['ptbanana'] }), 'en');
+  for (const [regional, locale] of [
+    ['tr-TR', 'tr'],
+    ['ru-RU', 'ru'],
+    ['vi-VN', 'vi'],
+    ['id-ID', 'id'],
+    ['hi-IN', 'hi'],
+    ['th-TH', 'th'],
+    ['uk-UA', 'uk'],
+  ] as const) {
+    assert.equal(resolveLocale({ browser: [regional] }), locale);
+    assert.equal(localeDirection(locale), 'ltr');
+    assert.equal(resolveLocale({ explicit: 'en', account: locale, browser: [regional] }), 'en');
+  }
+  assert.equal(resolveLocale({ browser: ['zh-Hant'] }), 'zh-Hant');
+  assert.equal(stripeElementsLocale('hi'), 'en');
+  assert.equal(stripeElementsLocale('uk'), 'en');
+  for (const locale of ['tr', 'ru', 'vi', 'id', 'th'] as const)
+    assert.equal(stripeElementsLocale(locale), locale);
 });
 test('navigation respects explicit language URLs while language selection replaces their prefix', () => {
   for (const requested of LOCALES) {
@@ -95,7 +115,7 @@ test('selection priority is independent of currencies and every complete languag
   assert.equal(resolveLocale({ guest: 'ja', browser: ['pl'] }, LOCALES), 'ja');
   assert.equal(resolveLocale({ browser: ['pt-PT'] }, LOCALES), 'pt-BR');
   assert.equal(resolveLocale({ browser: ['zh-CN'] }, LOCALES), 'zh-Hans');
-  assert.equal(resolveLocale({ browser: ['zh-Hant', 'en'] }, LOCALES), 'en');
+  assert.equal(resolveLocale({ browser: ['zh-Hant', 'en'] }, LOCALES), 'zh-Hant');
   assert.equal(resolveLocale({ account: 'de', browser: ['ar'] }), 'de');
   for (const locale of LOCALES.filter((value) => value !== 'en')) {
     assert.equal(localeReview(locale).legal, 'published');
@@ -106,6 +126,38 @@ test('selection priority is independent of currencies and every complete languag
   assert.equal(localePath('/de?currency=EUR#plans', 'en'), '/?currency=EUR#plans');
   assert.equal(localePath('/operations?from=2026-11-01', 'de'), '/operations?from=2026-11-01');
   assert.equal(localePath('/api/store/v2/checkout', 'de'), '/api/store/v2/checkout');
+});
+test('Chinese script and regional detection keep both catalogues independent of manual choice and provider language codes', async () => {
+  for (const browser of ['zh-TW', 'zh-HK', 'zh-MO', 'ZH-hAnT', 'zh-Hant-HK', 'zh-Hant-CN'])
+    assert.equal(resolveLocale({ browser: [browser] }), 'zh-Hant');
+  for (const browser of ['zh-CN', 'zh-SG', 'zh', 'zh-Hans', 'zh-Hans-TW'])
+    assert.equal(resolveLocale({ browser: [browser] }), 'zh-Hans');
+  for (const locale of ['zh-Hans', 'zh-Hant'] as const) {
+    assert.equal(resolveLocale({ explicit: locale, account: 'en', browser: ['zh-HK'] }), locale);
+    assert.equal(resolveLocale({ account: locale, guest: 'en', browser: ['zh-SG'] }), locale);
+    assert.equal(resolveLocale({ guest: locale, browser: ['zh-CN'] }), locale);
+    assert.equal(localeDirection(locale), 'ltr');
+    assert.equal(orderLocale(locale), locale);
+    assert.equal(localePath('/checkout?currency=GBP', locale), `/${locale}/checkout?currency=GBP`);
+  }
+  assert.equal(resolveLocale({ explicit: 'en', browser: ['zh-TW'] }), 'en');
+  assert.equal(resolveLocale({ browser: ['zh-TW', 'fr'] }, ['en', 'fr']), 'fr');
+  assert.equal(stripeElementsLocale('zh-Hans'), 'zh');
+  assert.equal(stripeElementsLocale('zh-Hant'), 'zh-TW');
+  assert.equal(firebaseAuthLocale('zh-Hans'), 'zh-CN');
+  assert.equal(firebaseAuthLocale('zh-Hant'), 'zh-TW');
+  assert.equal(firebaseAuthLocale('en'), 'en');
+  assert.equal(documentFontFiles('zh-Hans').Inter, 'NotoSansSC-Regular.woff2');
+  assert.equal(documentFontFiles('zh-Hant').Inter, 'NotoSansTC-Regular.woff2');
+  assert.equal(documentFontFiles('zh-Hant').InterBold, 'NotoSansTC-Bold.woff2');
+  const hans = await loadMessages('zh-Hans');
+  const hant = await loadMessages('zh-Hant');
+  assert.equal(hans.checkout.title, '结算');
+  assert.equal(hant.checkout.title, '結帳');
+  assert.equal(hant.authUi.email, '電子郵件地址');
+  assert.match(hant.display.installInstructions, /流動網絡/);
+  assert.match(hant.display.installInstructions, /行動服務/);
+  assert.match(hant.planInfo.deviceNotice, /未受電信業者鎖定/);
 });
 test('Polish and Arabic plural forms are grammatical categories, with opaque recorded amounts', async () => {
   const pl = createTranslator({ locale: 'pl', messages: await loadMessages('pl') });

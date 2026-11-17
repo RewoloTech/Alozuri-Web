@@ -12,6 +12,14 @@ import { messages as messages8 } from './zh-Hans.ts';
 import { messages as messages9 } from './ar.ts';
 import { messages as messages10 } from './nl.ts';
 import { messages as messages11 } from './pl.ts';
+import { messages as messages12 } from './tr.ts';
+import { messages as messages13 } from './ru.ts';
+import { messages as messages14 } from './vi.ts';
+import { messages as messages15 } from './id.ts';
+import { messages as messages16 } from './hi.ts';
+import { messages as messages17 } from './th.ts';
+import { messages as messages18 } from './uk.ts';
+import { messages as traditionalChinese } from './zh-Hant.ts';
 /** Only synchronous document/email renderers use this module. Website catalogues stay lazy. */
 const catalogues: Record<Locale, Messages> = {
   en: englishMessages,
@@ -27,6 +35,14 @@ const catalogues: Record<Locale, Messages> = {
   ar: messages9,
   nl: messages10,
   pl: messages11,
+  tr: messages12,
+  ru: messages13,
+  vi: messages14,
+  id: messages15,
+  hi: messages16,
+  th: messages17,
+  uk: messages18,
+  'zh-Hant': traditionalChinese,
 };
 export function staticMessages(locale: Locale): Messages {
   return catalogues[locale];

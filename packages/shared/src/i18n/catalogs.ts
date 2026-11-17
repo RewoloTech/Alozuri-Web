@@ -23,11 +23,27 @@ export async function loadMessages(locale: Locale): Promise<Messages> {
       return (await import('./ko.ts')).messages;
     case 'zh-Hans':
       return (await import('./zh-Hans.ts')).messages;
+    case 'zh-Hant':
+      return (await import('./zh-Hant.ts')).messages;
     case 'ar':
       return (await import('./ar.ts')).messages;
     case 'nl':
       return (await import('./nl.ts')).messages;
     case 'pl':
       return (await import('./pl.ts')).messages;
+    case 'tr':
+      return (await import('./tr.ts')).messages;
+    case 'ru':
+      return (await import('./ru.ts')).messages;
+    case 'vi':
+      return (await import('./vi.ts')).messages;
+    case 'id':
+      return (await import('./id.ts')).messages;
+    case 'hi':
+      return (await import('./hi.ts')).messages;
+    case 'th':
+      return (await import('./th.ts')).messages;
+    case 'uk':
+      return (await import('./uk.ts')).messages;
   }
 }

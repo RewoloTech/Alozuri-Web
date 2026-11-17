@@ -1,11 +1,15 @@
 # Alozuri internationalisation
 
-All 13 languages are implemented and enabled in the local build: English, Spanish,
+All 21 languages are implemented and enabled in the local build: English, Spanish,
 German, French, Italian, Brazilian Portuguese, Romanian, Japanese, Korean,
-Simplified Chinese, Arabic, Dutch and Polish. This change has **not been deployed**.
+Simplified Chinese, Arabic, Dutch, Polish, Turkish, Russian, Vietnamese,
+Indonesian, Hindi, Thai, Ukrainian and Traditional Chinese. This change has **not been deployed**.
 Professional native-language and legal approval has not been obtained. The legal
 review requirement is recorded separately from whether content exists and is enabled.
-See [the release audit](multilingual-production-audit.md) for actual verification.
+See [the Traditional Chinese audit](traditional-chinese-audit.md) for current
+verification, [the additional-languages audit](additional-languages-audit.md) for
+the 20-language baseline and [the earlier release audit](multilingual-production-audit.md)
+for the original 13-language baseline.
 
 ## Content and routing
 
@@ -28,11 +32,15 @@ English, preserving the query string. Other locales reuse the existing routes at
 checkout details and currency. API, Operations and internal routes are not localized;
 prefixed versions return 404. Private customer pages remain noindex/no-store.
 
-Public pages have native titles/descriptions, canonical links, all 13 hreflang
+Public pages have native titles/descriptions, canonical links, all 21 hreflang
 alternates, `x-default`, localized Open Graph metadata and sitemap entries. Product
 structured data uses translated descriptions and labels with the exact original
 SKU, amount and currency. Product and legacy checkout routes render request-specific
 language; catalogue fetches retain their existing explicit data cache.
+`/sitemap.xml` remains the public entry point and now indexes locale/page shards
+at `/sitemaps/sitemap/{locale}-{page}.xml`, with at most 5,000 paths per shard.
+This keeps all language alternatives and the existing catalogue within the
+[sitemap protocol's URL and byte limits](https://www.sitemaps.org/protocol.html).
 
 ## Preference and currency independence
 
@@ -80,9 +88,10 @@ order evidence are not rewritten. Existing agreements, compatibility confirmatio
 consumer rights and cancellation behaviour remain unchanged.
 
 Tests pin the English source digest, every language's policy structure, original
-links and all 91 legal text hashes. Changes to published wording require a new
+links and all 147 legal text hashes. The 140 pre-existing hashes are preserved.
+Changes to published wording require a new
 version. `POLICY_TRANSLATION_REVIEW` explicitly records that professional legal
-review has not been completed for the 12 translations. The release audit therefore
+review has not been completed for the 20 translations. The release audit therefore
 continues to exit nonzero for that review requirement, despite complete content.
 An unavailable historical translation never silently substitutes English.
 
@@ -90,7 +99,9 @@ New purchases already record `locale` and a hashed legal snapshot. Rendering use
 that saved locale, never the current browser/account preference. Missing locale on
 historical records means English; an invalid present locale or an order/legal
 language mismatch is rejected. Stripe Elements receives the order locale, with
-`zh-Hans` mapped to `zh`; its return URL retains that language. New Stripe payment
+`zh-Hans` mapped to `zh` and `zh-Hant` to `zh-TW`. Hindi and Ukrainian use English inside Stripe's embedded
+fields because the installed provider SDK does not support those two locales;
+the Alozuri interface and return URL retain the order language. New Stripe payment
 descriptions are localized while frozen historical attribution and idempotency
 bodies remain intact. No payment amount or supplier ordering algorithm changes.
 
@@ -110,7 +121,7 @@ frozen message; changing the template or profile does not change a queued messag
 The template version is deliberately not bumped to trigger historical resends.
 
 An authorized PDF download uses the same renderer in the browser and API. Complete
-Inter, Arabic and regional CJK fonts are self-hosted, with source hashes and OFL
+Inter, Arabic, regional CJK, Hindi and Thai fonts are self-hosted, with source hashes and OFL
 licenses. Unicode bidi run layout handles Arabic shaping and mixed technical values.
 Fonts load only on demand; normal storefront pages do not download the PDF fonts.
 The larger CJK font pair is approximately 6–12 MB on first PDF use and is cached.
@@ -150,3 +161,51 @@ Professional legal review is explicitly flagged here too.
 
 A production release requires explicit deployment authorization and professional
 review of translated legal documents. No automatic deployment is part of this work.
+
+## Seven-language extension (17 November 2026)
+
+The additional locales are `tr` (Türkçe), `ru` (Русский), `vi` (Tiếng Việt),
+`id` (Bahasa Indonesia), `hi` (हिन्दी), `th` (ไทย), and `uk` (Українська).
+They reuse the existing routes, functional preference cookies, account preference
+API, catalogue keys, versioned policies and immutable order language. All seven
+are left-to-right. Traditional Chinese was subsequently added as a separate locale
+alongside Simplified Chinese; both remain independently selectable.
+
+Stripe's installed Payment Element supports `tr`, `ru`, `vi`, `id` and `th`.
+It does not support `hi` or `uk`: only its embedded payment fields fall back to
+English; Alozuri's checkout, order language and currency remain unchanged.
+
+The native globe select retains its existing 44px header control. Browser-native
+scrolling and keyboard selection handle the 20 options without a wider header.
+Hindi/Thai webfonts and extended Latin/Cyrillic webfont subsets are self-hosted
+and requested by Unicode range. PDF fonts for Hindi and Thai are loaded only on
+an authorised download, with their source commits, hashes and OFL licences.
+
+Translations are machine-assisted with targeted engineering terminology and
+structural checks. Independent native-speaker and professional legal review has
+not been obtained. Passing key, ICU, identifier, rendering and payment tests is
+not a claim of that review. There is no translation API, model, extra service or
+new dependency in the deployed applications.
+
+Deploy the matching backend before the frontend: older checkout/profile schemas
+will reject the new locale values. This implementation does not deploy either
+application or resend historical notifications.
+
+## Traditional Chinese extension
+
+`zh-Hant` (繁體中文) and `zh-Hans` (简体中文) are separate locale resources and
+explicit URLs. Traditional Chinese appears immediately after Simplified Chinese
+in every shared language selector. `zh-TW`, `zh-HK` and `zh-MO` browser preferences select Traditional
+Chinese; `zh-CN`, `zh-SG` and generic `zh` select Simplified Chinese. Explicit
+script tags take priority over a conflicting region. Existing manual, URL and
+saved-account preferences continue to take priority over browser detection.
+
+The Traditional Chinese catalogue starts from the existing Simplified Chinese
+content, with character conversion followed by terminology and sentence edits
+for customer, telecom, payment, privacy, refund and installation copy. It is not
+an independent professional translation review. It uses terms such as 帳戶,
+方案, 電子郵件地址 and 啟用, with iPhone menu alternatives for Taiwan and Hong Kong.
+All seven policies and the existing transactional email/PDF flow are included.
+Firebase authentication messages use `zh-TW`. PDFs use on-demand self-hosted
+Noto Sans TC fonts; browser text prefers the device's Traditional Chinese fonts.
+No new runtime dependency, service, database or schedule is introduced.

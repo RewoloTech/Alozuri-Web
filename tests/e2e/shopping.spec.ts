@@ -1850,7 +1850,7 @@ test('editing a code during Continue validation cancels automatic payment progre
   expect(checkouts).toBe(1);
 });
 
-test('changing all thirteen languages preserves delivery details, compatibility, cart and unpaid promotion input', async ({
+test('changing all twenty-one languages preserves delivery details, compatibility, cart and unpaid promotion input', async ({
   page,
 }) => {
   await setup(page);
@@ -1953,6 +1953,42 @@ test('every locale reaches payment with compatibility validation, native errors 
     );
     await page.unroute('http://127.0.0.1:8189/v2/checkout');
   }
+});
+
+test('confirmation keeps refreshing a pending payment even when its eSIM allocation is already visible', async ({
+  page,
+}) => {
+  await setup(page);
+  const source = sampleConfirmation();
+  let requests = 0;
+  let paid = false;
+  await page.route('http://127.0.0.1:8189/v2/orders/' + source.id, async (route) => {
+    if (route.request().method() === 'OPTIONS') return route.fallback();
+    requests++;
+    await route.fulfill({
+      headers: { 'Access-Control-Allow-Origin': 'http://localhost:3100' },
+      json: {
+        ...source,
+        status: paid ? 'paid' : 'pending_payment',
+        paidAt: paid ? source.createdAt : undefined,
+        test: true,
+        contractDownloadAvailable: paid,
+        allocations: [{ id: orderId, status: 'paid', plan }],
+      },
+    });
+  });
+  await page.goto('/en/checkout/success?order=' + source.id + '#access=synthetic-refresh-only');
+  await expect(page.getByText('Payment: Awaiting payment', { exact: true })).toBeVisible();
+  await page.getByText('Order documents', { exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Download your contract PDF', exact: true }),
+  ).toBeDisabled();
+  paid = true;
+  await expect(page.getByText('Payment: Paid', { exact: true })).toBeVisible({ timeout: 10_000 });
+  expect(requests).toBeGreaterThanOrEqual(2);
+  await expect(
+    page.getByRole('button', { name: 'Download your contract PDF', exact: true }),
+  ).toBeEnabled();
 });
 
 test('native private orders download their saved language PDF even while the website is English', async ({

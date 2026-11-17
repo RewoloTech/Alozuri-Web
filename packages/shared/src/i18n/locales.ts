@@ -13,6 +13,14 @@ export const LOCALES = [
   'ar',
   'nl',
   'pl',
+  'tr',
+  'ru',
+  'vi',
+  'id',
+  'hi',
+  'th',
+  'uk',
+  'zh-Hant',
 ] as const;
 export type Locale = (typeof LOCALES)[number];
 export const DEFAULT_LOCALE: Locale = 'en';
@@ -32,6 +40,14 @@ export const LOCALE_NAMES: Record<Locale, string> = {
   ar: 'العربية',
   nl: 'Nederlands',
   pl: 'Polski',
+  tr: 'Türkçe',
+  ru: 'Русский',
+  vi: 'Tiếng Việt',
+  id: 'Bahasa Indonesia',
+  hi: 'हिन्दी',
+  th: 'ไทย',
+  uk: 'Українська',
+  'zh-Hant': '繁體中文',
 };
 export type ReviewStatus = 'draft' | 'reviewed' | 'published' | 'missing';
 export const REQUIRED_DOMAINS = [
@@ -75,7 +91,18 @@ export function requireInterfaceLocale(value: unknown): Locale {
   return value;
 }
 export const localeDirection = (locale: Locale): 'ltr' | 'rtl' => (locale === 'ar' ? 'rtl' : 'ltr');
-export const stripeElementsLocale = (locale: Locale) => (locale === 'zh-Hans' ? 'zh' : locale);
+/** Stripe does not currently offer Hindi or Ukrainian embedded payment fields. */
+export const stripeElementsLocale = (locale: Locale) =>
+  locale === 'zh-Hans'
+    ? 'zh'
+    : locale === 'zh-Hant'
+      ? 'zh-TW'
+      : locale === 'hi' || locale === 'uk'
+        ? 'en'
+        : locale;
+/** Firebase's email templates and provider UI use regional Chinese language codes. */
+export const firebaseAuthLocale = (locale: Locale) =>
+  locale === 'zh-Hans' ? 'zh-CN' : locale === 'zh-Hant' ? 'zh-TW' : locale;
 export class LocaleUnavailableError extends Error {
   readonly code = 'LOCALE_NOT_READY';
   readonly statusCode = 409;
@@ -102,8 +129,10 @@ export function negotiateLocale(
     const exact = LOCALES.find((locale) => locale.toLowerCase() === value);
     const alias = /^pt(?:-|$)/.test(value)
       ? 'pt-BR'
-      : /^zh(?:-|$)/.test(value) && !/^zh-(?:hant|tw|hk|mo)(?:-|$)/.test(value)
-        ? 'zh-Hans'
+      : /^zh(?:-|$)/.test(value)
+        ? /^zh-(?:hant|tw|hk|mo)(?:-|$)/.test(value)
+          ? 'zh-Hant'
+          : 'zh-Hans'
         : LOCALES.find((locale) => locale === value.split('-')[0]);
     const candidate = exact ?? alias;
     if (candidate && available.includes(candidate)) return candidate;

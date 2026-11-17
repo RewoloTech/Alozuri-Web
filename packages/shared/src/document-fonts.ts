@@ -8,12 +8,22 @@ export function documentFontFiles(locale: Locale): Record<string, string> {
         ? 'NotoSansKR'
         : locale === 'zh-Hans'
           ? 'NotoSansSC'
-          : undefined;
+          : locale === 'zh-Hant'
+            ? 'NotoSansTC'
+            : locale === 'hi'
+              ? 'NotoSansDevanagari'
+              : locale === 'th'
+                ? 'NotoSansThai'
+                : undefined;
   return {
     Latin: 'Inter-400.ttf',
     LatinBold: 'Inter-700.ttf',
-    Inter: family ? `${family}-Regular.woff2` : 'Inter-400.ttf',
-    InterBold: family ? `${family}-Bold.woff2` : 'Inter-700.ttf',
+    Inter: family
+      ? `${family}-Regular.${locale === 'hi' || locale === 'th' ? 'ttf' : 'woff2'}`
+      : 'Inter-400.ttf',
+    InterBold: family
+      ? `${family}-Bold.${locale === 'hi' || locale === 'th' ? 'ttf' : 'woff2'}`
+      : 'Inter-700.ttf',
     ...(locale === 'ar'
       ? { Arabic: 'NotoSansArabic-Regular.ttf', ArabicBold: 'NotoSansArabic-Bold.ttf' }
       : {}),

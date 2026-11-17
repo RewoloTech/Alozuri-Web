@@ -57,6 +57,20 @@
       "sha256": "c28a743d0ac15528462c2ae66486dadf39f92ec825189dfcff008a0226759fe5",
       "source": "https://raw.githubusercontent.com/notofonts/noto-cjk/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/SubsetOTF/KR/NotoSansKR-Regular.otf",
       "license": "OFL-CJK.txt"
+    },
+    {
+      "name": "NotoSansTC-Regular.woff2",
+      "bytes": 4175420,
+      "sha256": "9d38d7aa899200fb94a53b9b15b4c6e76e237d7a443d82436a96f5355f7798c2",
+      "source": "https://raw.githubusercontent.com/notofonts/noto-cjk/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/SubsetOTF/TC/NotoSansTC-Regular.otf",
+      "license": "OFL-CJK.txt"
+    },
+    {
+      "name": "NotoSansTC-Bold.woff2",
+      "bytes": 4393404,
+      "sha256": "b594a86bdc6654bffb6bd2d6e7200eb1e854e9b05e892915c15056f6f52a3856",
+      "source": "https://raw.githubusercontent.com/notofonts/noto-cjk/f8d157532fbfaeda587e826d4cd5b21a49186f7c/Sans/SubsetOTF/TC/NotoSansTC-Bold.otf",
+      "license": "OFL-CJK.txt"
     }
   ]
 }
