@@ -741,20 +741,6 @@ function CheckoutForIdentity() {
                   )}
                 </div>
               </details>
-              {quoteReady && quote?.promotion && (
-                <p role="status" className="checkout-promotion">
-                  {quote.promotion.discount && quote.promotion.discount.kind !== 'percent'
-                    ? `${isolate(quote.promotion.code)} · −${isolate(money(quote.discountCents ?? 0, currency))}`
-                    : p('promotionApplied', {
-                        code: isolate(quote.promotion.code),
-                        percent: quote.promotion.discountPercent,
-                        discount: isolate(money(quote.discountCents ?? 0, currency)),
-                        original: isolate(
-                          money(quote.originalRetailCents ?? quote.totalCents, currency),
-                        ),
-                      })}
-                </p>
-              )}
               <label className="checkbox-label">
                 <input
                   type="checkbox"

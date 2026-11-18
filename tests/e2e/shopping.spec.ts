@@ -727,14 +727,13 @@ test('promotional code apply, remove, invalid feedback and final Stripe amount s
   await expect(page.getByRole('button', { name: 'Continue to payment' })).toBeDisabled();
   await page.getByLabel('Promotional code', { exact: true }).fill('save20');
   await page.getByRole('button', { name: 'Apply code', exact: true }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'SAVE20: 20% off' })).toContainText(
-    '$2.40',
-  );
+  await expect(page.locator('.summary-discount')).toContainText('−$2.40');
+  await expect(page.locator('.checkout-promotion')).toHaveCount(0);
   await page.getByRole('button', { name: 'Remove code', exact: true }).click();
-  await expect(page.getByText('SAVE20: 20% off', { exact: false })).toHaveCount(0);
+  await expect(page.locator('.summary-discount')).toHaveCount(0);
   await page.getByLabel('Promotional code', { exact: true }).fill('SAVE20');
   await page.getByRole('button', { name: 'Apply code', exact: true }).click();
-  await expect(page.getByText('SAVE20: 20% off', { exact: false })).toBeVisible();
+  await expect(page.locator('.summary-discount')).toContainText('SAVE20');
   for (const width of [375, 390, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
@@ -2159,7 +2158,8 @@ test('30 percent GBP discount stays nominally exact in cart and Your order after
   await expect(page.locator('.summary-discount')).toContainText('−£0.33');
   await expect(page.locator('.promotion-price small').first()).toHaveText('−30%');
 
-  await expect(page.locator('.checkout-promotion')).toContainText('30% off');
+  await expect(page.locator('.checkout-promotion')).toHaveCount(0);
+  await expect(page.locator('.summary-discount')).toContainText('ALZ-K7M92Q');
   await expect(page.locator('.checkout-page .promotion-price small')).toHaveText('−30%');
   await expect(page.locator('.commerce-total')).toContainText('£0.80');
   await page.reload();
