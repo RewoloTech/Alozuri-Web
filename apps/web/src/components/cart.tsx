@@ -9,13 +9,7 @@ import { useEffect, useState } from 'react';
 import { useDispatch, useSelector, useStore } from 'react-redux';
 import { ShoppingBag, Trash2, Minus, Plus, LockKeyhole } from 'lucide-react';
 import { cartItems, previewCartPrices, money, type CartLine, type Currency } from '@alozuri/shared';
-import {
-  quantityChanged,
-  removeFromCart,
-  restoreCart,
-  setPromotionCode,
-  type RootState,
-} from '@/lib/store';
+import { quantityChanged, removeFromCart, restoreCart, type RootState } from '@/lib/store';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/firebase';
 import { useCurrency } from './currency-provider';
@@ -186,8 +180,6 @@ export function OrderSummary({
 type CartFailure = { key: keyof Messages['cart'] } | { code: ErrorCode };
 export function Cart() {
   const t = useTranslations('cart');
-  const checkoutCopy = useTranslations('checkout');
-  const paymentCopy = useTranslations('paymentUi');
   const errors = useTranslations('errors');
   const copy = usePlanCopy();
   const { currency, refresh, ready: currencyReady } = useCurrency();
@@ -219,8 +211,6 @@ export function Cart() {
     [error, setError] = useState<CartFailure | null>(null),
     [quoteAttempt, setQuoteAttempt] = useState(0),
     [quotedSignature, setQuotedSignature] = useState('');
-  const [promotionInput, setPromotionInput] = useState(cart.promotionCode);
-  useEffect(() => setPromotionInput(cart.promotionCode), [cart.promotionCode]);
   const signature = JSON.stringify(cartItems(cart.items));
   useEffect(() => {
     if (!currencyReady || !cart.ready || signature === '[]') {
@@ -439,49 +429,6 @@ export function Cart() {
           currency={currency}
           updating={pending}
         >
-          <details className="checkout-promo-entry">
-            <summary>{paymentCopy('promotionQuestion')}</summary>
-            <label htmlFor="cart-promotion-code">{checkoutCopy('promotionalCode')}</label>
-            <input
-              id="cart-promotion-code"
-              className="commerce-input"
-              value={promotionInput}
-              maxLength={32}
-              autoComplete="off"
-              autoCapitalize="characters"
-              spellCheck={false}
-              dir="ltr"
-              onChange={(e) => setPromotionInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  if (!pending) dispatch(setPromotionCode(promotionInput));
-                }
-              }}
-            />
-            <div className="checkout-promo-actions" dir="ltr">
-              <button
-                type="button"
-                className="button small"
-                disabled={pending || !promotionInput.trim()}
-                onClick={() => dispatch(setPromotionCode(promotionInput))}
-              >
-                {checkoutCopy('apply')}
-              </button>
-              {cart.promotionCode && (
-                <button
-                  type="button"
-                  className="button small"
-                  onClick={() => {
-                    dispatch(setPromotionCode(''));
-                    setPromotionInput('');
-                  }}
-                >
-                  {checkoutCopy('remove')}
-                </button>
-              )}
-            </div>
-          </details>
           <Link
             className="button primary full-width"
             aria-disabled={checkoutBlocked}

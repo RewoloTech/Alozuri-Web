@@ -2149,12 +2149,16 @@ test('30 percent GBP discount stays nominally exact in cart and Your order after
   });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/cart');
+  await expect(page.locator('.checkout-promo-entry')).toHaveCount(0);
+  await page.getByRole('link', { name: 'Secure checkout', exact: true }).click();
+  await expect(page.locator('.checkout-page')).toBeVisible();
+  await expect(page.getByLabel('Promotional code', { exact: true })).toHaveCount(1);
   await page.locator('.checkout-promo-entry summary').click();
   await page.getByLabel('Promotional code', { exact: true }).fill('ALZ-K7M92Q');
   await page.getByRole('button', { name: 'Apply code', exact: true }).click();
   await expect(page.locator('.summary-discount')).toContainText('−£0.33');
   await expect(page.locator('.promotion-price small').first()).toHaveText('−30%');
-  await page.getByRole('link', { name: 'Secure checkout', exact: true }).click();
+
   await expect(page.locator('.checkout-promotion')).toContainText('30% off');
   await expect(page.locator('.checkout-page .promotion-price small')).toHaveText('−30%');
   await expect(page.locator('.commerce-total')).toContainText('£0.80');
@@ -2167,6 +2171,9 @@ test('30 percent GBP discount stays nominally exact in cart and Your order after
   await page.getByRole('link', { name: 'Edit cart', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Your cart', exact: true })).toBeVisible();
   await expect(page.locator('.summary-discount')).toContainText('−£0.33');
+  await expect(page.locator('.checkout-promo-entry')).toHaveCount(0);
+  await page.getByRole('link', { name: 'Secure checkout', exact: true }).click();
+  await expect(page.locator('.checkout-page')).toBeVisible();
   await page.locator('.checkout-promo-entry summary').click();
   await page.getByRole('button', { name: 'Remove code', exact: true }).click();
   await expect(page.locator('.summary-discount')).toHaveCount(0);

@@ -341,8 +341,8 @@ trusted for payment. This does not synchronize coupons across different devices.
 
 Both cart and checkout's Your order summary show the verified original subtotal,
 a separate discount/code row and the final total. Automatic discounts also get
-the aggregate discount row. The cart has the same apply/remove controls as
-checkout. Removed or ineligible codes trigger revalidation; no discount breakdown
+the aggregate discount row. The promotion input and apply/remove controls appear only at the final
+checkout step; the cart shows the existing discount without a second input. Removed or ineligible codes trigger revalidation; no discount breakdown
 is shown from an unverified quote.
 
 Percentage promotion badges use the configured nominal rate (30% in the reported

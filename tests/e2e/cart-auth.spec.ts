@@ -286,13 +286,15 @@ async function signup(page: Page, promotionCode?: string) {
   await page.getByRole('button', { name: 'Add to cart', exact: true }).click();
   await page.getByRole('link', { name: 'Shopping cart, 1 item', exact: true }).click();
   await expect(page.locator('.commerce-total')).toContainText('$12.00');
+  await expect(page.locator('#cart-promotion-code')).toHaveCount(0);
+  await page.getByRole('link', { name: 'Secure checkout', exact: true }).click();
+  await expect(page.locator('.checkout-page')).toBeVisible();
   if (promotionCode) {
     await page.locator('.checkout-promo-entry summary').click();
     await page.getByLabel('Promotional code', { exact: true }).fill(promotionCode);
     await page.getByRole('button', { name: 'Apply code', exact: true }).click();
     await expect(page.locator('.commerce-total')).toContainText('$8.40');
   }
-  await page.getByRole('link', { name: 'Secure checkout', exact: true }).click();
   await expect(page.locator('.commerce-total')).toContainText(promotionCode ? '$8.40' : '$12.00');
   await page.getByRole('textbox', { name: 'Email address', exact: true }).fill(email);
   await page.getByRole('button', { name: 'Create an account', exact: true }).click();
