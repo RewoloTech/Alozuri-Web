@@ -69,13 +69,23 @@ export async function apiBlob(
   path: string,
   init: RequestInit = {},
   authenticated: boolean | string = false,
+  expected: 'pdf' | 'image' = 'pdf',
 ): Promise<Blob> {
   const response = await storeResponse(path, init, authenticated);
   if (!response.ok) {
     const body: unknown = await response.json().catch(() => null);
     throw await storeApiError(body, response.status);
   }
-  if (!response.headers.get('content-type')?.includes('application/pdf'))
-    throw new Error('Your contract is temporarily unavailable.');
+  const type = response.headers.get('content-type')?.split(';')[0];
+  if (
+    expected === 'image'
+      ? !type || !['image/png', 'image/jpeg', 'image/webp'].includes(type)
+      : type !== 'application/pdf'
+  )
+    throw new Error(
+      expected === 'image'
+        ? 'Image preview unavailable.'
+        : 'Your contract is temporarily unavailable.',
+    );
   return response.blob();
 }

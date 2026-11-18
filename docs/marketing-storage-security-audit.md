@@ -148,3 +148,16 @@ deny direct reads and writes; authenticated Operations APIs mediate uploads.
 Local verification: seven focused Firestore integration tests, 35 Jest tests,
 application type checks, lint and production build passed. Live deployment and
 verification results are recorded separately after the release checks.
+
+Live checks passed against the actual bucket and deployed API: anonymous upload
+rejected, malformed PNG rejected, administrator upload/decoded preview successful,
+draft anonymous read denied, direct Cloud Storage and Firebase client downloads
+denied, published image served through API and storefront with no-store, and
+unpublish immediately returned 404 through both paths. Temporary test accounts
+and assets were removed. No customer campaign or purchase was used.
+
+A live browser check found that the PDF download helper rejected image MIME types.
+The helper now has an explicit image mode (PNG/JPEG/WebP only); default contract
+PDF validation is retained. Preview tests assert the authenticated image mode and
+blob URL cleanup. Updated Jest total: 36 passed. PNG, JPEG and WebP round trips
+and publish/unpublish access are covered by the seven Firestore integration tests.

@@ -245,13 +245,17 @@ test('draft images require admin access and published images stop serving after 
     .toBuffer();
   const { promotionId: omittedPromotion, ...imageBanner } = banner;
   void omittedPromotion;
-  for (const _device of ['desktop', 'mobile']) {
-    void _device;
+  for (const [device, format] of [
+    ['desktop', 'png'],
+    ['mobile', 'jpeg'],
+    ['webp', 'webp'],
+  ] as const) {
+    const bytes = await sharp(png).toFormat(format).toBuffer();
     const result = await api.inject({
       method: 'POST',
       url: '/v1/operations/marketing/images',
       headers: { authorization: 'Bearer admin' },
-      payload: { content: png.toString('base64'), contentType: 'image/png' },
+      payload: { content: bytes.toString('base64'), contentType: 'image/' + format },
     });
     assert.equal(result.statusCode, 200);
     const image = await api.inject({ url: result.json().path });
@@ -263,7 +267,8 @@ test('draft images require admin access and published images stop serving after 
     assert.equal(preview.statusCode, 200);
     assert.match(preview.headers['cache-control']!, /no-store/);
     assert.equal((await sharp(preview.rawPayload).metadata()).width, 2);
-    const key = 'asset-' + _device;
+    assert.equal((await sharp(preview.rawPayload).metadata()).format, format);
+    const key = 'asset-' + device;
     await marketing.save(
       'banners',
       {

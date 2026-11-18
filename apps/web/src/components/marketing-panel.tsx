@@ -14,7 +14,7 @@ function MarketingImagePreview({ src }: { src: string }) {
     let url = '';
     setPreview('');
     setFailed(false);
-    void apiBlob(src.replace(/^\/api\/store/, ''), {}, true)
+    void apiBlob(src.replace(/^\/api\/store/, ''), {}, true, 'image')
       .then((blob) => {
         url = URL.createObjectURL(blob);
         if (active) setPreview(url);
