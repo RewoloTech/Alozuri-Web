@@ -494,6 +494,7 @@ export function MarketingPanel({ uid }: { uid: string }) {
                   Desktop image
                   <input
                     type="file"
+                    style={{ maxWidth: '100%' }}
                     accept="image/png,image/jpeg,image/webp"
                     disabled={busy}
                     onChange={(e) => void upload(e.target.files?.[0], false)}
@@ -503,6 +504,7 @@ export function MarketingPanel({ uid }: { uid: string }) {
                   Mobile image
                   <input
                     type="file"
+                    style={{ maxWidth: '100%' }}
                     accept="image/png,image/jpeg,image/webp"
                     disabled={busy}
                     onChange={(e) => void upload(e.target.files?.[0], true)}
