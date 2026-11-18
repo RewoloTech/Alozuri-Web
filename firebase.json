@@ -1,4 +1,5 @@
 {
+  "storage": { "rules": "infra/storage.rules" },
   "firestore": {
     "rules": "infra/firestore.rules",
     "indexes": "infra/firestore.indexes.json"

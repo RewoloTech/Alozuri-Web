@@ -105,7 +105,7 @@ async function relay(request: Request, context: { params: Promise<{ path: string
       const type = upstream.headers.get('content-type')?.split(';')[0];
       if (upstream.ok && type && ['image/png', 'image/jpeg', 'image/webp'].includes(type)) {
         responseHeaders.set('Content-Type', type);
-        responseHeaders.set('Cache-Control', 'public,max-age=31536000,immutable');
+        responseHeaders.set('Cache-Control', 'private,no-store');
         return new Response(upstream.body, { status: upstream.status, headers: responseHeaders });
       }
       return new Response(null, { status: upstream.ok ? 502 : upstream.status });

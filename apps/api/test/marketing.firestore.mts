@@ -1,4 +1,5 @@
 import test from 'node:test';
+import sharp from 'sharp';
 import assert from 'node:assert/strict';
 import { initializeApp, deleteApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
@@ -202,6 +203,16 @@ test('admin routes enforce authorization and reject invalid image uploads withou
     payload: { content: Buffer.from('fake image').toString('base64'), contentType: 'image/png' },
   });
   assert.notEqual(invalid.statusCode, 200);
+  const truncated = await api.inject({
+    method: 'POST',
+    url: '/v1/operations/marketing/images',
+    headers: { authorization: 'Bearer admin' },
+    payload: {
+      content: Buffer.from('89504e470d0a1a0a0000000000000000', 'hex').toString('base64'),
+      contentType: 'image/png',
+    },
+  });
+  assert.equal(truncated.statusCode, 400);
   const overview = await api.inject({
     url: '/v1/operations/marketing',
     headers: { authorization: 'Bearer admin' },
@@ -211,7 +222,7 @@ test('admin routes enforce authorization and reject invalid image uploads withou
   await api.close();
 });
 
-test('desktop and mobile images round-trip through authenticated upload and safe immutable public IDs', async () => {
+test('draft images require admin access and published images stop serving after unpublish', async () => {
   const { Readable } = await import('node:stream');
   const files = new Map<string, { bytes: Buffer; type: string }>();
   const api = Fastify();
@@ -229,10 +240,11 @@ test('desktop and mobile images round-trip through authenticated upload and safe
       read: (id) => Readable.from(files.get(id)!.bytes),
     },
   );
-  const png = Buffer.from(
-    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jOuoAAAAASUVORK5CYII=',
-    'base64',
-  );
+  const png = await sharp({ create: { width: 2, height: 2, channels: 4, background: '#4338ca' } })
+    .png()
+    .toBuffer();
+  const { promotionId: omittedPromotion, ...imageBanner } = banner;
+  void omittedPromotion;
   for (const _device of ['desktop', 'mobile']) {
     void _device;
     const result = await api.inject({
@@ -243,10 +255,36 @@ test('desktop and mobile images round-trip through authenticated upload and safe
     });
     assert.equal(result.statusCode, 200);
     const image = await api.inject({ url: result.json().path });
-    assert.equal(image.statusCode, 200);
-    assert.equal(image.headers['content-type'], 'image/png');
-    assert.match(image.headers['cache-control']!, /immutable/);
-    assert.deepEqual(image.rawPayload, png);
+    assert.equal(image.statusCode, 404);
+    const preview = await api.inject({
+      url: result.json().path,
+      headers: { authorization: 'Bearer admin' },
+    });
+    assert.equal(preview.statusCode, 200);
+    assert.match(preview.headers['cache-control']!, /no-store/);
+    assert.equal((await sharp(preview.rawPayload).metadata()).width, 2);
+    const key = 'asset-' + _device;
+    await marketing.save(
+      'banners',
+      {
+        ...imageBanner,
+        id: key,
+        desktopImage: '/api/store' + result.json().path,
+      },
+      'owner',
+    );
+    assert.equal((await api.inject({ url: result.json().path })).statusCode, 200);
+    await marketing.save(
+      'banners',
+      {
+        ...imageBanner,
+        id: key,
+        active: false,
+        desktopImage: '/api/store' + result.json().path,
+      },
+      'owner',
+    );
+    assert.equal((await api.inject({ url: result.json().path })).statusCode, 404);
   }
   assert.equal(
     (

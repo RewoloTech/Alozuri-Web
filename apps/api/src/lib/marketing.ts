@@ -3,6 +3,7 @@ import type { Firestore } from 'firebase-admin/firestore';
 import type { FastifyInstance } from 'fastify';
 import { getStorage } from 'firebase-admin/storage';
 import { z } from 'zod';
+import sharp from 'sharp';
 import { database } from './firebase.js';
 import {
   bannerSchema,
@@ -268,7 +269,7 @@ export class Marketing {
       });
     });
   }
-  async published() {
+  async published(imageId?: string) {
     if (process.env.MARKETING_ENABLED !== 'true') return [];
     const docs = await this.db
       .collection('websiteBanners')
@@ -280,6 +281,15 @@ export class Marketing {
     let catalogue: FirebaseFirestore.QuerySnapshot | undefined;
     for (const doc of docs.docs) {
       const banner = bannerSchema.parse(doc.data());
+      if (
+        imageId &&
+        ![banner.desktopImage, banner.mobileImage].some(
+          (image) =>
+            image === '/api/store/v1/marketing/images/' + imageId ||
+            image === '/v1/marketing/images/' + imageId,
+        )
+      )
+        continue;
       if (!activeWindow(banner)) continue;
       if (banner.campaignId) {
         const campaign = await this.db.doc('marketingCampaigns/' + banner.campaignId).get();
@@ -341,7 +351,7 @@ const configuredAssets: MarketingAssets = {
       .file('marketing/' + id)
       .save(bytes, {
         resumable: false,
-        metadata: { contentType, cacheControl: 'public, max-age=31536000, immutable' },
+        metadata: { contentType, cacheControl: 'private, no-store' },
       });
   },
   read(id) {
@@ -418,8 +428,28 @@ export function registerMarketing(
           : '';
     if (type !== input.contentType || bytes.length < 16 || bytes.length > 500_000)
       throw new OperationsError('Use a PNG, JPEG or WebP image under 500 KB.', 400);
+    let clean: Buffer;
+    try {
+      const decoder = sharp(bytes, { limitInputPixels: 16_000_000, failOn: 'warning' });
+      const metadata = await decoder.metadata();
+      if (
+        !metadata.width ||
+        !metadata.height ||
+        metadata.width > 4096 ||
+        metadata.height > 4096 ||
+        (metadata.pages ?? 1) > 1
+      )
+        throw new Error('Image dimensions unavailable.');
+      clean = await decoder.rotate().toBuffer();
+      if (clean.length > 500_000) throw new Error('Image too large.');
+    } catch {
+      throw new OperationsError(
+        'Use a valid PNG, JPEG or WebP image up to 4096 pixels and under 500 KB.',
+        400,
+      );
+    }
     const id = randomUUID();
-    await assets.save(id, bytes, type);
+    await assets.save(id, clean, type);
     await database()
       .doc('marketingAssets/' + id)
       .create({ type, actor: actor.uid, createdAt: new Date().toISOString() });
@@ -431,12 +461,20 @@ export function registerMarketing(
       .doc('marketingAssets/' + id)
       .get();
     if (!metadata.exists) return reply.code(404).send();
+    const published = await new Marketing(database()).published(id);
+    if (!published.length) {
+      try {
+        await authorize(req.headers.authorization);
+      } catch {
+        return reply.code(404).send();
+      }
+    }
     reply
       .header(
         'Content-Type',
         z.enum(['image/png', 'image/jpeg', 'image/webp']).parse(metadata.get('type')),
       )
-      .header('Cache-Control', 'public,max-age=31536000,immutable')
+      .header('Cache-Control', 'private,no-store')
       .header('X-Content-Type-Options', 'nosniff');
     return reply.send(assets.read(id));
   });

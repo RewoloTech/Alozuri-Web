@@ -1,0 +1,9 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Marketing uploads and delivery use the authorized backend, never client SDK access.
+    match /{object=**} {
+      allow read, write: if false;
+    }
+  }
+}

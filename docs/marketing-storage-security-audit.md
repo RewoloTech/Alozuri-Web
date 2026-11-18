@@ -127,3 +127,24 @@ The immediate priority is to address draft asset publication boundaries and
 complete the live rules/effective-IAM verification before calling the system
 fully audited. Keep the deny-all client rules; do not open the bucket to make
 uploads work. Resolve backend IAM and configuration instead.
+
+## Remediation — 18 November 2026
+
+Marketing assets now require an active published banner reference (including
+campaign, promotion and schedule eligibility) for anonymous delivery. Verified
+administrators can preview drafts with an authenticated blob request. API,
+storefront proxy and bucket object metadata use no-store caching so unpublishing
+blocks future requests. Previously downloaded copies cannot be revoked.
+
+Uploads now decode and re-encode PNG/JPEG/WebP using the existing Sharp version,
+with explicit runtime dependency, pixel/dimension and output-byte bounds; truncated
+image signatures are rejected. Metadata is stripped during re-encoding.
+
+The existing empty Firebase bucket was configured with uniform bucket-level
+access and enforced public access prevention. The API runtime has object-user
+permissions conditioned on the marketing/ prefix. Client Firebase Storage rules
+deny direct reads and writes; authenticated Operations APIs mediate uploads.
+
+Local verification: seven focused Firestore integration tests, 35 Jest tests,
+application type checks, lint and production build passed. Live deployment and
+verification results are recorded separately after the release checks.

@@ -2,7 +2,46 @@
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { LOCALES, LOCALE_NAMES } from '@alozuri/shared/i18n';
-import { api } from '@/lib/api';
+import { api, apiBlob } from '@/lib/api';
+function MarketingImagePreview({ src }: { src: string }) {
+  const [preview, setPreview] = useState('');
+  const [failed, setFailed] = useState(false);
+  const internal =
+    src.startsWith('/api/store/v1/marketing/images/') || src.startsWith('/v1/marketing/images/');
+  useEffect(() => {
+    if (!internal) return;
+    let active = true;
+    let url = '';
+    setPreview('');
+    setFailed(false);
+    void apiBlob(src.replace(/^\/api\/store/, ''), {}, true)
+      .then((blob) => {
+        url = URL.createObjectURL(blob);
+        if (active) setPreview(url);
+        else URL.revokeObjectURL(url);
+      })
+      .catch(() => {
+        if (active) setFailed(true);
+      });
+    return () => {
+      active = false;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [src, internal]);
+  const resolved = internal ? preview : src;
+  return resolved ? (
+    <Image
+      unoptimized
+      src={resolved}
+      alt=""
+      width={1160}
+      height={400}
+      style={{ width: '100%', height: 'auto' }}
+    />
+  ) : (
+    <p role="status">{failed ? 'Image preview unavailable.' : 'Loading image…'}</p>
+  );
+}
 import { PromotionsPanel } from './promotions';
 import type { PublicBanner } from './website-marketing';
 type Campaign = {
@@ -576,17 +615,12 @@ export function MarketingPanel({ uid }: { uid: string }) {
                 {(device === 'mobile'
                   ? banner.mobileImage || banner.desktopImage
                   : banner.desktopImage) && (
-                  <Image
-                    unoptimized
+                  <MarketingImagePreview
                     src={
                       (device === 'mobile'
                         ? banner.mobileImage || banner.desktopImage
                         : banner.desktopImage) || ''
                     }
-                    alt=""
-                    width={1160}
-                    height={400}
-                    style={{ width: '100%', height: 'auto' }}
                   />
                 )}
                 <strong>{previewCopy?.heading}</strong>

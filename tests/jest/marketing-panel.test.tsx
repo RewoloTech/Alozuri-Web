@@ -1,7 +1,10 @@
 import { test, expect, jest, afterEach } from '@jest/globals';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 const mockApi = jest.fn<(path: string, init?: RequestInit) => Promise<unknown>>();
-jest.mock('@/lib/api', () => ({ api: (path: string, init?: RequestInit) => mockApi(path, init) }));
+jest.mock('@/lib/api', () => ({
+  apiBlob: () => Promise.reject(new Error('Controlled unavailable preview')),
+  api: (path: string, init?: RequestInit) => mockApi(path, init),
+}));
 jest.mock('@/components/promotions', () => ({
   PromotionsPanel: () => <div>Existing discount editor</div>,
 }));
