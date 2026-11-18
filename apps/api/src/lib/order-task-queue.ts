@@ -126,6 +126,17 @@ export class CloudOrderTaskQueue implements OrderTaskQueue {
   ) {}
   async enqueue(input: OrderWork, runAfterAt?: number) {
     const work = orderWorkSchema.parse(input);
+    return this.enqueueHttp(work, orderTaskName(work), this.config.workerUrl, runAfterAt);
+  }
+  async enqueuePricing(version: string) {
+    z.uuid().parse(version);
+    return this.enqueueHttp(
+      { version },
+      'pricing-' + crypto.randomUUID(),
+      new URL('/internal/pricing/apply', this.config.workerUrl).href,
+    );
+  }
+  private async enqueueHttp(work: object, name: string, url: string, runAfterAt?: number) {
     try {
       await this.request({
         url: `https://cloudtasks.googleapis.com/v2/${this.config.queue}/tasks`,
@@ -137,10 +148,10 @@ export class CloudOrderTaskQueue implements OrderTaskQueue {
             ...(runAfterAt !== undefined
               ? { scheduleTime: new Date(runAfterAt).toISOString() }
               : {}),
-            name: `${this.config.queue}/tasks/${orderTaskName(work)}`,
+            name: `${this.config.queue}/tasks/${name}`,
             dispatchDeadline: '300s',
             httpRequest: {
-              url: this.config.workerUrl,
+              url,
               httpMethod: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: Buffer.from(JSON.stringify(work)).toString('base64'),

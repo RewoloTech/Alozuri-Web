@@ -90,6 +90,8 @@ export type Plan = {
 export type StoredPlan = Plan & {
   supplierCode: string;
   wholesaleUnits: number;
+  supplierAvailable?: boolean;
+  lastSupplierMovement?: 'increase' | 'decrease';
   active: boolean;
   providerId?: string;
   productOffers?: {
@@ -103,6 +105,7 @@ export type StoredPlan = Plan & {
   supplierCostUsdCents?: number;
   sellingPriceUsdCents?: number;
   pricingVersion?: string;
+  managedPricing?: import('./pricing-management.ts').ResolvedPricing;
   pricingUpdatedAt?: unknown;
   priceOverrideUsdCents?: number | null;
   pricingStatus?: 'valid' | 'review_required';

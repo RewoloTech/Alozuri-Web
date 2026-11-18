@@ -35,6 +35,11 @@ export async function publishFeaturedBundles(
       lease.get('status') !== (complete ? 'running' : 'complete')
     )
       throw new Error('Featured bundle source lease changed.');
+    const configRef = db.doc('pricingManagement/active');
+    const config =
+      complete?.pricingConfiguration && complete.pricingConfiguration !== 'global'
+        ? await transaction.get(configRef)
+        : null;
     const previous = docs.flatMap((doc) => {
       const parsed = bundleRecordSchema.safeParse(doc.data());
       return parsed.success ? [parsed.data] : [];
@@ -76,6 +81,12 @@ export async function publishFeaturedBundles(
         count++;
       }
     }
+    if (
+      config &&
+      config.get('version') === complete?.pricingConfiguration &&
+      config.get('job') !== 'complete'
+    )
+      transaction.update(configRef, { job: 'complete' });
     if (complete)
       transaction.set(state, { ...complete, status: 'complete', leaseUntil: 0, runId: syncId });
     return count;

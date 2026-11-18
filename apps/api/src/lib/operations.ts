@@ -1,3 +1,4 @@
+import { registerPricingManagement } from './pricing-management.js';
 import { registerMarketing } from './marketing.js';
 import { TopupReconciliation } from './topup-reconciliation.js';
 import { LOCALES } from '../../../../packages/shared/src/i18n/locales.ts';
@@ -218,6 +219,7 @@ export function registerOperations(
       .parse(request.query);
     return localizationPreview(input.locale);
   });
+  registerPricingManagement(app, requireAdmin);
   registerMarketing(app, requireAdmin);
   registerPromotionRoutes(app, requireAdmin);
   app.get('/v1/operations/access', async (req) => {

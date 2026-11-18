@@ -1,3 +1,4 @@
+import { readRules, resolvePricing } from './pricing-rules.js';
 import { resolveCanonicalProducts } from './canonical-products.js';
 import { pricingHistoryMetadata } from './pricing-history.js';
 import { initialFinancial } from './financial-calculations.js';
@@ -253,9 +254,10 @@ export function firestorePaymentStore(
 }
 export async function currentCheckoutPlan(
   id: string,
-  supplier = new SupplierClient(),
+  supplier: Pick<SupplierClient, 'packages'> = new SupplierClient(),
+  db = database(),
 ): Promise<StoredPlan> {
-  const ref = database().collection('packages').doc(id),
+  const ref = db.collection('packages').doc(id),
     doc = await ref.get(),
     data = doc.data();
   const publicPlan = data && cataloguePlan(data);
@@ -275,14 +277,31 @@ export async function currentCheckoutPlan(
     (p) => p.id === id,
   );
   if (!candidate) {
-    await ref.set({ active: false, pricingStatus: 'review_required' }, { merge: true });
+    await ref.set(
+      { active: false, supplierAvailable: false, pricingStatus: 'review_required' },
+      { merge: true },
+    );
     throw new CheckoutError('This package is no longer available. Search again.');
   }
-  const fresh = await database().runTransaction(async (t) => {
-    const current = await t.get(ref);
+  const fresh = await db.runTransaction(async (t) => {
+    const [current, active] = await t.getAll(ref, db.doc('pricingManagement/active'));
+    if (!cataloguePlan(current.data())) throw new CheckoutError('Plan unavailable. Search again.');
     if (decisionHash(current.get('productOffers')) !== decisionHash(data.productOffers))
       throw new CheckoutError('Supplier mapping changed. Review the package again.');
-    const priced = pricePackage(candidate, current.data());
+    const rule = resolvePricing(candidate, readRules(active.get('snapshot')));
+    const waitingForBatch =
+      decisionHash(rule) !== decisionHash(current.get('managedPricing') ?? null);
+    if (waitingForBatch && !['pending', 'retrying'].includes(active.get('job')))
+      throw new CheckoutError('Package pricing changed. Review this package again.');
+    // Until its family is materialised, charge the currently published catalogue rule.
+    // Once the batch commits, use the new rule even while later batches are running.
+    const priced = pricePackage(
+      candidate,
+      current.data(),
+      Timestamp.now(),
+      false,
+      waitingForBatch ? undefined : rule,
+    );
     if (
       current.get('supplierComparison') &&
       (
@@ -302,6 +321,7 @@ export async function currentCheckoutPlan(
     ) {
       priced.active = false;
       priced.pricingStatus = 'review_required';
+      priced.supplierAvailable = false;
       priced.pricingFlags = [...(priced.pricingFlags ?? []), 'service_changed_requires_sync'];
     }
     if (!samePackage(current.data() || {}, priced)) {
@@ -324,6 +344,12 @@ export async function currentCheckoutPlan(
             before,
             after,
             kind: 'checkout_revalidation',
+            configurationVersion: waitingForBatch
+              ? (current.get('appliedPricingVersion') ?? 'global')
+              : (active.get('version') ?? 'global'),
+            pricingAdministrator: waitingForBatch
+              ? (current.get('pricingAdministrator') ?? null)
+              : (active.get('actor') ?? null),
             ...pricingHistoryMetadata(priced, before, after),
             recordedAt: Timestamp.now(),
           },

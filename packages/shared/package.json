@@ -27,7 +27,9 @@
     "./i18n/places": "./src/i18n/places.ts",
     "./i18n/plan-copy": "./src/i18n/plan-copy.ts",
     "./document-fonts": "./src/document-fonts.ts",
-    "./i18n/transaction-copy": "./src/i18n/transaction-copy.ts"
+    "./i18n/transaction-copy": "./src/i18n/transaction-copy.ts",
+    "./pricing-management": "./src/pricing-management.ts",
+    "./geography": "./src/geography.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
@@ -36,6 +38,7 @@
     "@formatjs/icu-messageformat-parser": "^3.5.23",
     "bidi-js": "^1.0.3",
     "linebreak": "^1.1.0",
-    "use-intl": "^4.15.1"
+    "use-intl": "^4.15.1",
+    "zod": "^4.1.0"
   }
 }

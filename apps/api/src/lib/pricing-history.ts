@@ -1,3 +1,5 @@
+import { calculatePricing, PRICING_POLICY, moneyInteger } from './pricing.js';
+import { resolvedSchema } from './pricing-rules.js';
 import { countryName } from '../../../../packages/shared/src/index.ts';
 import type { Firestore, DocumentData, Query } from 'firebase-admin/firestore';
 import { FieldPath, Timestamp } from 'firebase-admin/firestore';
@@ -82,8 +84,30 @@ export function pricingMovement(before: unknown, after: unknown) {
 /** Enrich the EXISTING audit record; never create a parallel price-history store. */
 export function pricingHistoryMetadata(packageData: unknown, before: unknown, after: unknown) {
   const identity = identitySchema.safeParse(packageData);
+  const priced = z
+    .object({ wholesaleUnits: z.unknown(), managedPricing: resolvedSchema.optional() })
+    .safeParse(after);
+  let calculation;
+  if (priced.success && moneyInteger(priced.data.wholesaleUnits)) {
+    try {
+      const rule = priced.data.managedPricing;
+      const { target, minimum, competitorTarget } = calculatePricing(
+        priced.data.wholesaleUnits,
+        rule,
+      );
+      calculation = {
+        target,
+        minimum,
+        competitorTarget,
+        minimumMarginBps: rule?.minimumContributionBps ?? PRICING_POLICY.minimumContributionBps,
+      };
+    } catch {
+      /* Unsupported costs still receive an availability history record. */
+    }
+  }
   return {
     historyVersion: 1,
+    ...(calculation ? { calculation } : {}),
     ...(identity.success ? { package: identity.data } : {}),
     supplierCurrency: 'USD',
     supplierScale: 10000,
@@ -97,6 +121,7 @@ export const pricingHistoryQuery = z
     to: z.iso.date(),
     packageId: documentId.optional(),
     q: z.string().trim().max(80).optional(),
+    version: z.uuid().optional(),
     cursor: z.string().max(1500).optional(),
   })
   .strict();
@@ -106,6 +131,7 @@ const cursorSchema = z
     to: z.string(),
     packageId: z.string().nullable(),
     q: z.string().optional(),
+    version: z.uuid().optional(),
     seconds: z.number().int().min(-62135596800).max(253402300799),
     nanoseconds: z.number().int().min(0).max(999999999),
     path: z
@@ -160,6 +186,7 @@ export class PricingHistoryReports {
     let query: Query<DocumentData> = input.packageId
       ? this.db.collection('packages').doc(input.packageId).collection('pricingHistory')
       : this.db.collectionGroup('pricingHistory');
+    if (input.version) query = query.where('configurationVersion', '==', input.version);
     query = query
       .where('recordedAt', '>=', Timestamp.fromDate(new Date(bounds.start)))
       .where('recordedAt', '<', Timestamp.fromDate(new Date(bounds.end)))
@@ -173,6 +200,7 @@ export class PricingHistoryReports {
         throw new OperationsError('Invalid pricing history cursor.');
       }
       if (
+        cursor.version !== input.version ||
         cursor.from !== input.from ||
         cursor.to !== input.to ||
         cursor.packageId !== (input.packageId ?? null) ||
@@ -218,9 +246,27 @@ export class PricingHistoryReports {
     );
     const rows: PricingHistoryRow[] = parsed.map((p) => {
       const fallback = labels.get(p.packageId);
+      const rule = resolvedSchema.safeParse(p.doc.get('after.managedPricing'));
       const identity = p.record.package ?? (fallback?.success ? fallback.data : null);
       return {
         id: p.doc.id,
+        ...(typeof p.doc.get('calculation.target') === 'number'
+          ? {
+              targetCents: Number(p.doc.get('calculation.target')),
+              minimumCents: Number(p.doc.get('calculation.minimum')),
+              floorMargin: Number(p.doc.get('calculation.minimumMarginBps')),
+            }
+          : {}),
+        ...(typeof p.doc.get('configurationVersion') === 'string'
+          ? {
+              configurationVersion: String(p.doc.get('configurationVersion')),
+              actor:
+                typeof p.doc.get('pricingAdministrator') === 'string'
+                  ? String(p.doc.get('pricingAdministrator'))
+                  : null,
+            }
+          : {}),
+        ...(rule.success ? { rule: rule.data } : {}),
         packageId: p.packageId,
         name: identity?.name ?? p.packageId,
         countries: identity?.countries ?? [],
@@ -250,6 +296,7 @@ export class PricingHistoryReports {
           ? Buffer.from(
               JSON.stringify({
                 q: input.q ?? '',
+                version: input.version,
                 from: input.from,
                 to: input.to,
                 packageId: input.packageId ?? null,

@@ -1,3 +1,4 @@
+import { applyPricing } from './lib/pricing-management.js';
 import { Promotions } from './lib/promotions.js';
 import { BuyAgainError } from './lib/buy-again.js';
 import { LocaleUnavailableError } from '../../../packages/shared/src/i18n/locales.ts';
@@ -162,6 +163,23 @@ export async function createApp(
       (process.env.CORS_ORIGINS || 'http://localhost:3000').split(',').map((s) => s.trim()),
   });
   await app.register(rateLimit, { max: 100, timeWindow: '1 minute' });
+  // Cloud Run instances cache independently. A completed sync invalidates all warm readers.
+  if (!demo && !options.repository && process.env.K_SERVICE) {
+    const unsubscribe = database()
+      .doc('catalogueSync/esim-access')
+      .onSnapshot(
+        (doc) => {
+          if (doc.get('status') === 'complete') {
+            repository.invalidate?.();
+            defaultFeaturedReader.invalidate();
+          }
+        },
+        () => app.log.warn('Catalogue change listener unavailable; cache expiry remains active.'),
+      );
+    app.addHook('onClose', async () => {
+      unsubscribe();
+    });
+  }
   app.addHook('onSend', async (_request, reply) => {
     reply.header('X-Content-Type-Options', 'nosniff');
     reply.header('Cache-Control', 'no-store');
@@ -315,6 +333,14 @@ export async function createApp(
     supportedCurrencies: demo ? ['USD'] : ['USD', 'GBP', 'EUR'],
     fulfillmentMode: payments?.mode === 'live' ? 'esim_access' : 'test_no_issuance',
   }));
+  app.post('/internal/pricing/apply', { config: { rateLimit: false } }, async (req, reply) => {
+    if (!(await (options.verifyOrderTask ?? verifyOrderTaskIdentity)(req.headers.authorization)))
+      return reply.code(401).send({ error: 'Task authentication required.' });
+    const { version } = z.object({ version: z.uuid() }).strict().parse(req.body);
+    await applyPricing(version);
+    repository.invalidate?.();
+    return { processed: true };
+  });
   app.post('/internal/catalogue/sync', async (request, reply) => {
     if (!(await verifySyncIdentity(request.headers.authorization)))
       return reply.code(401).send({ error: 'Scheduler authentication required.' });

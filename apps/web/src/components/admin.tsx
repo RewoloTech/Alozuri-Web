@@ -5,6 +5,7 @@ import Link from '@/components/localized-link';
 import { useEffect, useRef, useState } from 'react';
 import { OperationsEsimDisclosure, OperationsEsimLookup } from './operations-esims';
 import { OperationsTrendCharts } from './operations-trends';
+import { PricingManagementPanel } from './pricing-management';
 import { PricingHistory } from './pricing-history';
 import type { OperationsReport } from '@alozuri/shared/financial';
 import { londonMonth } from '@alozuri/shared/financial';
@@ -35,9 +36,9 @@ export function Operations() {
 }
 function OperationsAccount() {
   const { user, admin } = useAuth();
-  const [section, setSection] = useState<'financial' | 'pricing' | 'trends' | 'promotions'>(
-    'financial',
-  );
+  const [section, setSection] = useState<
+    'financial' | 'management' | 'pricing' | 'trends' | 'promotions'
+  >('financial');
   const navigation = useRef<HTMLDivElement>(null);
   const [dates, setDates] = useState(() => londonMonth());
   const [authorized, setAuthorized] = useState(false),
@@ -83,7 +84,14 @@ function OperationsAccount() {
     };
   }, [user, admin]);
   useEffect(() => {
-    if (!authorized || !user || section === 'pricing' || section === 'promotions') return;
+    if (
+      !authorized ||
+      !user ||
+      section === 'management' ||
+      section === 'pricing' ||
+      section === 'promotions'
+    )
+      return;
     const controller = new AbortController();
     let active = true;
     setError('');
@@ -173,7 +181,13 @@ function OperationsAccount() {
             aria-label="Operations sections"
             ref={navigation}
             onKeyDown={(event) => {
-              const options = ['financial', 'pricing', 'trends', 'promotions'] as const;
+              const options = [
+                'financial',
+                'pricing',
+                'management',
+                'trends',
+                'promotions',
+              ] as const;
               const index = options.indexOf(section);
               const next =
                 event.key === 'ArrowRight' || event.key === 'ArrowLeft'
@@ -216,6 +230,17 @@ function OperationsAccount() {
             <button
               type="button"
               role="tab"
+              id="operations-management-tab"
+              aria-selected={section === 'management'}
+              aria-controls="operations-management-panel"
+              tabIndex={section === 'management' ? 0 : -1}
+              onClick={() => setSection('management')}
+            >
+              Pricing Management
+            </button>
+            <button
+              type="button"
+              role="tab"
               id="operations-trends-tab"
               aria-selected={section === 'trends'}
               aria-controls="operations-trends-panel"
@@ -235,6 +260,14 @@ function OperationsAccount() {
             >
               Marketing
             </button>
+          </div>
+          <div
+            role="tabpanel"
+            id="operations-management-panel"
+            aria-labelledby="operations-management-tab"
+            hidden={section !== 'management'}
+          >
+            {section === 'management' && user && <PricingManagementPanel uid={user.uid} />}
           </div>
           <div
             role="tabpanel"

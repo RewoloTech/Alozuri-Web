@@ -1,3 +1,4 @@
+import type { ResolvedPricing } from '../../../../packages/shared/src/pricing-management.ts';
 import { createHash } from 'node:crypto';
 // Supplier amounts are integer 1/10,000 USD; every calculation rounds costs up.
 export const ceilDiv = (a: bigint, b: bigint) => (a + b - 1n) / b;
@@ -80,18 +81,23 @@ export function estimatedContribution(
     PRICING_POLICY.otherCostCents
   );
 }
-export function profitable(units: number, cents: unknown): cents is number {
+export type Floors = { minimumContributionCents: number; minimumContributionBps: number };
+export function profitable(
+  units: number,
+  cents: unknown,
+  floors: Floors = PRICING_POLICY,
+): cents is number {
   if (!moneyInteger(units) || !moneyInteger(cents) || cents < MINIMUM_USD_CENTS || cents > 99999999)
     return false;
   return PRICING_POLICY.fees.every((fee) => {
     const contribution = estimatedContribution(units, cents, fee);
     return (
-      contribution >= PRICING_POLICY.minimumContributionCents &&
-      BigInt(contribution) * 10000n >= BigInt(cents) * BigInt(PRICING_POLICY.minimumContributionBps)
+      contribution >= floors.minimumContributionCents &&
+      BigInt(contribution) * 10000n >= BigInt(cents) * BigInt(floors.minimumContributionBps)
     );
   });
 }
-export function calculateSellingPrice(units: number): number {
+function progressiveTarget(units: number): number {
   if (!moneyInteger(units)) throw new Error('Invalid supplier cost.');
   let weighted = 0n;
   for (let i = 0; i < PRICING_POLICY.bands.length; i++) {
@@ -100,25 +106,65 @@ export function calculateSellingPrice(units: number): number {
     const covered = Math.max(0, Math.min(units, end) - band.fromUnits);
     weighted += BigInt(covered) * BigInt(band.contributionBps);
   }
-  const target = [
-    BigInt(PRICING_POLICY.minimumContributionCents),
-    ceilDiv(weighted, 1000000n),
-  ].reduce((a, b) => (a > b ? a : b));
-  const cost = BigInt(supplierCostCents(units) + PRICING_POLICY.otherCostCents);
-  let minimum = BigInt(MINIMUM_USD_CENTS);
+  return Number(ceilDiv(weighted, 1000000n));
+}
+type TargetPolicy = Floors & {
+  targetCents?: number | null;
+  undercutBps?: number | null;
+  benchmarkUsd?: number | null;
+};
+export function calculatePricing(units: number, policy: TargetPolicy = PRICING_POLICY) {
+  const cost = supplierCostCents(units);
+  const target =
+    policy.targetCents ?? Math.max(policy.minimumContributionCents, progressiveTarget(units));
+  let targetPrice = 0;
+  let minimum = MINIMUM_USD_CENTS;
   for (const fee of PRICING_POLICY.fees) {
-    const fixed = cost + BigInt(fee.fixedCents),
-      rate = BigInt(fee.bps);
-    const candidate = ceilDiv((fixed + target) * 10000n, 10000n - rate);
-    const margin = ceilDiv(
-      fixed * 10000n,
-      10000n - rate - BigInt(PRICING_POLICY.minimumContributionBps),
+    const fixed = BigInt(cost + PRICING_POLICY.otherCostCents + fee.fixedCents);
+    const rate = 10000n - BigInt(fee.bps);
+    const marginDenominator = rate - BigInt(policy.minimumContributionBps);
+    if (marginDenominator <= 0n) throw new Error('Invalid contribution margin.');
+    const atContribution = (cents: number) =>
+      checkedMoney(ceilDiv((fixed + BigInt(cents)) * 10000n, rate));
+    targetPrice = Math.max(targetPrice, atContribution(target));
+    minimum = Math.max(
+      minimum,
+      atContribution(policy.minimumContributionCents),
+      checkedMoney(ceilDiv(fixed * 10000n, marginDenominator)),
     );
-    minimum = [minimum, candidate, margin].reduce((a, b) => (a > b ? a : b));
   }
-  let price = roundRetailUp(checkedMoney(minimum));
-  // Account for independent whole-cent rounding of the actual fee estimate.
-  if (!profitable(units, price)) price = roundRetailUp(price + 1);
-  if (!profitable(units, price)) throw new Error('Supplier cost exceeds supported selling amount.');
-  return price;
+  // The integral fee can shift the exact margin floor by a cent.
+  while (minimum <= 99999999 && !profitable(units, minimum, policy)) minimum++;
+  if (minimum > 99999999) throw new Error('Supplier cost exceeds supported selling amount.');
+  const competitorTarget =
+    policy.benchmarkUsd == null
+      ? null
+      : Number((BigInt(policy.benchmarkUsd) * BigInt(10000 - (policy.undercutBps ?? 0))) / 10000n);
+  let price = roundRetailUp(
+    Math.max(minimum, Math.min(targetPrice, competitorTarget ?? targetPrice)),
+  );
+  while (price <= 99999999 && !profitable(units, price, policy)) price = roundRetailUp(price + 1);
+  if (!profitable(units, price, policy))
+    throw new Error('Supplier cost exceeds supported selling amount.');
+  return { price, minimum, target, competitorTarget };
+}
+export function calculateSellingPrice(units: number): number {
+  return calculatePricing(units).price;
+}
+export function contributionAtRetail(units: number, price: number) {
+  const contribution = Math.min(
+    ...PRICING_POLICY.fees.map((fee) => estimatedContribution(units, price, fee)),
+  );
+  return {
+    contribution,
+    fee: price - supplierCostCents(units) - PRICING_POLICY.otherCostCents - contribution,
+    margin: Math.trunc((contribution * 10000) / price),
+  };
+}
+export function approvedFixed(units: number, price: number, rule?: ResolvedPricing | null) {
+  return (
+    rule?.fixedCents === price &&
+    rule.approvedCostUnits === units &&
+    profitable(units, price, { minimumContributionCents: 0, minimumContributionBps: 0 })
+  );
 }

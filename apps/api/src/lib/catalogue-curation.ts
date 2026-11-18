@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { StoredPlan } from '../../../../packages/shared/src/index.ts';
-import { profitable } from './pricing.js';
+import { approvedFixed, profitable } from './pricing.js';
 
 export function canonical(value: unknown): string {
   if (Array.isArray(value)) return '[' + value.map(canonical).join(',') + ']';
@@ -202,6 +202,7 @@ export function curateCatalogue(source: StoredPlan[]): StoredPlan[] {
       if (!superior) continue;
       const discounted = superior.priceCents - 50;
       if (
+        !inferior.managedPricing &&
         inferior.priceOverrideUsdCents === null &&
         profitable(inferior.wholesaleUnits, discounted)
       ) {
@@ -235,7 +236,8 @@ export function assertCuratedCatalogue(source: StoredPlan[]): void {
   for (const p of source) {
     if (!p.active || p.catalogueVisibility === 'hidden') continue;
     if (
-      !profitable(p.wholesaleUnits, p.priceCents) ||
+      (!profitable(p.wholesaleUnits, p.priceCents, p.managedPricing) &&
+        !approvedFixed(p.wholesaleUnits, p.priceCents, p.managedPricing)) ||
       (p.dataType !== 'unlimited' && p.dataGb <= 0) ||
       (p.dataType === 'daily' && !p.dailyPolicy)
     )

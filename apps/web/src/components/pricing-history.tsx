@@ -23,8 +23,16 @@ const directionLabels = {
   baseline: 'New baseline',
   unavailable: 'Price unavailable',
 };
-export function PricingHistory({ uid }: { uid: string }) {
-  const [dates, setDates] = useState(() => londonMonth()),
+export function PricingHistory({
+  uid,
+  version,
+  at,
+}: {
+  uid: string;
+  version?: string;
+  at?: string;
+}) {
+  const [dates, setDates] = useState(() => londonMonth(at ? new Date(at) : undefined)),
     [draftSearch, setDraftSearch] = useState(''),
     [search, setSearch] = useState(''),
     [selected, setSelected] = useState<{ id: string; name: string } | null>(null);
@@ -46,6 +54,7 @@ export function PricingHistory({ uid }: { uid: string }) {
       return;
     }
     const query = new URLSearchParams(dates);
+    if (version) query.set('version', version);
     if (search) query.set('q', search);
     if (selected) query.set('packageId', selected.id);
     if (cursor) query.set('cursor', cursor);
@@ -67,7 +76,7 @@ export function PricingHistory({ uid }: { uid: string }) {
       active = false;
       controller.abort();
     };
-  }, [uid, dates, selected, cursor, attempt, search]);
+  }, [uid, dates, selected, cursor, attempt, search, version]);
   const reset = () => {
     setCursor(undefined);
     setHistory([]);
@@ -242,6 +251,44 @@ export function PricingHistory({ uid }: { uid: string }) {
                             <small>Package label unavailable.</small>
                           )}
                           {row.active === false && <small>Inactive / unavailable</small>}
+                          {row.configurationVersion && (
+                            <details>
+                              <summary>Pricing decision</summary>
+                              <small>Version {row.configurationVersion}</small>
+                              {row.targetCents !== undefined && (
+                                <small>
+                                  Contribution target {selling(row.targetCents)} · Minimum safe
+                                  price {selling(row.minimumCents ?? null)} · Minimum margin{' '}
+                                  {margin(row.floorMargin ?? null)}
+                                </small>
+                              )}
+                              {row.actor && <small>Published by {row.actor}</small>}
+                              <small>
+                                Rule {row.rule?.scope ?? 'Global'}
+                                {row.rule?.profile ? ' · ' + row.rule.profile : ''}
+                                {row.rule?.packageId ? ' · Package override' : ''}
+                              </small>
+                              {row.rule && (
+                                <>
+                                  <small>
+                                    Target{' '}
+                                    {row.rule.targetCents === null
+                                      ? 'progressive'
+                                      : selling(row.rule.targetCents)}{' '}
+                                    · Minimum {selling(row.rule.minimumContributionCents)} /{' '}
+                                    {margin(row.rule.minimumContributionBps)}
+                                  </small>
+                                  {row.rule.benchmark && (
+                                    <small>
+                                      {row.rule.benchmark.competitor} ·{' '}
+                                      {selling(row.rule.benchmarkUsd)} ·{' '}
+                                      {row.rule.benchmark.checked}
+                                    </small>
+                                  )}
+                                </>
+                              )}
+                            </details>
+                          )}
                           {!selected && (
                             <button
                               className="text-link"

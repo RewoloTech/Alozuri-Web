@@ -4541,3 +4541,71 @@ html:is(:lang(hi), :lang(th)) :is(h1, h2, h3, h4) {
 .operations-summary strong {
   font-size: 1.5rem;
 }
+
+.price-management,
+.price-workspace {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.price-workspace {
+  padding: 0;
+  border: 0;
+  margin: 0;
+}
+.price-fields,
+.price-nav {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 12px 0;
+}
+.price-management label {
+  display: block;
+  min-width: 0;
+}
+.price-management input:not([type='checkbox']),
+.price-management select {
+  display: block;
+  min-height: 44px;
+  width: 100%;
+  max-width: 32rem;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: white;
+  color: inherit;
+}
+.price-fields label {
+  flex: 1 1 150px;
+  max-width: 32rem;
+}
+.price-management fieldset:not(.price-workspace) {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 12px 0;
+}
+.price-nav > button {
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.price-nav > button[aria-pressed='true'] {
+  color: var(--blue);
+  border-color: currentColor;
+  font-weight: 700;
+}
+.price-management .scope-table {
+  max-height: 28rem;
+}
+.price-management .surface {
+  min-width: 0;
+}
+.price-management .scope-table input[type='checkbox'] {
+  min-width: 20px;
+  min-height: 20px;
+}

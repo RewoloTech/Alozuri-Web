@@ -6,6 +6,12 @@ export type PricingHistoryRow = {
   identitySource: 'snapshot' | 'current_catalogue' | 'unavailable';
   recordedAt: string;
   kind: string;
+  targetCents?: number;
+  minimumCents?: number;
+  floorMargin?: number;
+  configurationVersion?: string;
+  actor?: string | null;
+  rule?: import('./pricing-management.ts').ResolvedPricing;
   previousSupplierUnits: number | null;
   currentSupplierUnits: number | null;
   supplierCurrency: 'USD';

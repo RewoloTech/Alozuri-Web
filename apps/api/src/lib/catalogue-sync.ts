@@ -1,3 +1,4 @@
+import { readRules, resolvePricing } from './pricing-rules.js';
 import { resolveCanonicalProducts, productOffersSchema } from './canonical-products.js';
 import { pricingHistoryMetadata } from './pricing-history.js';
 import { randomUUID } from 'node:crypto';
@@ -42,6 +43,10 @@ export async function syncCatalogue(
     t.set(state, { runId, leaseUntil: now + 10 * 60 * 1000, status: 'running' }, { merge: true });
   });
   try {
+    const activeRef = db.doc('pricingManagement/active');
+    const activeRules = await activeRef.get();
+    const snapshot = readRules(activeRules.get('snapshot'));
+    const version = activeRules.get('version') ?? 'global';
     const syncedAt = new Date().toISOString();
     const { fetched, plans: offers } = await provider.fetch(syncedAt);
     let plans = offers;
@@ -88,8 +93,14 @@ export async function syncCatalogue(
     const unsortedWrites = [
       ...plans.map((p) => ({ ref: db.collection('packages').doc(p.id), data: p })),
       ...owned
-        .filter((d) => !ids.has(d.id) && d.get('active') === true)
-        .map((d) => ({ ref: d.ref, data: { active: false, pricingStatus: 'review_required' } })),
+        .filter(
+          (d) =>
+            !ids.has(d.id) && (d.get('active') === true || d.get('supplierAvailable') === true),
+        )
+        .map((d) => ({
+          ref: d.ref,
+          data: { active: false, supplierAvailable: false, pricingStatus: 'review_required' },
+        })),
     ];
     // Keep each comparison family in one transaction, including fresh overrides.
     const families = new Map<string, typeof unsortedWrites>();
@@ -118,7 +129,13 @@ export async function syncCatalogue(
       hidden = 0;
     for (const chunk of chunks) {
       const counts = await db.runTransaction(async (t) => {
-        const [lease, ...docs] = await t.getAll(state, ...chunk.map((w) => w.ref));
+        const [lease, currentRules, ...docs] = await t.getAll(
+          state,
+          activeRef,
+          ...chunk.map((w) => w.ref),
+        );
+        if ((currentRules.get('version') ?? 'global') !== version)
+          throw new Error('Pricing configuration changed during sync.');
         if (lease.get('runId') !== runId || lease.get('leaseUntil') <= Date.now())
           throw new Error('Catalogue lease lost.');
         for (let i = 0; i < chunk.length; i++) {
@@ -129,7 +146,17 @@ export async function syncCatalogue(
             throw new Error('Supplier offer mapping changed during sync. Retry after review.');
         }
         const candidates = chunk.flatMap((w, i) =>
-          'id' in w.data ? [pricePackage(w.data, docs[i].data() || {}, Timestamp.now(), true)] : [],
+          'id' in w.data
+            ? [
+                pricePackage(
+                  w.data,
+                  docs[i].data() || {},
+                  Timestamp.now(),
+                  true,
+                  resolvePricing(w.data, snapshot),
+                ),
+              ]
+            : [],
         );
         const priced = curateCatalogue(candidates);
         assertCuratedCatalogue(priced);
@@ -143,6 +170,7 @@ export async function syncCatalogue(
             previous = docs[i].data() || {};
           const calculated = byId.get(w.ref.id);
           const data = calculated ?? w.data;
+          if (calculated && 'id' in w.data) calculated.supplierAvailable = w.data.active;
           if (calculated) {
             if (!calculated.active) review++;
             else if (calculated.catalogueVisibility === 'hidden') hiddenCount++;
@@ -157,7 +185,20 @@ export async function syncCatalogue(
           )
             calculated.pricingUpdatedAt = previous.pricingUpdatedAt;
           if (!samePackage(previous, data)) {
-            t.set(w.ref, 'id' in data ? packageWrite(data) : data, { merge: true });
+            const patch = 'id' in data ? packageWrite(data) : data;
+            t.set(
+              w.ref,
+              {
+                ...patch,
+                ...(calculated && (calculated.managedPricing || previous.managedPricing)
+                  ? {
+                      appliedPricingVersion: version,
+                      pricingAdministrator: activeRules.get('actor') ?? null,
+                    }
+                  : {}),
+              },
+              { merge: true },
+            );
             if (decisionHash(before) !== decisionHash(after)) {
               const historyId = decisionHash({
                 before,
@@ -176,6 +217,8 @@ export async function syncCatalogue(
                   after,
                 ),
                 kind: 'catalogue_sync',
+                configurationVersion: version,
+                pricingAdministrator: activeRules.get('actor') ?? null,
                 runId,
                 recordedAt: Timestamp.now(),
               });
@@ -193,6 +236,7 @@ export async function syncCatalogue(
     }
     const result = {
       providerId: provider.id,
+      pricingConfiguration: version,
       fetched,
       active: available,
       reviewRequired,

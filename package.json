@@ -15,7 +15,7 @@
     "dev:api": "npm run dev -w @alozuri/api",
     "build": "npm run build -w @alozuri/web && npm run build -w @alozuri/api",
     "build:web": "npm run build -w @alozuri/web",
-    "test:firestore": "firebase emulators:exec --only firestore --project demo-alozuri --config infra/production-emulator.json \"node --import tsx --test --test-concurrency=1 apps/api/test/production.firestore.mts apps/api/test/commerce.firestore.mts apps/api/test/catalogue.firestore.mts apps/api/test/featured.firestore.mts apps/api/test/financial.firestore.mts apps/api/test/pricing-history.firestore.mts apps/api/test/operations-order-search.firestore.mts apps/api/test/buy-again.firestore.mts apps/api/test/marketing.firestore.mts\"",
+    "test:firestore": "firebase emulators:exec --only firestore --project demo-alozuri --config infra/production-emulator.json \"node --import tsx --test --test-concurrency=1 apps/api/test/production.firestore.mts apps/api/test/commerce.firestore.mts apps/api/test/catalogue.firestore.mts apps/api/test/featured.firestore.mts apps/api/test/financial.firestore.mts apps/api/test/pricing-history.firestore.mts apps/api/test/pricing-management.firestore.mts apps/api/test/operations-order-search.firestore.mts apps/api/test/buy-again.firestore.mts apps/api/test/marketing.firestore.mts\"",
     "test:auth": "firebase emulators:exec --only auth --project demo-alozuri --config infra/auth-emulator.json \"node --import tsx --test tests/integration/checkout-account.auth.mts\"",
     "test": "npm run test:unit",
     "typecheck": "npm run typecheck --workspaces --if-present",
@@ -41,7 +41,8 @@
     "test:meta": "node --import tsx --test tests/unit/meta-events.test.ts && playwright test tests/e2e/shopping.spec.ts --grep Meta",
     "test:i18n": "node --import tsx --test tests/unit/i18n.test.ts tests/unit/language-release.test.ts tests/unit/supplier-copy.test.ts",
     "i18n:check-release": "node --import tsx scripts/check-language-release.mts",
-    "test:buy-again": "firebase emulators:exec --only auth,firestore --project demo-alozuri --config infra/buy-again-emulator.json \"node --import tsx --test --test-concurrency=1 apps/api/test/buy-again.firestore.mts && E2E_CART_AUTH_EMULATOR=true E2E_BUY_AGAIN_INTEGRATION=true playwright test tests/e2e/cart-auth.spec.ts --grep 'Buy Again'\""
+    "test:buy-again": "firebase emulators:exec --only auth,firestore --project demo-alozuri --config infra/buy-again-emulator.json \"node --import tsx --test --test-concurrency=1 apps/api/test/buy-again.firestore.mts && E2E_CART_AUTH_EMULATOR=true E2E_BUY_AGAIN_INTEGRATION=true playwright test tests/e2e/cart-auth.spec.ts --grep 'Buy Again'\"",
+    "test:pricing-management": "firebase emulators:exec --only auth,firestore --project demo-alozuri --config infra/buy-again-emulator.json \"node --import tsx --test apps/api/test/pricing-management.firestore.mts && E2E_CART_AUTH_EMULATOR=true playwright test tests/e2e/cart-auth.spec.ts --grep 'Pricing Management previews'\""
   },
   "devDependencies": {
     "@playwright/test": "^1.65.0",

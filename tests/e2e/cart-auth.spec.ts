@@ -1827,3 +1827,109 @@ for (const width of [390, 1440])
       await backend.close();
     }
   });
+
+test('Pricing Management previews country changes before publishing', async ({ page }) => {
+  test.skip(
+    process.env.FIRESTORE_EMULATOR_HOST !== '127.0.0.1:8188',
+    'Requires both local emulators.',
+  );
+  test.setTimeout(90000);
+  await setup(page);
+  const user = await signup(page);
+  const { initializeApp, deleteApp } = await import('firebase-admin/app');
+  const { getFirestore } = await import('firebase-admin/firestore');
+  const { getAuth } = await import('firebase-admin/auth');
+  const { PricingManagement } = await import('../../apps/api/src/lib/pricing-management');
+  const { pricePackage } = await import('../../apps/api/src/lib/package-pricing');
+  const { configSchema } = await import('../../packages/shared/src/pricing-management');
+  const app = initializeApp({ projectId: 'demo-alozuri' }, 'pricing-browser');
+  const db = getFirestore(app, 'pricing-browser');
+  const auth = getAuth(app);
+  try {
+    const account = await auth.getUserByEmail(user.email);
+    await auth.setCustomUserClaims(account.uid, { admin: true });
+    await logout(page);
+    await login(page, user.email, user.password);
+    await db.doc('packages/test-ng').set(
+      pricePackage({
+        ...plan,
+        id: 'test-ng',
+        name: 'Nigeria 1 GB',
+        countries: ['NG'],
+        active: true,
+        syncedAt: new Date().toISOString(),
+        supplierCode: 'test-ng',
+        wholesaleUnits: 50000,
+      }),
+    );
+    const service = new PricingManagement(db);
+    await page.route('**/v1/operations/**', async (route) => {
+      const req = route.request(),
+        path = new URL(req.url()).pathname;
+      const headers = {
+        'Access-Control-Allow-Origin': 'http://localhost:3100',
+        'Access-Control-Allow-Headers': 'content-type,authorization',
+        'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+      };
+      if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
+      const claims = await auth.verifyIdToken(req.headers().authorization.slice(7));
+      expect(claims.admin).toBe(true);
+      const payload = req.method() === 'POST' ? req.postDataJSON() : {};
+      const json = path.endsWith('/workspace')
+        ? await service.workspace()
+        : path.endsWith('/preview')
+          ? await service.preview(payload.revision)
+          : path.endsWith('/draft')
+            ? await service.save(payload.revision, configSchema.parse(payload.config), claims.uid)
+            : path.endsWith('/publish')
+              ? { version: await service.publish(payload.revision, payload.token, claims.uid) }
+              : path.endsWith('/access')
+                ? { authorized: true }
+                : null;
+      return route.fulfill({
+        status: json ? 200 : 503,
+        headers,
+        json: json ?? { error: 'Fixture endpoint unavailable.' },
+      });
+    });
+    await page.goto('/operations');
+    await page.getByRole('tab', { name: 'Pricing Management' }).click();
+    const panel = page.getByRole('tabpanel', { name: 'Pricing Management' });
+    const publish = panel.getByRole('button', { name: 'Publish changes' });
+    await expect(publish).toBeDisabled();
+    await panel.getByRole('button', { name: 'Country Pricing', exact: true }).click();
+    await panel.getByLabel('Search countries').fill('Nigeria');
+    await panel.getByRole('button', { name: 'Nigeria', exact: true }).click();
+    await panel.getByLabel('Assigned profile').selectOption('competitive');
+    await panel.getByRole('button', { name: 'Preview changes' }).click();
+    await expect(panel.getByRole('heading', { name: 'Price change preview' })).toBeVisible();
+    await expect(publish).toBeEnabled();
+    expect((await db.doc('packages/test-ng').get()).get('priceCents')).toBe(949);
+    for (const width of [375, 390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      if (width === 375 || width === 1440)
+        await panel.screenshot({ path: '/tmp/alozuri-country-pricing-' + width + '.png' });
+    }
+    await panel.getByRole('button', { name: 'Package Overrides', exact: true }).click();
+    await panel
+      .getByRole('combobox', { name: /^Package(?:$| Choose package)/ })
+      .selectOption('test-ng');
+    await panel.getByLabel('Pricing mode').selectOption('fixed');
+    await panel.getByLabel('Fixed selling price (USD)').fill('5.70');
+    await panel.getByRole('button', { name: 'Preview changes' }).click();
+    await expect(panel.getByRole('alert')).toContainText('below its required minimum');
+    await expect(publish).toBeDisabled();
+    await panel.getByRole('checkbox', { name: /Approve a fixed price/ }).check();
+    await panel.getByRole('button', { name: 'Preview changes' }).click();
+    await expect(panel.getByRole('cell', { name: 'Approved exception' })).toBeVisible();
+    await publish.click();
+    await expect(panel.getByText('Rules published. Catalogue repricing queued.')).toBeVisible();
+    expect((await service.workspace()).hasDraft).toBe(false);
+  } finally {
+    await db.terminate();
+    await deleteApp(app);
+  }
+});
