@@ -160,9 +160,12 @@ async function setup(page: Page, delayed = false, interrupted = false) {
           items: itemsSchema,
           currency: z.string(),
           expectedTotalCents: z.number().optional(),
+          promotionCode: z.string().optional(),
         })
         .parse(request.postDataJSON());
-      const total = input.items.reduce((sum, item) => sum + item.quantity * plan.priceCents, 0);
+      const original = input.items.reduce((sum, item) => sum + item.quantity * plan.priceCents, 0);
+      const applied = input.promotionCode === 'TEST30';
+      const total = applied ? original * 0.7 : original;
       if (url.pathname === '/v2/checkout') {
         checkouts.push({
           items: input.items,
@@ -184,7 +187,30 @@ async function setup(page: Page, delayed = false, interrupted = false) {
       }
       data = {
         quote: {
-          items: lines(input.items),
+          items: lines(input.items).map((line) =>
+            applied
+              ? {
+                  ...line,
+                  plan: {
+                    ...line.plan,
+                    priceCents: 840,
+                    promotionPrice: {
+                      originalPriceCents: 1200,
+                      discountPercent: 30,
+                      campaign: 'TEST30',
+                      expiresAt: '2030-01-01T00:00:00Z',
+                    },
+                  },
+                }
+              : line,
+          ),
+          ...(applied
+            ? {
+                originalRetailCents: original,
+                discountCents: original - total,
+                promotion: { code: 'TEST30', discountPercent: 30 },
+              }
+            : {}),
           subtotalCents: total,
           taxCents: 0,
           totalCents: total,
@@ -253,15 +279,21 @@ async function setup(page: Page, delayed = false, interrupted = false) {
   });
   return { accounts, merges, checkouts, release, profiles, profileWrites };
 }
-async function signup(page: Page) {
+async function signup(page: Page, promotionCode?: string) {
   const email = `cart-${crypto.randomUUID()}@example.test`,
     password = 'cart-emulator-password';
   await page.goto('/plans/' + plan.id);
   await page.getByRole('button', { name: 'Add to cart', exact: true }).click();
   await page.getByRole('link', { name: 'Shopping cart, 1 item', exact: true }).click();
   await expect(page.locator('.commerce-total')).toContainText('$12.00');
+  if (promotionCode) {
+    await page.locator('.checkout-promo-entry summary').click();
+    await page.getByLabel('Promotional code', { exact: true }).fill(promotionCode);
+    await page.getByRole('button', { name: 'Apply code', exact: true }).click();
+    await expect(page.locator('.commerce-total')).toContainText('$8.40');
+  }
   await page.getByRole('link', { name: 'Secure checkout', exact: true }).click();
-  await expect(page.locator('.commerce-total')).toContainText('$12.00');
+  await expect(page.locator('.commerce-total')).toContainText(promotionCode ? '$8.40' : '$12.00');
   await page.getByRole('textbox', { name: 'Email address', exact: true }).fill(email);
   await page.getByRole('button', { name: 'Create an account', exact: true }).click();
   await page.getByLabel('Password', { exact: true }).fill(password);
@@ -271,7 +303,7 @@ async function signup(page: Page) {
   await expect(page.getByRole('textbox', { name: 'Email address', exact: true })).toHaveValue(
     email,
   );
-  await expect(page.locator('.commerce-total')).toContainText('$12.00');
+  await expect(page.locator('.commerce-total')).toContainText(promotionCode ? '$8.40' : '$12.00');
   // Delivery email is filled before signup; wait for the asynchronous verification send.
   let code: string | undefined;
   await expect
@@ -1601,3 +1633,27 @@ test('Buy Again checks owned profiles, requires multiple-profile choice and pres
     expect(requests.at(-1)?.profileOrderId).toBe(profileCount ? 'profile-0' : undefined);
   }
 });
+
+for (const width of [390, 1440])
+  test(`discount remains in cart and Your order through account creation, verification and reload at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const state = await setup(page);
+    await signup(page, 'TEST30');
+    await expect(page.locator('.commerce-total')).toContainText('$8.40');
+    await expect(page.locator('.summary-discount')).toContainText('TEST30');
+    await expect(page.locator('.summary-discount')).toContainText('−$3.60');
+    await page.reload();
+    await expect(page.locator('.commerce-total')).toContainText('$8.40');
+    await page.getByRole('link', { name: 'Secure checkout', exact: true }).click();
+    await expect(page.locator('.checkout-page .summary-discount')).toContainText('−$3.60');
+    await expect(page.locator('.checkout-page .promotion-price small')).toHaveText('−30%');
+    await page.getByRole('checkbox').check();
+    await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
+    await expect.poll(() => state.checkouts.at(-1)?.expectedTotalCents).toBe(840);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await page.screenshot({ path: `/tmp/alozuri-discount-account-${width}.png`, fullPage: true });
+  });

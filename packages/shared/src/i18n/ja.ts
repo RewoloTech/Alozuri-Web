@@ -800,6 +800,7 @@ export const messages = {
     furtherAction: 'お支払いには追加の操作が必要です。もう一度お試しください。',
   },
   cart: {
+    discount: '割引',
     activationLegacyNetwork:
       '対応ネットワークへの初回接続時に開始します。インストール前に購入したプランの条件をご確認ください。',
     title: 'カート',
@@ -1128,6 +1129,8 @@ export const messages = {
     pay: '{amount}を支払う',
   },
   errors: {
+    promoNotApplicable:
+      'このコードはこの注文には適用できません。別のコードを試すか、コードを削除して続行してください。',
     catalogueChanged: 'カタログが更新されました。検索結果を更新してください。',
     searchPageInvalid: 'この検索結果ページは無効になりました。もう一度検索してください。',
     generic: 'エラーが発生しました。もう一度お試しください。',

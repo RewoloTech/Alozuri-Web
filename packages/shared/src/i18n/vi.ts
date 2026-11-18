@@ -834,6 +834,7 @@ export const messages = {
     furtherAction: 'Thanh toán cần thực hiện thêm bước. Vui lòng thử lại.',
   },
   cart: {
+    discount: 'Giảm giá',
     activationLegacyNetwork:
       'Bắt đầu khi kết nối lần đầu với mạng hỗ trợ. Kiểm tra gói đã mua trước khi cài đặt.',
     title: 'Giỏ hàng của bạn',
@@ -1169,6 +1170,8 @@ export const messages = {
     pay: 'Thanh toán {amount}',
   },
   errors: {
+    promoNotApplicable:
+      'Không thể áp dụng mã này cho đơn hàng này. Hãy thử mã khác hoặc xóa mã để tiếp tục.',
     generic: 'Đã xảy ra lỗi. Vui lòng thử lại.',
     catalogueChanged: 'Danh mục đã thay đổi. Hãy làm mới tìm kiếm.',
     searchPageInvalid: 'Trang kết quả này không còn hợp lệ. Hãy bắt đầu tìm kiếm mới.',

@@ -20,7 +20,7 @@ import { useLanguage } from './language-provider';
 import { LoaderCircle } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { useLocalizedRouter as useRouter } from '@/lib/localized-router';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import {
   Elements,
   PaymentElement,
@@ -31,7 +31,7 @@ import {
 import { loadStripe } from '@stripe/stripe-js/pure';
 import type { StripeExpressCheckoutElementConfirmEvent } from '@stripe/stripe-js';
 import { cartItems, previewCartPrices, money, type CartLine, type Plan } from '@alozuri/shared';
-import type { RootState } from '@/lib/store';
+import { setPromotionCode as savePromotionCode, type RootState } from '@/lib/store';
 import { api } from '@/lib/api';
 import { useCurrency } from './currency-provider';
 import { useAuth } from './auth-provider';
@@ -335,8 +335,11 @@ function CheckoutForIdentity() {
     () => (buy ? (buyPlan ? [{ plan: buyPlan, quantity: 1 }] : []) : cart.items),
     [buy, buyPlan, cart.items],
   );
-  const [promotionInput, setPromotionInput] = useState('');
-  const [promotionCode, setPromotionCode] = useState('');
+  const dispatch = useDispatch();
+  const promotionCode = cart.promotionCode;
+  const setPromotionCode = (value: string) => dispatch(savePromotionCode(value));
+  const [promotionInput, setPromotionInput] = useState(promotionCode);
+  useEffect(() => setPromotionInput(promotionCode), [promotionCode]);
   const reviewForm = useRef<HTMLFormElement>(null);
   const paymentHeading = useRef<HTMLHeadingElement>(null);
   const pendingPromotionContinue = useRef<string | null>(null);
@@ -611,6 +614,7 @@ function CheckoutForIdentity() {
       total={
         session ? session.quote.totalCents : quoteReady && quote ? quote.totalCents : preview.total
       }
+      quote={session ? session.quote : quoteReady ? quote : null}
       currency={session?.quote.currency ?? currency}
       updating={!session && loading}
     />

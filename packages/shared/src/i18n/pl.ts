@@ -816,6 +816,7 @@ export const messages = {
     furtherAction: 'Płatność wymaga dodatkowego działania. Spróbuj ponownie.',
   },
   cart: {
+    discount: 'Rabat',
     activationLegacyNetwork:
       'Zaczyna się przy pierwszym połączeniu z obsługiwaną siecią. Przed instalacją sprawdź zakupiony pakiet.',
     title: 'Twój koszyk',
@@ -1150,6 +1151,8 @@ export const messages = {
     pay: 'Zapłać {amount}',
   },
   errors: {
+    promoNotApplicable:
+      'Tego kodu nie można zastosować do tego zamówienia. Wypróbuj inny kod lub usuń go, aby kontynuować.',
     catalogueChanged: 'Katalog został zaktualizowany. Odśwież wyniki wyszukiwania.',
     searchPageInvalid: 'Ta strona wyników jest już nieaktualna. Rozpocznij nowe wyszukiwanie.',
     generic: 'Coś poszło nie tak. Spróbuj ponownie.',

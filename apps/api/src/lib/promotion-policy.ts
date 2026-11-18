@@ -7,7 +7,16 @@ import { coverageMatchesRegion } from './featured-selection.js';
 import { FEATURED_REGIONS } from '../../../../packages/shared/src/featured.ts';
 import { promotionEstimate } from './promotion-estimate.js';
 import { PRICING_POLICY } from './pricing.js';
-import type { PriceExchange } from './exchange-rates.js';
+import { MINIMUM_CHARGE_MINOR, type PriceExchange } from './exchange-rates.js';
+export const promotionMarginSetting = z
+  .string()
+  .regex(/^-?\d+$/)
+  .transform(Number)
+  .pipe(z.number().int().min(-10000).max(9999));
+// Promotion losses are intentional merchant-funded discounts; normal retail targets stay separate.
+export const PROMOTION_MIN_CONTRIBUTION_BPS = promotionMarginSetting.parse(
+  process.env.PROMOTION_MIN_CONTRIBUTION_BPS ?? '-2000',
+);
 const ids = z.array(z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/)).max(500);
 export const promotionScope = z
   .object({
@@ -114,18 +123,15 @@ export function promotionMarginAllowed(
   currency: Plan['currency'],
   units: number,
   fx: PriceExchange,
+  minimumBps = PROMOTION_MIN_CONTRIBUTION_BPS,
 ) {
+  z.number().int().min(-10000).max(9999).parse(minimumBps);
+  if (final < MINIMUM_CHARGE_MINOR[currency]) return false;
   const estimate = promotionEstimate(final, currency, units, fx);
-  const fixedMinimum = Number(
-    (BigInt(PRICING_POLICY.minimumContributionCents + PRICING_POLICY.otherCostCents) *
-      BigInt(fx.numerator) +
-      BigInt(fx.denominator) -
-      1n) /
-      BigInt(fx.denominator),
-  );
-  return (
-    !!estimate &&
-    estimate.contributionMinor >= fixedMinimum &&
-    estimate.marginBps >= PRICING_POLICY.minimumContributionBps
-  );
+  if (!estimate) return false;
+  const otherCosts =
+    (BigInt(PRICING_POLICY.otherCostCents) * BigInt(fx.numerator) + BigInt(fx.denominator) - 1n) /
+    BigInt(fx.denominator);
+  const net = BigInt(estimate.contributionMinor) - otherCosts;
+  return net * 10000n >= BigInt(final) * BigInt(minimumBps);
 }

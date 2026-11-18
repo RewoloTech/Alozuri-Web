@@ -113,7 +113,7 @@ test('overlap uses priority, fixed amounts and price cannot stack; margin failur
     (await promotions.automaticView([product], priceExchange('USD')))[0].priceCents,
     700,
   );
-  await db.doc('packages/' + product.id).update({ wholesaleUnits: 90000 });
+  await db.doc('packages/' + product.id).update({ wholesaleUnits: 200000 });
   assert.equal((await promotions.automaticView([product], priceExchange('USD'))).length, 0);
   await db.doc('packages/' + product.id).update({
     wholesaleUnits: 1000,
@@ -259,4 +259,17 @@ test('desktop and mobile images round-trip through authenticated upload and safe
     403,
   );
   await api.close();
+});
+
+test('percentage promotions keep the configured 30% label across penny rounding and automatic views', async () => {
+  await promotions.save({ ...offer, code: 'ROUND30', discountPercent: 30, priority: 999 }, true);
+  const config = await promotions.get('ROUND30');
+  const fx = { ...priceExchange('USD'), numerator: '75', denominator: '100' };
+  const gbp = { ...product, currency: 'GBP' as const, priceCents: 113 };
+  const direct = promotions.apply(gbp, 1000, config, fx);
+  assert.equal(direct.priceCents, 80);
+  assert.equal(direct.promotionPrice?.discountPercent, 30);
+  const automatic = await promotions.automaticView([gbp], fx);
+  assert.equal(automatic[0].priceCents, 80);
+  assert.equal(automatic[0].promotionPrice?.discountPercent, 30);
 });

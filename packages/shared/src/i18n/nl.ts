@@ -827,6 +827,7 @@ export const messages = {
     furtherAction: 'Voor de betaling is een extra handeling nodig. Probeer het opnieuw.',
   },
   cart: {
+    discount: 'Korting',
     activationLegacyNetwork:
       'Begint bij de eerste verbinding met een ondersteund netwerk. Controleer je gekochte bundel vóór de installatie.',
     title: 'Je winkelwagen',
@@ -1162,6 +1163,8 @@ export const messages = {
     pay: '{amount} betalen',
   },
   errors: {
+    promoNotApplicable:
+      'Deze code kan niet op deze bestelling worden toegepast. Probeer een andere code of verwijder de code om verder te gaan.',
     catalogueChanged: 'Het aanbod is gewijzigd. Vernieuw je zoekopdracht.',
     searchPageInvalid: 'Deze resultatenpagina is niet meer geldig. Begin een nieuwe zoekopdracht.',
     generic: 'Er ging iets mis. Probeer het opnieuw.',

@@ -639,7 +639,10 @@ test('promotional code apply, remove, invalid feedback and final Stripe amount s
         headers,
         json: {
           error: {
-            code: 'PROMO_CODE_EXPIRED',
+            code:
+              input.promotionCode === 'BLOCKED'
+                ? 'PROMO_CODE_NOT_APPLICABLE'
+                : 'PROMO_CODE_EXPIRED',
             message: 'Promotion has expired.',
             requestId: 'promotion-fixture',
           },
@@ -714,6 +717,13 @@ test('promotional code apply, remove, invalid feedback and final Stripe amount s
   await expect(page.locator('main').getByRole('alert')).toContainText(
     'This promotional code has expired',
   );
+  await expect(page.getByRole('button', { name: 'Continue to payment' })).toBeDisabled();
+  await page.getByLabel('Promotional code', { exact: true }).fill('BLOCKED');
+  await page.getByRole('button', { name: 'Apply code', exact: true }).click();
+  await expect(page.locator('main').getByRole('alert')).toContainText(
+    'This code cannot be applied to this order',
+  );
+  await expect(page.locator('main').getByRole('alert')).not.toContainText('not valid');
   await expect(page.getByRole('button', { name: 'Continue to payment' })).toBeDisabled();
   await page.getByLabel('Promotional code', { exact: true }).fill('save20');
   await page.getByRole('button', { name: 'Apply code', exact: true }).click();
@@ -2023,4 +2033,142 @@ test('native private orders download their saved language PDF even while the web
     await download.saveAs(`/tmp/alozuri-browser-saved-${locale}.pdf`);
     await page.unroute('http://127.0.0.1:8189/v2/orders/' + source.id);
   }
+});
+
+test('Romanian RADU15 margin rejection explains order eligibility and removing the code restores the verified total', async ({
+  page,
+}) => {
+  await setup(page);
+  const uk = {
+    ...plan,
+    name: 'United Kingdom 1GB 7 days',
+    countries: ['GB'],
+    dataGb: 1,
+    days: 7,
+    priceCents: 149,
+  };
+  const headers = { 'Access-Control-Allow-Origin': 'http://localhost:3100' };
+  await page.route('http://127.0.0.1:8189/v1/packages/' + plan.id, (route) =>
+    route.fulfill({ headers, json: { plan: uk } }),
+  );
+  await page.route('http://127.0.0.1:8189/v2/quote', async (route) => {
+    const input = route.request().postDataJSON();
+    if (input.promotionCode)
+      return route.fulfill({
+        status: 409,
+        headers,
+        json: {
+          error: 'This promotion does not meet the minimum contribution margin.',
+          errorDetails: { code: 'PROMO_CODE_NOT_APPLICABLE' },
+        },
+      });
+    return route.fulfill({
+      headers,
+      json: {
+        quote: {
+          items: [{ plan: uk, quantity: 1 }],
+          currency: 'USD',
+          subtotalCents: 149,
+          taxCents: 0,
+          totalCents: 149,
+        },
+      },
+    });
+  });
+  await page.goto('/ro/checkout?buy=' + plan.id);
+  const messages = await loadMessages('ro');
+  await page.locator('.checkout-promo-entry summary').click();
+  await page.getByLabel(messages.checkout.promotionalCode, { exact: true }).fill('RADU15');
+  await page.getByRole('button', { name: messages.checkout.apply, exact: true }).click();
+  await expect(page.locator('main').getByRole('alert')).toContainText(
+    messages.errors.promoNotApplicable,
+  );
+  await expect(page.locator('main').getByRole('alert')).not.toContainText(
+    messages.errors.promoInvalid,
+  );
+  await page.getByRole('button', { name: messages.checkout.remove, exact: true }).click();
+  await expect(page.locator('main').getByRole('alert')).toHaveCount(0);
+  await page.screenshot({ path: '/tmp/alozuri-radu15-ro.png', fullPage: true });
+});
+
+test('30 percent GBP discount stays nominally exact in cart and Your order after penny rounding and reload', async ({
+  page,
+}) => {
+  await setup(page);
+  const gbp = {
+    ...plan,
+    countries: ['GB'],
+    currency: 'GBP' as const,
+    priceCents: 113,
+    dataGb: 1,
+    days: 7,
+  };
+  await page.addInitScript((p) => {
+    localStorage.setItem('alozuri-currency', 'GBP');
+    if (!localStorage.getItem('alozuri-cart'))
+      localStorage.setItem('alozuri-cart', JSON.stringify([{ plan: p, quantity: 1 }]));
+  }, gbp);
+  await page.route('http://127.0.0.1:8189/v2/quote', async (route) => {
+    const input = route.request().postDataJSON();
+    const applied = input.promotionCode === 'ALZ-K7M92Q';
+    await route.fulfill({
+      headers: { 'Access-Control-Allow-Origin': 'http://localhost:3100' },
+      json: {
+        quote: {
+          items: [
+            {
+              plan: applied
+                ? {
+                    ...gbp,
+                    priceCents: 80,
+                    promotionPrice: {
+                      originalPriceCents: 113,
+                      discountPercent: 29.2,
+                      campaign: 'ALZ-K7M92Q',
+                      expiresAt: '2030-01-01T00:00:00Z',
+                    },
+                  }
+                : gbp,
+              quantity: 1,
+            },
+          ],
+          currency: 'GBP',
+          subtotalCents: applied ? 80 : 113,
+          totalCents: applied ? 80 : 113,
+          taxCents: 0,
+          ...(applied
+            ? {
+                originalRetailCents: 113,
+                discountCents: 33,
+                promotion: { code: 'ALZ-K7M92Q', discountPercent: 30 },
+              }
+            : {}),
+        },
+      },
+    });
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/cart');
+  await page.locator('.checkout-promo-entry summary').click();
+  await page.getByLabel('Promotional code', { exact: true }).fill('ALZ-K7M92Q');
+  await page.getByRole('button', { name: 'Apply code', exact: true }).click();
+  await expect(page.locator('.summary-discount')).toContainText('−£0.33');
+  await expect(page.locator('.promotion-price small').first()).toHaveText('−30%');
+  await page.getByRole('link', { name: 'Secure checkout', exact: true }).click();
+  await expect(page.locator('.checkout-promotion')).toContainText('30% off');
+  await expect(page.locator('.checkout-page .promotion-price small')).toHaveText('−30%');
+  await expect(page.locator('.commerce-total')).toContainText('£0.80');
+  await page.reload();
+  await expect(page.locator('.summary-discount')).toContainText('−£0.33');
+  await expect(page.locator('.checkout-page .promotion-price small')).toHaveText('−30%');
+  await expect(page.locator('main')).not.toContainText('29.2%');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: '/tmp/alozuri-discount-gbp-390.png', fullPage: true });
+  await page.getByRole('link', { name: 'Edit cart', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Your cart', exact: true })).toBeVisible();
+  await expect(page.locator('.summary-discount')).toContainText('−£0.33');
+  await page.locator('.checkout-promo-entry summary').click();
+  await page.getByRole('button', { name: 'Remove code', exact: true }).click();
+  await expect(page.locator('.summary-discount')).toHaveCount(0);
+  await expect(page.locator('.commerce-total')).toContainText('£1.13');
 });

@@ -833,6 +833,7 @@ export const messages = {
     furtherAction: 'Pembayaran memerlukan tindakan lebih lanjut. Silakan coba lagi.',
   },
   cart: {
+    discount: 'Diskon',
     activationLegacyNetwork:
       'Dimulai saat pertama kali terhubung ke jaringan yang didukung. Periksa paket yang dibeli sebelum instalasi.',
     title: 'Keranjang Anda',
@@ -1173,6 +1174,8 @@ export const messages = {
     pay: 'Bayar {amount}',
   },
   errors: {
+    promoNotApplicable:
+      'Kode ini tidak dapat digunakan untuk pesanan ini. Coba kode lain atau hapus kode untuk melanjutkan.',
     generic: 'Terjadi kesalahan. Silakan coba lagi.',
     catalogueChanged: 'Katalog berubah. Perbarui pencarian Anda.',
     searchPageInvalid: 'Halaman hasil ini sudah tidak berlaku. Mulai pencarian baru.',

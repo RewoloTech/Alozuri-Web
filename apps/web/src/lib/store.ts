@@ -83,8 +83,12 @@ const cart = createSlice({
     syncFailed: false,
     error: '',
     version: 0,
+    promotionCode: '',
   },
   reducers: {
+    setPromotionCode(state, action: PayloadAction<string>) {
+      state.promotionCode = action.payload.trim().toUpperCase().slice(0, 32);
+    },
     cartSyncing(state, action: PayloadAction<boolean>) {
       state.syncing = action.payload;
     },
@@ -142,6 +146,7 @@ const cart = createSlice({
     },
     clearCart(state) {
       state.items = [];
+      state.promotionCode = '';
       state.error = '';
     },
   },
@@ -149,6 +154,7 @@ const cart = createSlice({
 export const { setCountries, restoreSearch, switchSearch, chooseCountry, removeCountry } =
   itinerary.actions;
 export const {
+  setPromotionCode,
   cartSyncing,
   cartSyncFailure,
   restoreCart,

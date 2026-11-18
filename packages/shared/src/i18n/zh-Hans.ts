@@ -750,6 +750,7 @@ export const messages = {
     furtherAction: '支付需要进一步操作，请重试。',
   },
   cart: {
+    discount: '优惠',
     activationLegacyNetwork: '首次连接受支持的网络时开始。安装前请查看所购套餐的条件。',
     title: '您的购物车',
     eyebrow: '为下一段旅程做好准备',
@@ -1064,6 +1065,7 @@ export const messages = {
     pay: '支付{amount}',
   },
   errors: {
+    promoNotApplicable: '此优惠码无法用于此订单。请尝试其他优惠码，或移除优惠码后继续。',
     catalogueChanged: '产品目录已更新，请刷新搜索结果。',
     searchPageInvalid: '此搜索结果页已失效，请重新搜索。',
     generic: '出现错误，请重试。',

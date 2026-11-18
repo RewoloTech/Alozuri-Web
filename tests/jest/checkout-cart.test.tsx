@@ -122,3 +122,43 @@ test('an unresolved account cart sync failure blocks payment creation even on fo
   expect(mockCheckout).not.toHaveBeenCalled();
   expect(screen.queryByText('Card details')).toBeNull();
 });
+
+test('Your order uses verified original subtotal, discount and total with the nominal percentage', () => {
+  const { OrderSummary } = jest.requireActual<typeof import('../../apps/web/src/components/cart')>(
+    '../../apps/web/src/components/cart',
+  );
+  const discounted = {
+    ...quote,
+    currency: 'GBP' as const,
+    items: [
+      {
+        plan: {
+          ...plan,
+          currency: 'GBP' as const,
+          priceCents: 80,
+          promotionPrice: {
+            originalPriceCents: 113,
+            discountPercent: 29.2,
+            campaign: 'TEST30',
+            expiresAt: '2030-01-01T00:00:00Z',
+          },
+        },
+        quantity: 1,
+      },
+    ],
+    subtotalCents: 80,
+    totalCents: 80,
+    originalRetailCents: 113,
+    discountCents: 33,
+    promotion: { code: 'TEST30', discountPercent: 30 },
+  };
+  const { container } = render(
+    <NextIntlClientProvider locale="en" messages={englishMessages} timeZone="Europe/London">
+      <OrderSummary lines={discounted.items} total={80} currency="GBP" quote={discounted} />
+    </NextIntlClientProvider>,
+  );
+  expect(container.querySelector('.summary-discount')?.textContent).toContain('−£0.33');
+  expect(container.querySelector('.promotion-price small')?.textContent).toBe('−30%');
+  expect(container.querySelector('.commerce-total')?.textContent).toContain('£0.80');
+  expect(container.querySelector('.spec-list')?.textContent).toContain('£1.13');
+});

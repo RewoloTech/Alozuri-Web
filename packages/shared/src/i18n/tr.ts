@@ -829,6 +829,7 @@ export const messages = {
     furtherAction: 'Ödeme için ek işlem gerekli. Lütfen tekrar deneyin.',
   },
   cart: {
+    discount: 'İndirim',
     activationLegacyNetwork:
       'Desteklenen ağa ilk bağlantıda başlar. Kurulumdan önce satın aldığınız planı kontrol edin.',
     title: 'Sepetiniz',
@@ -1164,6 +1165,8 @@ export const messages = {
     pay: '{amount} öde',
   },
   errors: {
+    promoNotApplicable:
+      'Bu kod bu siparişe uygulanamıyor. Başka bir kod deneyin veya devam etmek için kodu kaldırın.',
     generic: 'Bir sorun oluştu. Lütfen tekrar deneyin.',
     catalogueChanged: 'Katalog değişti. Aramanızı yenileyin.',
     searchPageInvalid: 'Bu arama sayfası artık geçerli değil. Yeni bir arama başlatın.',

@@ -4,6 +4,7 @@ import { demoPlans } from '../../../packages/shared/src/demo.ts';
 import { CONTINENTS } from '../../../packages/shared/src/geography.ts';
 import {
   discountedUnit,
+  promotionMarginSetting,
   matchesPromotion,
   promotionMarginAllowed,
   promotionConfigHash,
@@ -96,7 +97,7 @@ test('supplier offer replacement leaves targets and prices unchanged but recheck
     discountedUnit(second.priceCents, p, priceExchange('USD')),
   );
   assert.equal(promotionMarginAllowed(1080, 'USD', 1000, priceExchange('USD')), true);
-  assert.equal(promotionMarginAllowed(1080, 'USD', 200000, priceExchange('USD')), false);
+  assert.equal(promotionMarginAllowed(1080, 'USD', 300000, priceExchange('USD')), false);
   assert.notEqual(
     promotionConfigHash(p),
     promotionConfigHash({ ...p, scope: { ...p.scope, excludedProducts: ['internal-product'] } }),
@@ -145,4 +146,25 @@ test('unsafe and ambiguous CTA URLs are rejected', () => {
     assert.equal(marketingUrl.safeParse(value).success, false, value);
   for (const value of ['/destinations?countries=FR', 'https://example.com/offers'])
     assert.equal(marketingUrl.safeParse(value).success, true);
+});
+
+test('promotion margin permits deliberate losses and supports negative settings independently of retail targets', () => {
+  assert.equal(promotionMarginSetting.parse('-10000'), -10000);
+  for (const value of ['-10001', '10000', '-1.5', 'bad', ''])
+    assert.equal(promotionMarginSetting.safeParse(value).success, false);
+  assert.equal(promotionMarginAllowed(75, 'USD', 4700, priceExchange('USD')), true);
+  assert.equal(promotionMarginAllowed(75, 'USD', 4700, priceExchange('USD'), 0), false);
+  assert.equal(promotionMarginAllowed(75, 'USD', 4700, priceExchange('USD'), -1000), true);
+  assert.equal(promotionMarginAllowed(49, 'USD', 1000, priceExchange('USD')), false);
+  assert.equal(promotionMarginAllowed(75, 'USD', 20000, priceExchange('USD')), false);
+});
+
+test('minus 20 percent promotion floor includes supplier costs and estimated payment fees', () => {
+  // USD 1 sale: supplier USD 0.84 + estimated fee USD 0.36 => -USD 0.20.
+  assert.equal(promotionMarginSetting.parse('-2000'), -2000);
+  assert.equal(promotionMarginAllowed(100, 'USD', 8400, priceExchange('USD')), true);
+  // Supplier 0.8401 rounds up to 0.85, so net contribution is -0.21: reject.
+  assert.equal(promotionMarginAllowed(100, 'USD', 8401, priceExchange('USD')), false);
+  // A setting override cannot accidentally retain the earlier -100% default.
+  assert.equal(promotionMarginAllowed(100, 'USD', 10000, priceExchange('USD')), false);
 });

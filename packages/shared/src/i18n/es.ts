@@ -822,6 +822,7 @@ export const messages = {
     furtherAction: 'El pago requiere una acción adicional. Inténtalo de nuevo.',
   },
   cart: {
+    discount: 'Descuento',
     activationLegacyNetwork:
       'Comienza con la primera conexión a una red compatible. Revisa el plan comprado antes de instalar la eSIM.',
     title: 'Tu carrito',
@@ -1158,6 +1159,8 @@ export const messages = {
     pay: 'Pagar {amount}',
   },
   errors: {
+    promoNotApplicable:
+      'Este código no se puede aplicar a este pedido. Prueba otro código o elimínalo para continuar.',
     catalogueChanged: 'El catálogo ha cambiado. Actualiza la búsqueda.',
     searchPageInvalid: 'Esta página de resultados ya no es válida. Inicia una nueva búsqueda.',
     generic: 'Algo ha salido mal. Vuelve a intentarlo.',

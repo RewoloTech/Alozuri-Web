@@ -2,7 +2,7 @@ import type { Messages } from './messages.ts';
 export const ERROR_MESSAGES = {
   PROMO_CODE_INVALID: 'promoInvalid',
   PROMO_CODE_EXPIRED: 'promoExpired',
-  PROMO_CODE_NOT_APPLICABLE: 'promoInvalid',
+  PROMO_CODE_NOT_APPLICABLE: 'promoNotApplicable',
   PAYMENT_FAILED: 'paymentFailed',
   PAYMENT_CANCELLED: 'paymentCancelled',
   PLAN_UNAVAILABLE: 'planUnavailable',

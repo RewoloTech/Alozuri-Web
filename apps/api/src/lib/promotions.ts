@@ -233,7 +233,7 @@ export class Promotions {
     if (p.campaignId) {
       const campaign = await this.db.doc('marketingCampaigns/' + p.campaignId).get();
       if (!campaign.exists || !activeWindow(campaignSchema.parse(campaign.data())))
-        throw new OperationsError('Campaign is not active.', 400);
+        throw new OperationsError('Campaign is not active.', 400, 'PROMO_CODE_NOT_APPLICABLE');
     }
     return {
       ...(p.campaignId ? { campaignId: p.campaignId } : {}),
@@ -309,19 +309,7 @@ export class Promotions {
       try {
         const units = z.number().int().positive().safe().parse(records[i].get('wholesaleUnits'));
         const discounted = this.apply(plan, units, p, fx);
-        return [
-          {
-            ...discounted,
-            promotionPrice: {
-              originalPriceCents: plan.priceCents,
-              discountPercent:
-                Math.floor(((plan.priceCents - discounted.priceCents) * 10000) / plan.priceCents) /
-                100,
-              campaign: p.code,
-              expiresAt: p.expiresAt,
-            },
-          },
-        ];
+        return [discounted];
       } catch {
         return [];
       }
@@ -398,9 +386,13 @@ export class Promotions {
     const snapshot = await this.validate(code, own);
     const config = await this.get(code);
     if (subtotalUsd < (config.minimumOrderUsdCents ?? 0))
-      throw new OperationsError('Minimum order value not met.', 400);
+      throw new OperationsError('Minimum order value not met.', 400, 'PROMO_CODE_NOT_APPLICABLE');
     if (!plans.some((plan) => matchesPromotion(config, plan)))
-      throw new OperationsError('This promotion does not apply to these packages.', 400);
+      throw new OperationsError(
+        'This promotion does not apply to these packages.',
+        400,
+        'PROMO_CODE_NOT_APPLICABLE',
+      );
     return { snapshot, config };
   }
   apply(plan: Plan, units: number, p: z.infer<typeof stored>, fx: PriceExchange) {
@@ -409,19 +401,28 @@ export class Promotions {
     try {
       final = discountedUnit(plan.priceCents, p, fx);
     } catch {
-      throw new OperationsError('This promotion must reduce the price by no more than 50%.', 409);
+      throw new OperationsError(
+        'This promotion must reduce the price by no more than 50%.',
+        409,
+        'PROMO_CODE_NOT_APPLICABLE',
+      );
     }
     if (!promotionMarginAllowed(final, plan.currency, units, fx))
       throw new OperationsError(
         'This promotion does not meet the minimum contribution margin.',
         409,
+        'PROMO_CODE_NOT_APPLICABLE',
       );
     return {
       ...plan,
       priceCents: final,
       promotionPrice: {
         originalPriceCents: plan.priceCents,
-        discountPercent: Math.floor(((plan.priceCents - final) * 10000) / plan.priceCents) / 100,
+        discountPercent: !p.discount
+          ? p.discountPercent
+          : p.discount.kind === 'percent'
+            ? p.discount.value
+            : Math.floor(((plan.priceCents - final) * 10000) / plan.priceCents) / 100,
         campaign: p.code,
         expiresAt: p.expiresAt,
       },

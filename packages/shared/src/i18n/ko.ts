@@ -794,6 +794,7 @@ export const messages = {
     furtherAction: '결제에 추가 조치가 필요합니다. 다시 시도하세요.',
   },
   cart: {
+    discount: '할인',
     activationLegacyNetwork:
       '지원 네트워크에 처음 연결될 때 시작됩니다. 설치 전에 구매한 요금제의 조건을 확인하세요.',
     title: '장바구니',
@@ -1120,6 +1121,8 @@ export const messages = {
     pay: '{amount} 결제',
   },
   errors: {
+    promoNotApplicable:
+      '이 코드는 이 주문에 적용할 수 없습니다. 다른 코드를 사용하거나 코드를 삭제하고 계속하세요.',
     catalogueChanged: '상품 목록이 변경되었습니다. 검색 결과를 새로고침해 주세요.',
     searchPageInvalid: '이 검색 결과 페이지는 더 이상 유효하지 않습니다. 다시 검색해 주세요.',
     generic: '오류가 발생했습니다. 다시 시도해 주세요.',

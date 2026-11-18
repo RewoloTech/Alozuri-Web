@@ -781,6 +781,7 @@ export const messages = {
     furtherAction: 'يتطلب الدفع إجراءً إضافياً. حاول مجدداً.',
   },
   cart: {
+    discount: 'الخصم',
     activationLegacyNetwork: 'تبدأ عند أول اتصال بشبكة مدعومة. راجع باقتك المشتراة قبل التثبيت.',
     title: 'سلتك',
     eyebrow: 'جاهز لرحلتك القادمة',
@@ -1105,6 +1106,7 @@ export const messages = {
     pay: 'ادفع {amount}',
   },
   errors: {
+    promoNotApplicable: 'لا يمكن تطبيق هذا الرمز على هذا الطلب. جرّب رمزًا آخر أو أزله للمتابعة.',
     catalogueChanged: 'تم تحديث قائمة الباقات. حدّث نتائج البحث.',
     searchPageInvalid: 'لم تعد صفحة النتائج هذه صالحة. ابدأ بحثًا جديدًا.',
     generic: 'حدث خطأ. يُرجى المحاولة مجددًا.',

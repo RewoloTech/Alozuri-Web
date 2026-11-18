@@ -838,6 +838,7 @@ export const messages = {
     furtherAction: 'Für die Zahlung ist ein weiterer Schritt erforderlich. Versuche es erneut.',
   },
   cart: {
+    discount: 'Rabatt',
     activationLegacyNetwork:
       'Beginnt bei der ersten Verbindung mit einem unterstützten Netz. Prüfe deinen gekauften Tarif vor der Installation.',
     title: 'Dein Warenkorb',
@@ -1173,6 +1174,8 @@ export const messages = {
     pay: '{amount} bezahlen',
   },
   errors: {
+    promoNotApplicable:
+      'Dieser Code kann für diese Bestellung nicht verwendet werden. Versuche einen anderen Code oder entferne ihn, um fortzufahren.',
     catalogueChanged: 'Der Katalog wurde aktualisiert. Aktualisiere deine Suche.',
     searchPageInvalid: 'Diese Ergebnisseite ist nicht mehr gültig. Starte eine neue Suche.',
     generic: 'Etwas ist schiefgelaufen. Bitte versuche es erneut.',

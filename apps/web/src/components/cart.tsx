@@ -9,7 +9,13 @@ import { useEffect, useState } from 'react';
 import { useDispatch, useSelector, useStore } from 'react-redux';
 import { ShoppingBag, Trash2, Minus, Plus, LockKeyhole } from 'lucide-react';
 import { cartItems, previewCartPrices, money, type CartLine, type Currency } from '@alozuri/shared';
-import { quantityChanged, removeFromCart, restoreCart, type RootState } from '@/lib/store';
+import {
+  quantityChanged,
+  removeFromCart,
+  restoreCart,
+  setPromotionCode,
+  type RootState,
+} from '@/lib/store';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/firebase';
 import { useCurrency } from './currency-provider';
@@ -25,6 +31,17 @@ export type Quote = {
   totalCents: number;
   currency: Currency;
 };
+function promotionForQuote(
+  promotion: NonNullable<CartLine['plan']['promotionPrice']>,
+  quote?: Quote | null,
+) {
+  const code = quote?.promotion;
+  return code &&
+    code.code === promotion.campaign &&
+    (!code.discount || code.discount.kind === 'percent')
+    ? { ...promotion, discountPercent: code.discountPercent }
+    : promotion;
+}
 export function LineDescription({ line }: { line: CartLine }) {
   const t = useTranslations('cart');
   const plans = useTranslations('plans');
@@ -53,7 +70,9 @@ export function OrderSummary({
   updating = false,
   compact = false,
   showPlanDetails = false,
+  quote,
 }: {
+  quote?: Quote | null;
   lines: CartLine[];
   total: number | null;
   currency?: Currency;
@@ -62,6 +81,10 @@ export function OrderSummary({
   showPlanDetails?: boolean;
   children?: React.ReactNode;
 }) {
+  const discount =
+    quote?.currency === currency && quote.totalCents === total && (quote.discountCents ?? 0) > 0
+      ? quote
+      : null;
   const t = useTranslations('cart');
   const plans = useTranslations('plans');
   const search = useTranslations('search');
@@ -110,7 +133,7 @@ export function OrderSummary({
                 promotion={
                   line.plan.promotionPrice
                     ? {
-                        ...line.plan.promotionPrice,
+                        ...promotionForQuote(line.plan.promotionPrice, quote),
                         originalPriceCents:
                           line.plan.promotionPrice.originalPriceCents * line.quantity,
                       }
@@ -123,12 +146,23 @@ export function OrderSummary({
           </strong>
         </div>
       ))}
-      {(!compact || !showPlanDetails || lines.length > 1) && (
+      {(discount || !compact || !showPlanDetails || lines.length > 1) && (
         <dl className="spec-list" dir="ltr">
           <div>
             <dt dir={copy.dir}>{t('subtotal')}</dt>
-            <dd dir="ltr">{total === null ? '—' : money(total, currency)}</dd>
+            <dd dir="ltr">
+              {total === null ? '—' : money(discount?.originalRetailCents ?? total, currency)}
+            </dd>
           </div>
+          {discount && (
+            <div className="summary-discount">
+              <dt dir={copy.dir}>
+                {t('discount')}
+                {discount.promotion ? ` · ${discount.promotion.code}` : ''}
+              </dt>
+              <dd dir="ltr">−{money(discount.discountCents ?? 0, currency)}</dd>
+            </div>
+          )}
         </dl>
       )}
       <div className="commerce-total" dir="ltr">
@@ -152,6 +186,8 @@ export function OrderSummary({
 type CartFailure = { key: keyof Messages['cart'] } | { code: ErrorCode };
 export function Cart() {
   const t = useTranslations('cart');
+  const checkoutCopy = useTranslations('checkout');
+  const paymentCopy = useTranslations('paymentUi');
   const errors = useTranslations('errors');
   const copy = usePlanCopy();
   const { currency, refresh, ready: currencyReady } = useCurrency();
@@ -183,6 +219,8 @@ export function Cart() {
     [error, setError] = useState<CartFailure | null>(null),
     [quoteAttempt, setQuoteAttempt] = useState(0),
     [quotedSignature, setQuotedSignature] = useState('');
+  const [promotionInput, setPromotionInput] = useState(cart.promotionCode);
+  useEffect(() => setPromotionInput(cart.promotionCode), [cart.promotionCode]);
   const signature = JSON.stringify(cartItems(cart.items));
   useEffect(() => {
     if (!currencyReady || !cart.ready || signature === '[]') {
@@ -197,7 +235,11 @@ export function Cart() {
       void api<{ quote: Quote }>('/v2/quote', {
         method: 'POST',
         signal: controller.signal,
-        body: JSON.stringify({ items: JSON.parse(signature), currency }),
+        body: JSON.stringify({
+          items: JSON.parse(signature),
+          currency,
+          ...(cart.promotionCode ? { promotionCode: cart.promotionCode } : {}),
+        }),
       })
         .then((r) => {
           if (active && JSON.stringify(cartItems(store.getState().cart.items)) === signature) {
@@ -221,7 +263,17 @@ export function Cart() {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [signature, cart.ready, dispatch, currency, refresh, quoteAttempt, store, currencyReady]);
+  }, [
+    signature,
+    cart.ready,
+    dispatch,
+    currency,
+    refresh,
+    quoteAttempt,
+    store,
+    currencyReady,
+    cart.promotionCode,
+  ]);
   if (!currencyReady || !mounted || !cart.ready)
     return (
       <section className="container section" role="status">
@@ -250,7 +302,11 @@ export function Cart() {
       </section>
     );
   const priceReady =
-    quote?.currency === currency && quotedSignature === signature && !pending && !error;
+    quote?.currency === currency &&
+    quotedSignature === signature &&
+    (quote.promotion?.code ?? '') === cart.promotionCode &&
+    !pending &&
+    !error;
   const preview = previewCartPrices(
     cart.items,
     quote?.currency === currency ? quote.items : [],
@@ -323,7 +379,7 @@ export function Cart() {
                       promotion={
                         line.plan.promotionPrice
                           ? {
-                              ...line.plan.promotionPrice,
+                              ...promotionForQuote(line.plan.promotionPrice, quote),
                               originalPriceCents:
                                 line.plan.promotionPrice.originalPriceCents * line.quantity,
                             }
@@ -379,9 +435,53 @@ export function Cart() {
           compact
           lines={displayedItems}
           total={total}
+          quote={priceReady ? quote : null}
           currency={currency}
           updating={pending}
         >
+          <details className="checkout-promo-entry">
+            <summary>{paymentCopy('promotionQuestion')}</summary>
+            <label htmlFor="cart-promotion-code">{checkoutCopy('promotionalCode')}</label>
+            <input
+              id="cart-promotion-code"
+              className="commerce-input"
+              value={promotionInput}
+              maxLength={32}
+              autoComplete="off"
+              autoCapitalize="characters"
+              spellCheck={false}
+              dir="ltr"
+              onChange={(e) => setPromotionInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  if (!pending) dispatch(setPromotionCode(promotionInput));
+                }
+              }}
+            />
+            <div className="checkout-promo-actions" dir="ltr">
+              <button
+                type="button"
+                className="button small"
+                disabled={pending || !promotionInput.trim()}
+                onClick={() => dispatch(setPromotionCode(promotionInput))}
+              >
+                {checkoutCopy('apply')}
+              </button>
+              {cart.promotionCode && (
+                <button
+                  type="button"
+                  className="button small"
+                  onClick={() => {
+                    dispatch(setPromotionCode(''));
+                    setPromotionInput('');
+                  }}
+                >
+                  {checkoutCopy('remove')}
+                </button>
+              )}
+            </div>
+          </details>
           <Link
             className="button primary full-width"
             aria-disabled={checkoutBlocked}

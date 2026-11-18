@@ -815,6 +815,7 @@ export const messages = {
     furtherAction: 'Plata necesită o acțiune suplimentară. Încearcă din nou.',
   },
   cart: {
+    discount: 'Reducere',
     activationLegacyNetwork:
       'Începe la prima conectare la o rețea compatibilă. Verifică planul cumpărat înainte de instalare.',
     title: 'Coșul tău',
@@ -1151,6 +1152,8 @@ export const messages = {
     pay: 'Plătește {amount}',
   },
   errors: {
+    promoNotApplicable:
+      'Acest cod nu poate fi aplicat acestei comenzi. Încearcă alt cod sau elimină-l pentru a continua.',
     catalogueChanged: 'Catalogul s-a modificat. Actualizează căutarea.',
     searchPageInvalid: 'Această pagină de rezultate nu mai este validă. Începe o căutare nouă.',
     generic: 'A apărut o eroare. Încearcă din nou.',

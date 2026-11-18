@@ -816,6 +816,7 @@ export const messages = {
     furtherAction: 'O pagamento exige uma ação adicional. Tente de novo.',
   },
   cart: {
+    discount: 'Desconto',
     activationLegacyNetwork:
       'Começa na primeira conexão a uma rede compatível. Confira o plano comprado antes da instalação.',
     title: 'Seu carrinho',
@@ -1150,6 +1151,8 @@ export const messages = {
     pay: 'Pagar {amount}',
   },
   errors: {
+    promoNotApplicable:
+      'Este código não pode ser aplicado a este pedido. Tente outro código ou remova-o para continuar.',
     catalogueChanged: 'O catálogo mudou. Atualize sua busca.',
     searchPageInvalid: 'Esta página de resultados não é mais válida. Faça uma nova busca.',
     generic: 'Ocorreu um erro. Tente novamente.',

@@ -341,6 +341,8 @@ export class CommerceService {
     if (result.snapshots.some((line) => line.plan.priceCents < MINIMUM_CHARGE_MINOR[currency]))
       throw new CommerceError(
         'This code brings a plan below the supported payment minimum. Remove the code to continue.',
+        400,
+        'PROMO_CODE_NOT_APPLICABLE',
       );
     result.quote = {
       ...result.quote,

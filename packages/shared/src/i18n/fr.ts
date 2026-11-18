@@ -839,6 +839,7 @@ export const messages = {
     furtherAction: 'Une action supplémentaire est nécessaire pour le paiement. Veuillez réessayer.',
   },
   cart: {
+    discount: 'Réduction',
     activationLegacyNetwork:
       'Commence à la première connexion à un réseau compatible. Vérifiez le forfait acheté avant l’installation.',
     title: 'Votre panier',
@@ -1177,6 +1178,8 @@ export const messages = {
     pay: 'Payer {amount}',
   },
   errors: {
+    promoNotApplicable:
+      'Ce code ne peut pas être appliqué à cette commande. Essayez un autre code ou retirez-le pour continuer.',
     catalogueChanged: 'Le catalogue a changé. Actualisez votre recherche.',
     searchPageInvalid: 'Cette page de résultats n’est plus valide. Lancez une nouvelle recherche.',
     generic: 'Une erreur est survenue. Veuillez réessayer.',

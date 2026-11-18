@@ -753,6 +753,7 @@ export const messages = {
     furtherAction: '支付需要進一步操作，請重試。',
   },
   cart: {
+    discount: '優惠',
     activationLegacyNetwork: '首次連線受支援的網路時開始。安裝前請檢視所購方案的條件。',
     title: '您的購物車',
     eyebrow: '為下一段旅程做好準備',
@@ -1068,6 +1069,7 @@ export const messages = {
     pay: '支付 {amount}',
   },
   errors: {
+    promoNotApplicable: '此優惠碼無法用於此訂單。請嘗試其他優惠碼，或移除優惠碼後繼續。',
     catalogueChanged: '產品目錄已更新，請重新整理搜尋結果。',
     searchPageInvalid: '此搜尋結果頁已失效，請重新搜尋。',
     generic: '出現錯誤，請重試。',

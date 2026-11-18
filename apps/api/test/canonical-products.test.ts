@@ -62,7 +62,7 @@ test('supplier mappings preserve canonical ID, targeting and pricing across equi
     promotionMarginAllowed(1000, 'USD', next.wholesaleUnits, priceExchange('USD')),
     true,
   );
-  assert.equal(promotionMarginAllowed(1000, 'USD', 100000, priceExchange('USD')), false);
+  assert.equal(promotionMarginAllowed(1000, 'USD', 100000, priceExchange('USD')), true);
 });
 test('mapping rejects changed coverage, allowance, validity, speed or unknown service characteristics', () => {
   const products = [{ id: 'canonical', data: { productOffers: mappings } }];

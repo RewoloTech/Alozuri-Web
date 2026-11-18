@@ -3164,3 +3164,85 @@ test('minimum orders use server USD values; an unmet minimum or expired edited c
   );
   assert.equal(f.getCreates(), 0);
 });
+
+test('active promotion below the regular target is accepted while an invalid code remains rejected', async () => {
+  const f = fixture(),
+    promo = await promotionFixture(null, 30);
+  f.plans[0] = pricePackage(
+    { ...f.plans[0], wholesaleUnits: 55000 },
+    { priceOverrideUsdCents: 899 },
+  );
+  assert.equal(f.plans[0].active, true);
+  const api = await createApp({
+    demo: true,
+    payments: null,
+    commerce: f.service,
+    fulfillment: null,
+    profiles: null,
+    financial: null,
+  });
+  try {
+    const payload = { items: [{ planId: f.plans[0].id, quantity: 1 }], currency: 'GBP' };
+    assert.equal((await api.inject({ method: 'POST', url: '/v2/quote', payload })).statusCode, 200);
+    const blocked = await api.inject({
+      method: 'POST',
+      url: '/v2/quote',
+      payload: { ...payload, promotionCode: promo.code },
+    });
+    assert.equal(blocked.statusCode, 200);
+    assert.equal(blocked.json().quote.promotion.code, promo.code);
+    const invalid = await api.inject({
+      method: 'POST',
+      url: '/v2/quote',
+      payload: { ...payload, promotionCode: 'DOES_NOT_EXIST' },
+    });
+    assert.equal(invalid.statusCode, 400);
+    assert.equal(invalid.json().errorDetails.code, 'PROMO_CODE_INVALID');
+    assert.equal(f.getCreates(), 0);
+  } finally {
+    await api.close();
+  }
+});
+
+for (const currency of ['USD', 'GBP', 'EUR'] as const)
+  test(`50% promotion permits intentional negative contribution, keeps regular pricing and exact Stripe total in ${currency}`, async () => {
+    const f = fixture(false, undefined, currency);
+    f.plans[0] = pricePackage(
+      { ...f.plans[0], wholesaleUnits: 4700, countries: ['GB'], dataGb: 1, days: 7 },
+      { priceOverrideUsdCents: 149 },
+    );
+    assert.equal(f.plans[0].active, true);
+    const items = [{ planId: f.plans[0].id, quantity: 1 }];
+    const fifteen = await promotionFixture(null, 15),
+      half = await promotionFixture(null, 50);
+    const q15 = await f.service.quote(items, currency, fifteen.code);
+    assert.ok(q15.discountCents! > 0);
+    const quote = await f.service.quote(items, currency, half.code);
+    const checkout = await f.service.checkout(
+      { ...f.input, items, promotionCode: half.code, expectedTotalCents: quote.totalCents },
+      null,
+    );
+    assert.equal(f.intent.amount, quote.totalCents);
+    const saved = await db.doc('purchases/' + checkout.orderId).get();
+    assert.ok(saved.get('financial.checkoutEstimate.contributionMinor') < 0);
+    assert.equal(saved.get('promotion.discountPercent'), 50);
+    f.intent.status = 'succeeded';
+    f.intent.amount_received = f.intent.amount;
+    await f.event('payment_intent.succeeded');
+    await f.event('payment_intent.succeeded');
+    assert.equal((await half.promotions.get(half.code)).redemptionCount, 1);
+    assert.equal(f.plans[0].priceCents, 149);
+    if (currency === 'USD') {
+      assert.equal(quote.totalCents, 75);
+      await db.doc('packages/' + f.plans[0].id).set(f.plans[0]);
+      await half.promotions.save({ ...half.input, automatic: true }, false);
+      process.env.MARKETING_ENABLED = 'true';
+      try {
+        const views = await half.promotions.automaticView([f.plans[0]], priceExchange('USD'));
+        assert.equal(views[0].priceCents, quote.totalCents);
+      } finally {
+        delete process.env.MARKETING_ENABLED;
+        await half.promotions.setActive(half.code, false);
+      }
+    }
+  });

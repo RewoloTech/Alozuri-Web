@@ -810,6 +810,7 @@ export const englishMessages = {
     furtherAction: 'Payment needs further action. Please try again.',
   },
   cart: {
+    discount: 'Discount',
     activationLegacyNetwork:
       'Starts on first connection to a supported network. Check your purchased plan before installation.',
     title: 'Your cart',
@@ -1143,6 +1144,8 @@ export const englishMessages = {
     pay: 'Pay {amount}',
   },
   errors: {
+    promoNotApplicable:
+      'This code cannot be applied to this order. Try a different code or remove it to continue.',
     generic: 'Something went wrong. Please try again.',
     catalogueChanged: 'The catalogue changed. Refresh your search.',
     searchPageInvalid: 'This search page is no longer valid. Start a new search.',

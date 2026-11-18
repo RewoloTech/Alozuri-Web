@@ -55,7 +55,7 @@ unconditional, purchasable single-item price.
 Promotions do not stack. A supplied eligible code replaces automatic promotions
 for the basket. Without a code, each line gets its highest-priority matching
 automatic promotion; equal priorities resolve by code ascending. A matching
-promotion that breaches the margin policy blocks that discounted purchase and is
+promotion that breaches the configured promotion margin floor blocks that discounted purchase and is
 excluded from public catalogue views. It never silently falls back to another
 price. The overview lists blocked product/promotion combinations; its margin scan
 is bounded to 1,000 active products and discloses truncation.
@@ -254,3 +254,110 @@ mobile-only uploaded image fallback and session dismissal when local storage
 rejects banner writes. Final screenshots were manually inspected at public
 390px and 1440px, plus the 390px Operations editor; the announcement remains a
 slim strip above navigation and the forms have no horizontal overflow.
+
+## Active code rejection retest (18 November 2026)
+
+Live quote requests reproduced RADU15 failing for United Kingdom, 1 GB, 7 days,
+USD 1.49 (internal product `esim-40cf91478584a5a5c81b2405`). The API returned
+409: minimum contribution margin not met. Its discounted unit price would be
+USD 1.27. The code is active and within its schedule; activation alone does not
+bypass package-level margin protection. Removing it restores the normal quote.
+
+RADU15 and FRIENDS20 succeeded on a live Egypt quote in GBP. The active 30% code
+failed on the cheapest Egypt package but succeeded on a higher-priced Egypt
+package in USD, EUR and GBP. All production checks were quote requests; no new
+payment, charge or order was created. Examined promotions had no outstanding
+holds before these requests.
+
+The misleading error classification is corrected locally: margin/discount/payment
+minimum restrictions, targeting failures, basket minima and inactive campaign
+eligibility return PROMO_CODE_NOT_APPLICABLE instead of generic validation.
+That identifier now has a separate translated message in all 21 locales; it is
+not presented as an invalid code. Supplier costs and margin figures are not
+exposed in the customer message. Existing discount amounts and margin policy
+remain enforced. Both API and frontend must be deployed for this change; a local
+frontend using the old live backend will still receive its generic error code.
+
+Validation: eight focused Firestore checkout tests passed, 18 localization tests
+passed, three existing promotion/payment browser scenarios passed, and a further
+two-scenario browser run passed including Romanian RADU15 feedback and recovery
+by removing the code. Typechecks, lint and production build passed. The browser
+regressions use controlled quote/Stripe fixtures, separate from live quote checks.
+
+## Merchant-approved negative promotion margins
+
+On 18 November 2026 the merchant explicitly authorized deliberate below-cost
+promotions up to the existing 50% discount ceiling. Promotion eligibility now
+uses a separate signed setting, `PROMOTION_MIN_CONTRIBUTION_BPS`, default
+`-2000` (the merchant’s final chosen floor of minus 20%). Basis points refer to estimated net contribution divided by the
+**discounted selling price**, not to the customer discount percentage.
+
+- `-2000`: permit estimated net contribution down to minus 20% of discounted revenue.
+  This includes supplier cost, estimated processing fees and configured other costs.
+  A discount up to 50% is allowed only if it stays within this floor.
+- `0`: require estimated break-even after supplier cost, estimated processing
+  fees and configured other costs.
+- `1500`: require a 15% estimated promotion contribution margin.
+
+Signed integer values from -10000 through 9999 are accepted. Invalid values fail
+startup. The ordinary `PRICING_MIN_CONTRIBUTION_*` settings remain unchanged and
+continue to determine regular catalogue prices and supplier revalidation. Their
+positive absolute contribution floor no longer blocks promotions. The existing
+50% maximum discount, server-side calculations, Stripe currency charge minima,
+product eligibility, code scheduling, quota and webhook protections remain.
+This explicitly supersedes the earlier positive-margin-only promotion policy
+and the prior active-code rejection troubleshooting examples above.
+
+The new setting belongs on the API's Cloud Run service. Deploy the updated API;
+set `PROMOTION_MIN_CONTRIBUTION_BPS=-2000` explicitly to record the intended
+production policy (the same value is the code default when absent). This task
+has not deployed the API or changed its live environment.
+
+A read-only replay with the current UK 1 GB / 7 day product's supplier-cost record
+confirmed the updated local policy accepts USD 1.27 with RADU15 and USD 0.75 with
+50% off; the latter has negative estimated contribution. No supplier cost figure
+was printed, and no live purchase or payment was created. Automated checkout
+fixtures verify the 50% discounted amount, negative frozen estimate and duplicate
+webhook protection in USD, GBP and EUR, plus the same public automatic USD price.
+
+The final -20% boundary is tested explicitly: for a USD 1.00 sale, supplier
+cost USD 0.84 and estimated payment fees USD 0.36 leave -USD 0.20 (accepted).
+A supplier amount rounding up to USD 0.85 leaves -USD 0.21 (rejected). The
+percentage denominator is the final discounted revenue, not the original price.
+
+Final -20% verification: 254 API unit tests and 10 focused Firestore integration
+checks passed, including 50% discounted checkout in USD/GBP/EUR and the exact
+cost-plus-fee boundary. API build, test typecheck and targeted lint passed.
+The live Cloud Run environment has not been modified by this change.
+
+## Cart and account discount consistency
+
+Cart and checkout share the applied coupon code in Redux. Only the code is saved
+in sessionStorage (`alozuri-promotion-code`), allowing the current browser tab's
+signup, email-verification redirect, navigation and reload to retain it. Account
+cart merging continues to own product IDs/quantities; every changed basket or
+currency is quoted again by the server. No client-stored discounted amount is
+trusted for payment. This does not synchronize coupons across different devices.
+
+Both cart and checkout's Your order summary show the verified original subtotal,
+a separate discount/code row and the final total. Automatic discounts also get
+the aggregate discount row. The cart has the same apply/remove controls as
+checkout. Removed or ineligible codes trigger revalidation; no discount breakdown
+is shown from an unverified quote.
+
+Percentage promotion badges use the configured nominal rate (30% in the reported
+GBP example), rather than deriving 29.2% from rounded penny amounts. Currency
+amounts retain the existing server rounding. Fixed-amount/promotional-price
+badges continue to use their actual effective percentage. The shared summary
+also uses a verified quote's nominal rate when receiving older API badge metadata.
+
+Verification: 38 shared, 254 API and 18 localization unit tests passed; 34 Jest
+component tests passed; seven Marketing Firestore integration tests passed,
+including nominal-rate/penny-rounding parity for manual and automatic discounts.
+Eight Playwright scenarios passed with the real isolated Auth emulator, including
+signup, verification, merged cart, reload and exact checkout amount at 390px and
+1440px. A further GBP compatibility scenario passed with old 29.2% badge metadata
+and a verified 30% code, confirming both cart and checkout still display 30%.
+A test selector initially matched the cart before navigation completed; scoping
+it to checkout corrected that test. Final test typecheck and targeted UI visual
+review passed. No live payment or production deployment was performed.

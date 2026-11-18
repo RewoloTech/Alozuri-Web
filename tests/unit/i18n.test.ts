@@ -224,6 +224,12 @@ test('structured customer error mapping is safe for unknown codes and does not e
   );
   assert.equal(error.code, 'PROMO_CODE_EXPIRED');
   assert.match(error.message, /expired/);
+  const notApplicable = await storeApiError(
+    { errorDetails: { code: 'PROMO_CODE_NOT_APPLICABLE' } },
+    409,
+  );
+  assert.match(notApplicable.message, /cannot be applied to this order/);
+  assert.doesNotMatch(notApplicable.message, /not valid|margin|contribution/);
   const unknown = await storeApiError(
     { error: { code: 'UNKNOWN_ERROR', message: 'database secret diagnostics' } },
     503,
