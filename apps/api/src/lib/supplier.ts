@@ -1,3 +1,5 @@
+import { supplierHttp } from './supplier-rate-limit.js';
+import { topupProfileSchema, topupPackageSchema } from './topup-eligibility.js';
 import { createHmac, randomUUID, createHash } from 'node:crypto';
 import { z } from 'zod';
 import { dataSizeLabel, type StoredPlan } from '../../../../packages/shared/src/index.ts';
@@ -143,7 +145,7 @@ export class SupplierClient {
     const signature = createHmac('sha256', this.secret)
       .update(timestamp + requestId + this.access + body)
       .digest('hex');
-    const response = await fetch('https://api.esimaccess.com/api/v1/open/' + path, {
+    const response = await supplierHttp('https://api.esimaccess.com/api/v1/open/' + path, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -172,6 +174,63 @@ export class SupplierClient {
       );
     }
     return result.obj;
+  }
+  async topupProfile(esimTranNo: string) {
+    z.string().min(1).max(200).parse(esimTranNo);
+    const data = await this.request('esim/query', {
+      esimTranNo,
+      pager: { pageNum: 1, pageSize: 5 },
+    });
+    const profiles = z
+      .object({ esimList: z.array(topupProfileSchema).length(1) })
+      .parse(data).esimList;
+    if (profiles[0].esimTranNo !== esimTranNo) throw new Error('Supplier profile mismatch.');
+    return profiles[0];
+  }
+  async topupPackages(iccid: string) {
+    z.string()
+      .regex(/^\d{10,25}$/)
+      .parse(iccid);
+    const data = await this.request('package/list', { type: 'TOPUP', iccid });
+    return z.object({ packageList: z.array(topupPackageSchema).max(1000) }).parse(data).packageList;
+  }
+  // Chargeable operation: never retry automatically after any ambiguous response.
+  async topup(input: {
+    esimTranNo: string;
+    packageCode: string;
+    transactionId: string;
+    amount: number;
+    periodNum?: number;
+  }) {
+    const body = z
+      .object({
+        esimTranNo: z.string().min(1).max(200),
+        packageCode: z.string().min(1).max(200),
+        transactionId: z.string().min(1).max(50),
+        amount: z.number().int().positive().safe(),
+        periodNum: z.number().int().min(1).max(365).optional(),
+      })
+      .strict()
+      .parse(input);
+    const data = await this.request('esim/topup', {
+      ...body,
+      amount: String(body.amount),
+      ...(body.periodNum ? { periodNum: String(body.periodNum) } : {}),
+    });
+    const result = z
+      .object({
+        transactionId: z.string(),
+        iccid: z.string(),
+        expiredTime: z.string().regex(/(?:Z|[+-]\d{2}:?\d{2})$/),
+        topUpEsimTranNo: z.string().min(1).max(200),
+      })
+      .parse(data);
+    if (
+      result.transactionId !== body.transactionId ||
+      !Number.isFinite(Date.parse(result.expiredTime))
+    )
+      throw new Error('Top-up requires reconciliation.');
+    return result;
   }
   async balance(): Promise<number> {
     const result = await this.request('balance/query', {});
@@ -271,7 +330,7 @@ export class SupplierClient {
       const signature = createHmac('sha256', this.secret)
         .update(timestamp + requestId + this.access + body)
         .digest('hex');
-      const response = await fetch('https://api.esimaccess.com/api/v1/open/package/list', {
+      const response = await supplierHttp('https://api.esimaccess.com/api/v1/open/package/list', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

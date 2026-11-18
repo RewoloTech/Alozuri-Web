@@ -114,6 +114,14 @@ export function initialFinancial(
               : promotionEstimate(amount, p.currency, quoted, saleExchange),
         }
       : {}),
+    ...(p.discountCents && !p.promotion
+      ? {
+          checkoutEstimate:
+            !captureCheckoutEstimate || quoted === null
+              ? null
+              : promotionEstimate(amount, p.currency, quoted, saleExchange),
+        }
+      : {}),
     selling: {
       currency: p.currency,
       amountMinor: amount,

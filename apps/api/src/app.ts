@@ -1,3 +1,5 @@
+import { Promotions } from './lib/promotions.js';
+import { BuyAgainError } from './lib/buy-again.js';
 import { LocaleUnavailableError } from '../../../packages/shared/src/i18n/locales.ts';
 import { isErrorCode, type ErrorCode } from '../../../packages/shared/src/i18n/errors.ts';
 import { OperationsEsims } from './lib/operations-esims.js';
@@ -16,6 +18,7 @@ import { database } from './lib/firebase.js';
 import { defaultFeaturedReader } from './lib/featured-bundles.js';
 import {
   parseFeaturedBundles,
+  defaultAllowance,
   type FeaturedBundle,
 } from '../../../packages/shared/src/featured.ts';
 import {
@@ -108,7 +111,8 @@ export async function createApp(
   const converted = new WeakMap<Plan[], Map<string, Plan[]>>();
   async function displayPlans(currency: Currency) {
     const source = await repository.plans();
-    if (currency === 'USD') return source;
+    if (currency === 'USD')
+      return new Promotions(database()).automaticView(source, priceExchange('USD'));
     const fx = priceExchange(currency, await rates.current());
     const key = JSON.stringify({ currency, ...fx });
     let views = converted.get(source);
@@ -121,7 +125,7 @@ export async function createApp(
       plans = source.map((p) => convertedPlan(p, currency, fx));
       views.set(key, plans);
     }
-    return plans;
+    return new Promotions(database()).automaticView(plans, fx);
   }
   const verify = options.verify ?? verifyToken;
   const payments = options.payments === undefined ? configuredPayments() : options.payments;
@@ -227,6 +231,7 @@ export async function createApp(
           ? { errorDetails: { code: error.code } }
           : {}),
       });
+    if (error instanceof BuyAgainError) return reply.code(409).send({ error: error.message });
     if (error instanceof CommerceError)
       return reply.code(error.statusCode).send({
         error: error.message,
@@ -400,6 +405,25 @@ export async function createApp(
       input.currency,
     );
     if (!bundles) throw new Error('Invalid featured bundle snapshot.');
+    if (process.env.MARKETING_ENABLED === 'true') {
+      const prices = new Map((await displayPlans(input.currency)).map((p) => [p.id, p]));
+      for (const bundle of bundles) {
+        bundle.options = bundle.options.flatMap((option) => {
+          const plan = prices.get(option.productId);
+          return plan
+            ? [
+                {
+                  ...option,
+                  priceCents: plan.priceCents,
+                  ...(plan.promotionPrice ? { promotionPrice: plan.promotionPrice } : {}),
+                },
+              ]
+            : [];
+        });
+        bundle.defaultDataGb = defaultAllowance(bundle.options.map((o) => o.dataGb));
+        bundle.status = bundle.options.length ? 'active' : 'unavailable';
+      }
+    }
     return { bundles };
   });
   app.get('/v1/catalogue/sitemap', async () => ({

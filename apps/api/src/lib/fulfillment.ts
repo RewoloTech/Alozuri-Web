@@ -1,3 +1,4 @@
+import { BuyAgainService, repeatDecisionSchema } from './buy-again.js';
 import {
   STRIPE_APP_INFO,
   stripeAttributionSchema,
@@ -17,6 +18,8 @@ import { SupplierClient, SupplierError, activationSchema, type Activation } from
 
 const liveOrderSchema = orderSchema
   .extend({
+    repeatDecision: repeatDecisionSchema.optional(),
+    supplierAttempted: z.boolean().optional(),
     test: z.literal(false),
     supplierCode: z.string().min(1).max(200),
     wholesaleUnits: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
@@ -79,6 +82,8 @@ export function firestoreFulfillmentStore(): FulfillmentStore {
           // Guest ownership can change while the supplier request is in flight.
           uid: orderSchema.shape.uid.parse(doc.get('uid')),
           ...activationSchema.parse(activation),
+          topUpCount: 0,
+          topUpHistoryKnown: true,
         });
       if (done) t.delete(jobRef);
     });
@@ -347,8 +352,26 @@ export class FulfillmentService {
       });
       return;
     }
+    if (order.repeatDecision?.method === 'TOPUP') {
+      if (process.env.BUY_AGAIN_ENABLED !== 'true')
+        throw new Error('Buy Again disabled; review paid order.');
+      if (await new BuyAgainService(database()).fulfill(order.id, order.uid, order.repeatDecision))
+        return;
+      const replacement = await database()
+        .doc('orders/' + order.id)
+        .get();
+      order.supplierCode = z.string().parse(replacement.get('supplierCode'));
+      order.wholesaleUnits = z
+        .number()
+        .int()
+        .positive()
+        .safe()
+        .parse(replacement.get('wholesaleUnits'));
+    }
     const transactionId = 'az_' + createHash('sha256').update(order.id).digest('hex').slice(0, 40);
     if (!order.supplierOrderNo) {
+      if (order.repeatDecision && order.supplierAttempted)
+        throw new Error('Buy Again supplier order outcome requires reconciliation.');
       await this.store.update(order, { status: 'fulfilling', supplierAttempted: true });
       let orderNo: string;
       try {

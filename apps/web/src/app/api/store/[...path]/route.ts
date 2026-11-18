@@ -101,6 +101,15 @@ async function relay(request: Request, context: { params: Promise<{ path: string
       );
       return new Response(upstream.body, { status: upstream.status, headers: responseHeaders });
     }
+    if (request.method === 'GET' && /^\/v1\/marketing\/images\/[a-f0-9-]{36}$/.test(path)) {
+      const type = upstream.headers.get('content-type')?.split(';')[0];
+      if (upstream.ok && type && ['image/png', 'image/jpeg', 'image/webp'].includes(type)) {
+        responseHeaders.set('Content-Type', type);
+        responseHeaders.set('Cache-Control', 'public,max-age=31536000,immutable');
+        return new Response(upstream.body, { status: upstream.status, headers: responseHeaders });
+      }
+      return new Response(null, { status: upstream.ok ? 502 : upstream.status });
+    }
     responseHeaders.set('Content-Type', 'application/json');
     const retryAfter = upstream.headers.get('retry-after');
     if (retryAfter) responseHeaders.set('Retry-After', retryAfter);

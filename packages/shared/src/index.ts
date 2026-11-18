@@ -64,6 +64,13 @@ export function uniqueDestinations(items: readonly Country[]): Country[] {
 }
 export type Currency = 'USD' | 'GBP' | 'EUR';
 export type Plan = {
+  tags?: string[];
+  promotionPrice?: {
+    originalPriceCents: number;
+    discountPercent: number;
+    campaign: string;
+    expiresAt: string;
+  };
   id: string;
   name: string;
   countries: string[];
@@ -85,6 +92,12 @@ export type StoredPlan = Plan & {
   wholesaleUnits: number;
   active: boolean;
   providerId?: string;
+  productOffers?: {
+    providerId: string;
+    adapterProductId: string;
+    serviceHash: string;
+    selected: boolean;
+  }[];
   packageId?: string;
   supplier?: 'esimaccess';
   supplierCostUsdCents?: number;

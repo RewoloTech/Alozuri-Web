@@ -15,6 +15,7 @@ export const emailInstallationSchema = z.object({
   unitId: z.string().regex(/^order_[a-f0-9]{48}$/),
   planId: z.string().min(1).max(100),
   activation: activationSchema,
+  topupReceipt: z.object({ expiresAt: z.string() }).optional(),
 });
 export type EmailInstallation = z.infer<typeof emailInstallationSchema>;
 const e = escapeEmailHtml;
@@ -56,6 +57,12 @@ export async function installationConfirmationEmail(
     if (!item) throw new Error('Installation plan is unavailable.');
     const { plan } = item;
     const title = `eSIM ${index + 1} — ${copy.title(plan)}`;
+    if (unit.topupReceipt) {
+      const message = `Top-up successful. ${copy.title(plan)} was added to your existing eSIM ending ${unit.activation.iccid.slice(-4)}. Your existing QR code remains valid; no new installation is needed. Confirmed expiry: ${unit.topupReceipt.expiresAt}.`;
+      html.push(`<p>${e(message)}</p>`);
+      text.push(message);
+      continue;
+    }
     const [, address, code, confirmation] = unit.activation.ac.split('$');
     const fields = [
       [t('display.smdp'), address],

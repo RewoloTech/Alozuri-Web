@@ -183,6 +183,8 @@ test('Polish and Arabic plural forms are grammatical categories, with opaque rec
   assert.equal(destinationName('DE', 'de'), 'Deutschland');
   assert.equal(destinationName('JP', 'ja'), '日本');
   assert.equal(destinationName('GB', 'en'), 'United Kingdom');
+  assert.equal(destinationName('EG', 'ro'), 'Egypt');
+  assert.equal(destinationName('EG', 'es'), 'Egipto');
   assert.throws(() => destinationName('invalid', 'en'));
   assert.equal(stripeElementsLocale('pt-BR'), 'pt-BR');
 });

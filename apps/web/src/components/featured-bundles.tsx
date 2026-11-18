@@ -1,10 +1,10 @@
 'use client';
+import { PromotionPrice } from './promotion-price';
 import { useLocale, useTranslations } from 'next-intl';
 import { localeDirection } from '@alozuri/shared/i18n';
 import { useEffect, useRef, useState } from 'react';
 import Link from '@/components/localized-link';
 import { ArrowUpRight, Globe2 } from 'lucide-react';
-import { money } from '@alozuri/shared';
 import {
   parseFeaturedBundles,
   unavailableBundles,
@@ -98,11 +98,17 @@ export function FeaturedBundles({ initial }: { initial: FeaturedBundle[] | null 
                     {t('featureCoverage', { count: selected.countryCount })}
                   </p>
                   <strong className="featured-price" dir="ltr">
-                    {current
-                      ? money(selected.priceCents, selected.currency)
-                      : error
-                        ? plans('unavailable')
-                        : plans('loadingPrice')}{' '}
+                    {current ? (
+                      <PromotionPrice
+                        amount={selected.priceCents}
+                        currency={selected.currency}
+                        promotion={selected.promotionPrice}
+                      />
+                    ) : error ? (
+                      plans('unavailable')
+                    ) : (
+                      plans('loadingPrice')
+                    )}{' '}
                     <small>{ready ? currency : ''}</small>
                   </strong>
                   <fieldset className="featured-allowances" dir="ltr">

@@ -12,7 +12,9 @@ async function publicJson(path: string): Promise<unknown> {
   if (!base) return null;
   try {
     const response = await fetch(base + path, {
-      next: { revalidate: 300 },
+      ...(path === '/v1/countries'
+        ? { next: { revalidate: 300 } }
+        : { cache: 'no-store' as const }),
       signal: AbortSignal.timeout(5000),
     });
     return response.status === 404 ? MISSING : response.ok ? await response.json() : null;
@@ -70,6 +72,20 @@ export function parsePublicPlan(input: unknown, id: string): Plan | null {
     p.dataType === 'daily' ? 'daily' : p.dataType === 'unlimited' ? 'unlimited' : 'fixed';
   return {
     id,
+    ...(record(p.promotionPrice) &&
+    typeof p.promotionPrice.originalPriceCents === 'number' &&
+    typeof p.promotionPrice.discountPercent === 'number' &&
+    typeof p.promotionPrice.campaign === 'string' &&
+    typeof p.promotionPrice.expiresAt === 'string'
+      ? {
+          promotionPrice: {
+            originalPriceCents: p.promotionPrice.originalPriceCents,
+            discountPercent: p.promotionPrice.discountPercent,
+            campaign: p.promotionPrice.campaign,
+            expiresAt: p.promotionPrice.expiresAt,
+          },
+        }
+      : {}),
     name: p.name,
     countries: p.countries,
     priceCents: p.priceCents,

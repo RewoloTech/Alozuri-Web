@@ -279,3 +279,106 @@ test('curated sync keeps supplier variants, is idempotent, audits decisions and 
   assert.equal((await refs[0].collection('pricingHistory').get()).size, 2);
   assert.equal((await syncCatalogue(provider, db)).written, 0);
 });
+
+test('verified supplier offer mapping keeps one canonical product and its promotion through catalogue sync', async () => {
+  const { productServiceHash } = await import('../src/lib/canonical-products.ts');
+  const { pricePackage } = await import('../src/lib/package-pricing.ts');
+  const { Promotions } = await import('../src/lib/promotions.ts');
+  const { priceExchange } = await import('../src/lib/exchange-rates.ts');
+  const mappedDb = getFirestore(app, 'mapped-products');
+  const offer = {
+    ...plan('offer-original', 'mapped-provider-a'),
+    countries: ['FR'],
+    syncedAt: new Date().toISOString(),
+    supplierComparison: {
+      key: 'verified',
+      fup: 'fixed',
+      fupKbps: null,
+      topupType: 2,
+      attributes: { speed: '4G' },
+    },
+  };
+  const serviceHash = productServiceHash(offer);
+  const mappings = [
+    { providerId: 'mapped-provider-a', adapterProductId: offer.id, serviceHash, selected: false },
+    {
+      providerId: 'mapped-provider-b',
+      adapterProductId: 'offer-replacement',
+      serviceHash,
+      selected: true,
+    },
+  ];
+  const canonical = pricePackage(
+    { ...offer, id: 'stable-product' },
+    { priceOverrideUsdCents: 1000 },
+  );
+  await mappedDb.doc('packages/stable-product').set({ ...canonical, productOffers: mappings });
+  const promotions = new Promotions(mappedDb);
+  await promotions.save(
+    {
+      code: 'STABLE10',
+      discountPercent: 10,
+      active: true,
+      startsAt: '2020-01-01T00:00:00Z',
+      expiresAt: '2099-01-01T00:00:00Z',
+      maxUses: null,
+      scope: { kind: 'products', values: [canonical.id], excludedProducts: [] },
+    },
+    true,
+  );
+  await syncCatalogue(
+    {
+      id: 'mapped-provider-b',
+      fetch: async (at) => ({
+        fetched: 1,
+        plans: [
+          {
+            ...offer,
+            id: 'offer-replacement',
+            providerId: 'mapped-provider-b',
+            supplierCode: 'REPLACEMENT',
+            wholesaleUnits: 1100,
+            syncedAt: at,
+          },
+        ],
+      }),
+    },
+    mappedDb,
+  );
+  const product = await mappedDb.doc('packages/stable-product').get();
+  assert.equal(product.get('providerId'), 'mapped-provider-b');
+  assert.equal(product.get('supplierCode'), 'REPLACEMENT');
+  assert.equal(product.get('priceCents'), 1000);
+  assert.equal((await mappedDb.doc('packages/offer-replacement').get()).exists, false);
+  const config = await promotions.get('STABLE10');
+  assert.equal(
+    promotions.apply(
+      { ...canonical, priceCents: product.get('priceCents') },
+      product.get('wholesaleUnits'),
+      config,
+      priceExchange('USD'),
+    ).priceCents,
+    900,
+  );
+  await assert.rejects(
+    syncCatalogue(
+      {
+        id: 'mapped-provider-b',
+        fetch: async (at) => ({
+          fetched: 1,
+          plans: [
+            {
+              ...offer,
+              id: 'offer-replacement',
+              providerId: 'mapped-provider-b',
+              days: 99,
+              syncedAt: at,
+            },
+          ],
+        }),
+      },
+      mappedDb,
+    ),
+    /service changed/,
+  );
+});

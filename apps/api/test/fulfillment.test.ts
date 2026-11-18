@@ -385,3 +385,29 @@ test('new Alozuri refunds retain the original brand reference and retry key with
   await f.service.run();
   assert.equal(f.refundRequests.length, 1);
 });
+
+test('Buy Again new-profile timeout never blindly repeats a supplier purchase', async () => {
+  const f = fixture();
+  f.order.repeatDecision = {
+    method: 'NEW_ESIM',
+    uid: 'alice',
+    sourceOrderId: 'previous',
+    productId: f.order.plan.id,
+    productIdentity: 'verified-test-identity',
+    supplierCode: 'sku',
+    supplierCost: 1000,
+    newSupplierCost: 1000,
+    createdAt: Date.now(),
+    expiresAt: Date.now() + 600000,
+  };
+  let calls = 0;
+  f.supplier.order = async () => {
+    calls++;
+    throw new Error('Synthetic timeout after submission');
+  };
+  await f.service.run();
+  await f.service.run();
+  assert.equal(calls, 1);
+  assert.equal(f.order.supplierAttempted, true);
+  assert.equal(f.getSaved(), undefined);
+});

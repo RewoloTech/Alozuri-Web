@@ -1,3 +1,4 @@
+import { resolveCanonicalProducts, productOffersSchema } from './canonical-products.js';
 import { pricingHistoryMetadata } from './pricing-history.js';
 import { randomUUID } from 'node:crypto';
 import { OAuth2Client } from 'google-auth-library';
@@ -42,7 +43,8 @@ export async function syncCatalogue(
   });
   try {
     const syncedAt = new Date().toISOString();
-    const { fetched, plans } = await provider.fetch(syncedAt);
+    const { fetched, plans: offers } = await provider.fetch(syncedAt);
+    let plans = offers;
     if (
       plans.some((p) => p.providerId !== provider.id || !storedPlanSchema.safeParse(p).success) ||
       new Set(plans.map((p) => p.id)).size !== plans.length
@@ -52,14 +54,30 @@ export async function syncCatalogue(
     // Refuse a severe shrink instead of accidentally disabling most of a healthy catalogue.
     const existing = await db.collection('packages').get();
     const owns = (d: FirebaseFirestore.QueryDocumentSnapshot) =>
-      d.get('providerId') === provider.id ||
-      (provider.id === 'esim-access' && !d.get('providerId'));
-    const owned = existing.docs.filter(owns);
+      d.get('productOffers') !== undefined
+        ? productOffersSchema
+            .parse(d.get('productOffers'))
+            .some((o) => o.providerId === provider.id && o.selected)
+        : d.get('providerId') === provider.id ||
+          (provider.id === 'esim-access' && !d.get('providerId'));
+    plans = resolveCanonicalProducts(
+      provider.id,
+      offers,
+      existing.docs.map((d) => ({ id: d.id, data: d.data() })),
+    );
+    const mappedToProvider = (d: FirebaseFirestore.QueryDocumentSnapshot) =>
+      d.get('productOffers') !== undefined &&
+      productOffersSchema
+        .parse(d.get('productOffers'))
+        .some((o) => o.providerId === provider.id && o.selected);
+    const owned = existing.docs.filter((d) => owns(d) || mappedToProvider(d));
     const existingById = new Map(existing.docs.map((d) => [d.id, d]));
+    if (new Set(plans.map((p) => p.id)).size !== plans.length)
+      throw new Error('Duplicate internal products after supplier mapping.');
     if (
       plans.some((p) => {
         const d = existingById.get(p.id);
-        return d && !owns(d);
+        return d && !owns(d) && !mappedToProvider(d);
       })
     )
       throw new Error('Provider product identifier collision.');
@@ -103,6 +121,13 @@ export async function syncCatalogue(
         const [lease, ...docs] = await t.getAll(state, ...chunk.map((w) => w.ref));
         if (lease.get('runId') !== runId || lease.get('leaseUntil') <= Date.now())
           throw new Error('Catalogue lease lost.');
+        for (let i = 0; i < chunk.length; i++) {
+          if (
+            decisionHash(docs[i].get('productOffers')) !==
+            decisionHash(existingById.get(chunk[i].ref.id)?.get('productOffers'))
+          )
+            throw new Error('Supplier offer mapping changed during sync. Retry after review.');
+        }
         const candidates = chunk.flatMap((w, i) =>
           'id' in w.data ? [pricePackage(w.data, docs[i].data() || {}, Timestamp.now(), true)] : [],
         );

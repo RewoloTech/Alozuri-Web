@@ -3003,3 +3003,164 @@ test('an invalid locale on a queued notification is quarantined without blocking
   assert.equal((await notification.get()).get('status'), 'attention');
   assert.deepEqual((await notification.get()).get('rendered'), snapshot);
 });
+
+test('Buy Again quote retries keep one Stripe intent and one webhook allocation with frozen fulfilment choice', async () => {
+  const previous = process.env.BUY_AGAIN_ENABLED;
+  process.env.BUY_AGAIN_ENABLED = 'true';
+  try {
+    const { repeatProductIdentity } = await import('../src/lib/buy-again.ts');
+    const f = fixture(),
+      plan = f.plans[0],
+      quoteId = crypto.randomUUID();
+    const user = {
+      uid: 'repeat-' + crypto.randomUUID(),
+      email: 'repeat@example.test',
+      verified: true,
+      admin: false,
+    };
+    await db.doc('buyAgainQuotes/' + quoteId).set({
+      method: 'TOPUP',
+      uid: user.uid,
+      sourceOrderId: 'order_' + 'a'.repeat(48),
+      profileOrderId: 'order_' + 'a'.repeat(48),
+      productId: plan.id,
+      productIdentity: repeatProductIdentity(plan),
+      supplierCode: 'verified-topup',
+      supplierCost: 1,
+      newSupplierCost: plan.wholesaleUnits,
+      createdAt: Date.now(),
+      expiresAt: Date.now() + 600000,
+    });
+    const input = {
+      ...f.input,
+      items: [{ planId: plan.id, quantity: 1 }],
+      expectedTotalCents: plan.priceCents,
+      repeatQuote: quoteId,
+    };
+    const first = await f.service.checkout(input, user);
+    const second = await f.service.checkout({ ...input, requestId: crypto.randomUUID() }, user);
+    assert.equal(first.orderId, second.orderId);
+    assert.equal(f.getCreates(), 1);
+    f.intent.status = 'succeeded';
+    f.intent.amount_received = f.intent.amount;
+    await f.event();
+    await f.event();
+    const units = await db.collection('orders').where('parentOrderId', '==', first.orderId).get();
+    assert.equal(units.size, 1);
+    assert.equal(units.docs[0].get('repeatDecision.method'), 'TOPUP');
+    assert.equal(units.docs[0].get('supplierCode'), 'verified-topup');
+    await assert.rejects(f.service.checkout(input, { ...user, uid: 'foreign' }));
+  } finally {
+    if (previous === undefined) delete process.env.BUY_AGAIN_ENABLED;
+    else process.env.BUY_AGAIN_ENABLED = previous;
+  }
+});
+
+test('automatic targeted prices match Stripe, explicit codes replace them, and duplicate payment delivery settles once', async () => {
+  process.env.MARKETING_ENABLED = 'true';
+  const f = fixture(),
+    promotions = new Promotions(db);
+  const input = {
+    code: 'AUTO_INTEGRATION',
+    discountPercent: 20,
+    active: true,
+    startsAt: new Date(Date.now() - 60_000).toISOString(),
+    expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+    maxUses: null,
+    automatic: true,
+    priority: 9999,
+    scope: { kind: 'products', values: [f.plans[0].id], excludedProducts: [] },
+  };
+  for (const plan of f.plans) await db.doc('packages/' + plan.id).set(plan);
+  try {
+    await promotions.save(input, true);
+    for (const currency of ['USD', 'GBP', 'EUR'] as const) {
+      const q = await f.service.quote(f.input.items, currency);
+      assert.equal(q.items[0].plan.promotionPrice?.campaign, input.code);
+      assert.equal(q.items[1].plan.promotionPrice, undefined);
+      assert.ok(q.discountCents! > 0);
+    }
+    const q = await f.service.quote(f.input.items, 'USD');
+    await assert.rejects(
+      f.service.checkout({ ...f.input, expectedTotalCents: 1 }, null),
+      /price changed/,
+    );
+    assert.equal(f.getCreates(), 0);
+    const result = await f.service.checkout({ ...f.input, expectedTotalCents: q.totalCents }, null);
+    assert.equal(f.intent.amount, q.totalCents);
+    f.intent.status = 'succeeded';
+    f.intent.amount_received = f.intent.amount;
+    await f.event('payment_intent.succeeded', 'evt_auto_once');
+    await f.event('payment_intent.succeeded', 'evt_auto_replay');
+    const saved = await db.doc('purchases/' + result.orderId).get();
+    assert.equal(saved.get('items')[0].automaticPromotion.code, input.code);
+    assert.equal(saved.get('discountCents'), q.discountCents);
+    assert.equal((await promotions.get(input.code)).redemptionCount, 1);
+    const coupon = await promotionFixture(null, 10);
+    const explicit = await f.service.quote(f.input.items, 'USD', coupon.code);
+    assert.equal(explicit.promotion?.code, coupon.code);
+    assert.equal(explicit.items[0].plan.promotionPrice?.campaign, coupon.code);
+    await promotions.setActive(input.code, false);
+    assert.equal((await f.service.quote(f.input.items, 'USD')).discountCents, undefined);
+    await assert.rejects(
+      promotions.deleteUnused(input.code),
+      /redeemed|referenced|cannot be deleted/,
+    );
+  } finally {
+    await promotions.setActive(input.code, false);
+    delete process.env.MARKETING_ENABLED;
+  }
+});
+
+for (const currency of ['USD', 'GBP', 'EUR'] as const)
+  for (const kind of ['fixed', 'price'] as const)
+    test(`scoped monetary ${kind} discount freezes partial-cart reference prices and exact Stripe amount in ${currency}`, async () => {
+      const f = fixture(false, undefined, currency),
+        promo = await promotionFixture();
+      for (const p of f.plans) await db.doc('packages/' + p.id).set(p);
+      await promo.promotions.save(
+        {
+          ...promo.input,
+          discount: { kind, value: kind === 'fixed' ? 100 : 600 },
+          scope: { kind: 'products', values: [f.plans[0].id], excludedProducts: [] },
+        },
+        false,
+      );
+      const q = await f.service.quote(f.input.items, currency, promo.code);
+      assert.equal(q.items[0].plan.promotionPrice?.campaign, promo.code);
+      assert.equal(q.items[1].plan.promotionPrice, undefined);
+      const purchase = await f.service.checkout(
+        { ...f.input, promotionCode: promo.code, expectedTotalCents: q.totalCents },
+        null,
+      );
+      assert.equal(f.intent.amount, q.totalCents);
+      f.intent.status = 'succeeded';
+      f.intent.amount_received = f.intent.amount;
+      await f.event();
+      const saved = await db.doc('purchases/' + purchase.orderId).get();
+      assert.equal(saved.get('originalRetailCents') - saved.get('discountCents'), q.totalCents);
+      assert.equal(
+        (await f.service.order(purchase.orderId, null, purchase.accessToken)).totalCents,
+        q.totalCents,
+      );
+    });
+test('minimum orders use server USD values; an unmet minimum or expired edited code creates no payment', async () => {
+  const f = fixture(),
+    promo = await promotionFixture();
+  await promo.promotions.save({ ...promo.input, minimumOrderUsdCents: 100000 }, false);
+  await assert.rejects(f.service.quote(f.input.items, 'USD', promo.code), /Minimum/);
+  await promo.promotions.save({ ...promo.input, minimumOrderUsdCents: 100 }, false);
+  const q = await f.service.quote(f.input.items, 'USD', promo.code);
+  await promo.promotions.save(
+    { ...promo.input, startsAt: '2020-01-01T00:00:00Z', expiresAt: '2020-02-01T00:00:00Z' },
+    false,
+  );
+  await assert.rejects(
+    f.service.checkout(
+      { ...f.input, promotionCode: promo.code, expectedTotalCents: q.totalCents },
+      null,
+    ),
+    /expired/,
+  );
+  assert.equal(f.getCreates(), 0);
+});

@@ -13,7 +13,7 @@ export const messages = {
     BR: 'Statuia lui Cristos Mântuitorul deasupra orașului Rio de Janeiro, Brazilia',
     ZA: 'Muntele Table din Cape Town, Africa de Sud',
     AE: 'Burj Khalifa din Dubai, Emiratele Arabe Unite',
-    EG: 'O piramidă în deșertul de la Giza, Egipt',
+    EG: 'O piramidă în deșertul de la Giza, Egypt',
   },
   transactionUi: {
     purchaseContract: 'Contractul tău de cumpărare',

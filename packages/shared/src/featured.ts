@@ -9,6 +9,7 @@ export const REGION_NAMES: Record<FeaturedRegion, string> = {
 export const BUNDLE_ALLOWANCES = [5, 10, 20] as const;
 export type BundleAllowance = (typeof BUNDLE_ALLOWANCES)[number];
 export type FeaturedOption = {
+  promotionPrice?: import('./index.ts').Plan['promotionPrice'];
   productId: string;
   dataGb: BundleAllowance;
   validityDays: number;
@@ -68,6 +69,20 @@ export function parseFeaturedBundles(
       )
         return null;
       options.push({
+        ...(record(option.promotionPrice) &&
+        typeof option.promotionPrice.originalPriceCents === 'number' &&
+        typeof option.promotionPrice.discountPercent === 'number' &&
+        typeof option.promotionPrice.campaign === 'string' &&
+        typeof option.promotionPrice.expiresAt === 'string'
+          ? {
+              promotionPrice: {
+                originalPriceCents: option.promotionPrice.originalPriceCents,
+                discountPercent: option.promotionPrice.discountPercent,
+                campaign: option.promotionPrice.campaign,
+                expiresAt: option.promotionPrice.expiresAt,
+              },
+            }
+          : {}),
         productId: option.productId,
         dataGb: option.dataGb,
         validityDays: option.validityDays,

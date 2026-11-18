@@ -119,6 +119,13 @@ export class OrderConfirmations {
               current.get('confirmationPayloadHash') === undefined)
           ) {
             installations = units.docs.map((unit, index) => ({
+              ...(unit.get('topupReceipt')
+                ? {
+                    topupReceipt: {
+                      expiresAt: z.string().parse(unit.get('topupReceipt.expiresAt')),
+                    },
+                  }
+                : {}),
               unitId: unit.id,
               planId: z.string().parse(unit.get('plan.id')),
               activation: activationSchema.parse(activations[index].data()),

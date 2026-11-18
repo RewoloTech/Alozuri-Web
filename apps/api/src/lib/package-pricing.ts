@@ -1,3 +1,5 @@
+import { z } from 'zod';
+import { productOffersSchema } from './canonical-products.js';
 import { Timestamp, FieldValue } from 'firebase-admin/firestore';
 import type { StoredPlan } from '../../../../packages/shared/src/index.ts';
 import { canonical } from './catalogue-curation.js';
@@ -20,6 +22,8 @@ export function pricePackage(
   at = Timestamp.now(),
   resetValue = false,
 ): StoredPlan {
+  if (previous.productOffers !== undefined)
+    incoming = { ...incoming, productOffers: productOffersSchema.parse(previous.productOffers) };
   const date = catalogueDate(incoming.syncedAt);
   const syncedAt =
     previous.catalogueDate === date &&
@@ -99,6 +103,9 @@ export function pricePackage(
     previous.pricingUpdatedAt instanceof Timestamp;
   return {
     ...incoming,
+    ...(z.array(z.string().max(100)).max(50).safeParse(previous.tags).success
+      ? { tags: z.array(z.string().max(100)).max(50).parse(previous.tags) }
+      : {}),
     wholesaleUnits: units,
     packageId: incoming.id,
     supplier: 'esimaccess',

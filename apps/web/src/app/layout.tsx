@@ -1,3 +1,4 @@
+import { WebsiteMarketingProvider, WebsiteBanner } from '@/components/website-marketing';
 import { LanguageProvider } from '@/components/language-provider';
 import { Suspense } from 'react';
 import { MetaTracking } from '@/components/meta-tracking';
@@ -76,9 +77,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 <a className="skip-link" href="#main">
                   {t('site.skip')}
                 </a>
-                <Header />
-                <main id="main">{children}</main>
-                <Footer />
+                <WebsiteMarketingProvider>
+                  <WebsiteBanner placement="announcement" />
+                  <Header />
+                  <WebsiteBanner placement="page" />
+                  <main id="main">{children}</main>
+                  <Footer />
+                </WebsiteMarketingProvider>
               </StoreProvider>
             </PrivacyProvider>
           </LanguageProvider>

@@ -115,7 +115,13 @@ export function eligibleRegion(
   region: FeaturedRegion,
   policy = BUNDLE_POLICY,
 ): boolean {
-  const codes = candidate.plan.countries;
+  return coverageMatchesRegion(candidate.plan.countries, region, policy);
+}
+export function coverageMatchesRegion(
+  codes: string[],
+  region: FeaturedRegion,
+  policy = BUNDLE_POLICY,
+): boolean {
   if (region === 'global') {
     const groups = new Map<Continent, number>();
     for (const code of codes) {

@@ -14,10 +14,11 @@ import { api } from '@/lib/api';
 import { authClient } from '@/lib/firebase';
 import { useCurrency } from './currency-provider';
 import { useAuth } from './auth-provider';
+import { PromotionPrice } from './promotion-price';
 export type Quote = {
   originalRetailCents?: number;
   discountCents?: number;
-  promotion?: { code: string; discountPercent: number };
+  promotion?: { code: string; discountPercent: number; discount?: { kind: string; value: number } };
   items: CartLine[];
   subtotalCents: number;
   taxCents: number;
@@ -102,9 +103,23 @@ export function OrderSummary({
             )}
           </div>
           <strong dir="ltr">
-            {line.plan.currency === currency
-              ? money(line.plan.priceCents * line.quantity, line.plan.currency)
-              : '—'}
+            {line.plan.currency === currency ? (
+              <PromotionPrice
+                amount={line.plan.priceCents * line.quantity}
+                currency={line.plan.currency}
+                promotion={
+                  line.plan.promotionPrice
+                    ? {
+                        ...line.plan.promotionPrice,
+                        originalPriceCents:
+                          line.plan.promotionPrice.originalPriceCents * line.quantity,
+                      }
+                    : undefined
+                }
+              />
+            ) : (
+              '—'
+            )}
           </strong>
         </div>
       ))}
@@ -301,9 +316,23 @@ export function Cart() {
               </div>
               <div className="cart-line-end" dir={copy.dir}>
                 <strong dir="ltr">
-                  {line.plan.currency === currency
-                    ? money(line.plan.priceCents * line.quantity, line.plan.currency)
-                    : '—'}
+                  {line.plan.currency === currency ? (
+                    <PromotionPrice
+                      amount={line.plan.priceCents * line.quantity}
+                      currency={line.plan.currency}
+                      promotion={
+                        line.plan.promotionPrice
+                          ? {
+                              ...line.plan.promotionPrice,
+                              originalPriceCents:
+                                line.plan.promotionPrice.originalPriceCents * line.quantity,
+                            }
+                          : undefined
+                      }
+                    />
+                  ) : (
+                    '—'
+                  )}
                 </strong>
                 <button
                   className="text-link"

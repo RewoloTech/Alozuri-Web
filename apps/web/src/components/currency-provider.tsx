@@ -68,12 +68,14 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
     };
     const timer = setInterval(tick, 5 * 60 * 1000);
     document.addEventListener('visibilitychange', tick);
+    window.addEventListener('alozuri-promotions-changed', tick);
     return () => {
       active = false;
       controller.abort();
       clearTimeout(timeout);
       clearInterval(timer);
       document.removeEventListener('visibilitychange', tick);
+      window.removeEventListener('alozuri-promotions-changed', tick);
     };
   }, []);
   function setCurrency(value: Currency) {

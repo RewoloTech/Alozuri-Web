@@ -1,5 +1,6 @@
 'use client';
-import { PromotionPerformance, PromotionsPanel } from './promotions';
+import { PromotionPerformance } from './promotions';
+import { MarketingPanel } from './marketing-panel';
 import Link from '@/components/localized-link';
 import { useEffect, useRef, useState } from 'react';
 import { OperationsEsimDisclosure, OperationsEsimLookup } from './operations-esims';
@@ -232,7 +233,7 @@ function OperationsAccount() {
               tabIndex={section === 'promotions' ? 0 : -1}
               onClick={() => setSection('promotions')}
             >
-              Promotions
+              Marketing
             </button>
           </div>
           <div
@@ -241,7 +242,7 @@ function OperationsAccount() {
             aria-labelledby="operations-promotions-tab"
             hidden={section !== 'promotions'}
           >
-            {section === 'promotions' && user && <PromotionsPanel uid={user.uid} />}
+            {section === 'promotions' && user && <MarketingPanel uid={user.uid} />}
           </div>
           <div
             role="tabpanel"
@@ -470,7 +471,10 @@ function OperationsAccount() {
                                       <>
                                         <strong>{r.promotion.code}</strong>
                                         <small>
-                                          {r.promotion.discountPercent}% ·{' '}
+                                          {!r.promotion.discount ||
+                                          r.promotion.discount.kind === 'percent'
+                                            ? `${r.promotion.discountPercent}% · `
+                                            : ''}
                                           {original(r.selling.discountMinor, r.selling.currency)}{' '}
                                           discount
                                         </small>

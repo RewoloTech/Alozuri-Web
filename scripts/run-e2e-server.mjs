@@ -57,6 +57,7 @@ for (const name of [
   'checkout-account',
   'operations-plan-sales',
   'language-navigation',
+  'buy-again',
 ]) {
   const fixture = path.join(target, `apps/web/src/app/e2e-fixtures/${name}/page.tsx`);
   mkdirSync(path.dirname(fixture), { recursive: true });

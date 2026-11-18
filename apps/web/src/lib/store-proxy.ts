@@ -3,6 +3,8 @@
 export function allowedStoreRequest(method: string, path: string): boolean {
   const id = '[a-zA-Z0-9_-]{1,100}';
   const reads = [
+    '^/v1/marketing$',
+    '^/v1/marketing/images/[a-f0-9-]{36}$',
     '^/v1/(config|countries|featured-bundles|packages|packages/match)$',
     `^/v1/packages/${id}$`,
     '^/v2/search/plans$',
@@ -12,7 +14,14 @@ export function allowedStoreRequest(method: string, path: string): boolean {
   ];
   if (method === 'GET') return reads.some((pattern) => new RegExp(pattern).test(path));
   if (method === 'POST')
-    return ['/v2/quote', '/v2/checkout', '/v2/cart/merge', '/v2/profile'].includes(path);
+    return [
+      '/v2/quote',
+      '/v2/checkout',
+      '/v2/cart/merge',
+      '/v2/profile',
+      '/v2/buy-again/options',
+      '/v2/buy-again/quote',
+    ].includes(path);
   if (method === 'PATCH') return path === '/v2/profile' || path === '/v2/profile/language';
   return method === 'PUT' && path === '/v2/cart';
 }

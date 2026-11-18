@@ -1,4 +1,5 @@
 'use client';
+import { PromotionPrice } from './promotion-price';
 import { useLocale, useTranslations } from 'next-intl';
 import { destinationName } from '@alozuri/shared/i18n/destinations';
 import { localeDirection } from '@alozuri/shared/i18n';
@@ -33,7 +34,6 @@ import {
   countryFlag,
   uniqueDestinations,
   matchPlans,
-  money,
   type PlanSummary,
   type SearchPage,
   type SearchSort,
@@ -729,7 +729,15 @@ export function PlanCard({ plan, highlight = false }: { plan: PlanSummary; highl
       <div className="plan-bottom" dir="ltr">
         <div>
           <strong dir="ltr">
-            {!ready || plan.currency === currency ? money(plan.priceCents, plan.currency) : '—'}
+            {!ready || plan.currency === currency ? (
+              <PromotionPrice
+                amount={plan.priceCents}
+                currency={plan.currency}
+                promotion={plan.promotionPrice}
+              />
+            ) : (
+              '—'
+            )}
           </strong>
           <span>
             {' '}

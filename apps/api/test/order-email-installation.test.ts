@@ -132,3 +132,20 @@ test('a ten-eSIM purchase retains a distinct QR attachment and manual block for 
   assert(email.html.includes('cid:alozuri-esim-10'));
   assert(Buffer.byteLength(email.html) < 100_000);
 });
+
+test('top-up receipt uses existing confirmation without QR attachments or new installation credentials', async () => {
+  const order = sampleConfirmation();
+  const units = sampleInstallations(order).map((unit) => ({
+    ...unit,
+    topupReceipt: { expiresAt: '2030-01-01T00:00:00Z' },
+  }));
+  const email = await installationConfirmationEmail(order, url, units);
+  assert.equal(email.attachments?.length ?? 0, 0);
+  assert.ok(email.text.includes('Top-up successful'));
+  assert.ok(email.text.includes('no new installation is needed'));
+  for (const unit of units) {
+    assert.ok(!email.text.includes(unit.activation.iccid));
+    assert.ok(!email.text.includes(unit.activation.ac));
+    assert.ok(!email.html.includes(unit.activation.ac));
+  }
+});

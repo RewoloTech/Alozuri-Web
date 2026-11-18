@@ -3,6 +3,13 @@ import { useEffect, useRef, useState } from 'react';
 import type { OperationsReport } from '@alozuri/shared/financial';
 import { api } from '@/lib/api';
 type Promotion = {
+  name?: string;
+  scope?: { kind: string; values: string[]; excludedProducts: string[] };
+  discount?: { kind: string; value: number };
+  automatic?: boolean;
+  priority?: number;
+  minimumOrderUsdCents?: number;
+  campaignId?: string;
   code: string;
   discountPercent: number;
   active: boolean;
@@ -46,14 +53,60 @@ export function PromotionsPanel({ uid }: { uid: string }) {
     [end, setEnd] = useState(''),
     [limit, setLimit] = useState(''),
     [editing, setEditing] = useState(false);
+  const [destinationSearch, setDestinationSearch] = useState(''),
+    [availableCountries, setAvailableCountries] = useState<{ code: string; name: string }[]>([]),
+    [productTags, setProductTags] = useState('');
+  useEffect(() => {
+    void api<{ countries: { code: string; name: string }[] }>('/v1/countries')
+      .then((r) => setAvailableCountries(Array.isArray(r.countries) ? r.countries : []))
+      .catch(() => setAvailableCountries([]));
+  }, []);
+  const [targetText, setTargetText] = useState('');
+  const [scopeKind, setScopeKind] = useState('all'),
+    [targets, setTargets] = useState<string[]>([]),
+    [excluded, setExcluded] = useState('');
+  const [discountKind, setDiscountKind] = useState('percent'),
+    [discountValue, setDiscountValue] = useState(100);
+  const [campaignName, setCampaignName] = useState(''),
+    [automatic, setAutomatic] = useState(false),
+    [priority, setPriority] = useState(0),
+    [minimum, setMinimum] = useState(0),
+    [campaignId, setCampaignId] = useState('');
+  const [campaigns, setCampaigns] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => {
+    void api<{ campaigns: { id: string; name: string }[] }>('/v1/operations/marketing', {}, uid)
+      .then((r) => setCampaigns(r.campaigns ?? []))
+      .catch(() => setCampaigns([]));
+  }, [uid]);
   const [packageSearch, setPackageSearch] = useState(''),
     [packages, setPackages] = useState<{ id: string; name: string }[]>([]),
     [packageId, setPackageId] = useState(''),
     [preview, setPreview] = useState<Preview | null>(null);
+  function resetEditor() {
+    setEditing(false);
+    setCode('');
+    setPreview(null);
+    setPercent(10);
+    setActive(true);
+    setStart('');
+    setEnd('');
+    setLimit('');
+    setScopeKind('all');
+    setTargets([]);
+    setTargetText('');
+    setExcluded('');
+    setDiscountKind('percent');
+    setDiscountValue(100);
+    setCampaignName('');
+    setAutomatic(false);
+    setPriority(0);
+    setMinimum(0);
+    setCampaignId('');
+  }
   const selection = useRef('');
   useEffect(() => {
-    selection.current = JSON.stringify([packageId, percent]);
-  }, [packageId, percent]);
+    selection.current = JSON.stringify([packageId, percent, discountKind, discountValue]);
+  }, [packageId, percent, discountKind, discountValue]);
   useEffect(() => {
     const controller = new AbortController();
     let live = true;
@@ -87,6 +140,35 @@ export function PromotionsPanel({ uid }: { uid: string }) {
       controller.abort();
     };
   }, [uid, q, status, cursor, attempt]);
+  function toggleTarget(id: string) {
+    const next = targets.includes(id) ? targets.filter((value) => value !== id) : [...targets, id];
+    setTargets(next);
+    setTargetText(next.join(', '));
+  }
+  async function saveTags() {
+    setBusy(true);
+    setSaveError('');
+    try {
+      await api(
+        '/v1/operations/promotions/products/' + encodeURIComponent(packageId) + '/tags',
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            tags: productTags
+              .split(',')
+              .map((t) => t.trim())
+              .filter(Boolean),
+          }),
+        },
+        uid,
+      );
+      setActionMessage('Product tags saved.');
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : 'Could not save tags.');
+    } finally {
+      setBusy(false);
+    }
+  }
   async function check() {
     setError('');
     setPreview(null);
@@ -94,7 +176,17 @@ export function PromotionsPanel({ uid }: { uid: string }) {
       const requested = selection.current;
       const result = await api<Preview>(
         '/v1/operations/promotions/preview',
-        { method: 'POST', body: JSON.stringify({ packageId, discountPercent: percent }) },
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            packageId,
+            discountPercent: percent,
+            discount: {
+              kind: discountKind,
+              value: discountKind === 'percent' ? percent : discountValue,
+            },
+          }),
+        },
         uid,
       );
       if (selection.current === requested) setPreview(result);
@@ -132,6 +224,23 @@ export function PromotionsPanel({ uid }: { uid: string }) {
           method: editing ? 'PUT' : 'POST',
           body: JSON.stringify({
             code,
+            ...(campaignName ? { name: campaignName } : {}),
+            scope: {
+              kind: scopeKind,
+              values: targets,
+              excludedProducts: excluded
+                .split(',')
+                .map((s) => s.trim())
+                .filter(Boolean),
+            },
+            discount: {
+              kind: discountKind,
+              value: discountKind === 'percent' ? percent : discountValue,
+            },
+            automatic,
+            priority,
+            minimumOrderUsdCents: minimum,
+            ...(campaignId ? { campaignId } : {}),
             discountPercent: percent,
             active,
             startsAt: new Date(start + 'Z').toISOString(),
@@ -228,7 +337,11 @@ export function PromotionsPanel({ uid }: { uid: string }) {
         {rows.map((p) => (
           <div key={p.code}>
             <h3>
-              {p.code} · {p.discountPercent}% · {p.active ? 'Active' : 'Inactive'}
+              {p.code} ·{' '}
+              {p.discount && p.discount.kind !== 'percent'
+                ? `${(p.discount.value / 100).toFixed(2)} USD ${p.discount.kind === 'fixed' ? 'off' : 'price'}`
+                : `${p.discountPercent}%`}{' '}
+              · {p.active ? 'Active' : 'Inactive'}
             </h3>
             <p>
               {p.redemptionCount} paid redemptions · {p.reservedCount} pending reservations
@@ -262,6 +375,17 @@ export function PromotionsPanel({ uid }: { uid: string }) {
                 className="button"
                 disabled={busy || Boolean(actionBusy)}
                 onClick={() => {
+                  setScopeKind(p.scope?.kind ?? 'all');
+                  setTargets(p.scope?.values ?? []);
+                  setTargetText(p.scope?.values.join(', ') ?? '');
+                  setExcluded(p.scope?.excludedProducts.join(',') ?? '');
+                  setDiscountKind(p.discount?.kind ?? 'percent');
+                  setDiscountValue(p.discount?.value ?? 100);
+                  setCampaignName(p.name ?? '');
+                  setAutomatic(p.automatic ?? false);
+                  setPriority(p.priority ?? 0);
+                  setMinimum(p.minimumOrderUsdCents ?? 0);
+                  setCampaignId(p.campaignId ?? '');
                   setCode(p.code);
                   setPercent(p.discountPercent);
                   setActive(p.active);
@@ -307,34 +431,246 @@ export function PromotionsPanel({ uid }: { uid: string }) {
           />
         </label>
         <label>
-          Discount % (1–50)
+          Campaign name
+          <input
+            className="commerce-input"
+            value={campaignName}
+            onChange={(e) => setCampaignName(e.target.value)}
+            maxLength={120}
+          />
+        </label>
+        <label>
+          Discount applies to
+          <select
+            className="commerce-input"
+            value={scopeKind}
+            onChange={(e) => {
+              setScopeKind(e.target.value);
+              setTargets([]);
+              setTargetText('');
+            }}
+          >
+            <option value="all">All packages (default)</option>
+            <option value="products">Individual / multiple packages</option>
+            <option value="destinations">Individual / multiple destinations</option>
+            <option value="regions">Selected regions</option>
+            <option value="tags">Product categories / tags</option>
+          </select>
+        </label>
+        <p className="muted">
+          Destination targeting requires the plan’s full coverage to be within the selected
+          countries. Regional targeting uses verified regional bundle coverage; use destinations for
+          local plans.
+        </p>
+        {scopeKind !== 'all' && (
+          <label>
+            Selected target IDs (comma-separated)
+            <input
+              className="commerce-input"
+              value={targetText}
+              onChange={(e) => {
+                setTargetText(e.target.value);
+                setTargets(
+                  e.target.value
+                    .split(',')
+                    .map((s) => s.trim())
+                    .filter(Boolean),
+                );
+              }}
+            />
+          </label>
+        )}
+        {scopeKind === 'products' && (
+          <div className="notice">
+            <p>Use the catalogue search below to select internal products.</p>
+            {packages.map((product) => (
+              <label className="checkbox-label" key={product.id}>
+                <input
+                  type="checkbox"
+                  checked={targets.includes(product.id)}
+                  onChange={() => toggleTarget(product.id)}
+                />
+                {product.name}
+              </label>
+            ))}
+          </div>
+        )}
+        {scopeKind === 'destinations' && (
+          <div className="notice">
+            <label>
+              Search destinations
+              <input
+                className="commerce-input"
+                value={destinationSearch}
+                onChange={(e) => setDestinationSearch(e.target.value)}
+              />
+            </label>
+            {availableCountries
+              .filter((c) =>
+                (c.name + c.code).toLowerCase().includes(destinationSearch.toLowerCase()),
+              )
+              .slice(0, 16)
+              .map((c) => (
+                <label className="checkbox-label" key={c.code}>
+                  <input
+                    type="checkbox"
+                    checked={targets.includes(c.code)}
+                    onChange={() => toggleTarget(c.code)}
+                  />
+                  {c.name}
+                </label>
+              ))}
+          </div>
+        )}
+        {scopeKind === 'destinations' && (
+          <p className="fine-print">
+            Use existing ISO destination codes. A plan must cover only the selected destinations to
+            qualify.
+          </p>
+        )}
+        {scopeKind === 'regions' && (
+          <div className="operations-esim-search">
+            {[
+              'europe',
+              'asia',
+              'north-america',
+              'global',
+              'africa',
+              'south-america',
+              'oceania',
+            ].map((region) => (
+              <label className="checkbox-label" key={region}>
+                <input
+                  type="checkbox"
+                  checked={targets.includes(region)}
+                  onChange={() => toggleTarget(region)}
+                />
+                {region}
+              </label>
+            ))}
+          </div>
+        )}
+        <label>
+          Excluded internal package IDs (comma-separated)
+          <input
+            className="commerce-input"
+            value={excluded}
+            onChange={(e) => setExcluded(e.target.value)}
+          />
+        </label>
+        <label>
+          Discount type
+          <select
+            className="commerce-input"
+            value={discountKind}
+            onChange={(e) => {
+              setDiscountKind(e.target.value);
+              setPreview(null);
+            }}
+          >
+            <option value="percent">Percentage</option>
+            <option value="fixed">Fixed amount off</option>
+            <option value="price">Promotional selling price</option>
+          </select>
+        </label>
+        {discountKind !== 'percent' && (
+          <label>
+            Amount in USD cents (100 = $1.00)
+            <input
+              className="commerce-input"
+              type="number"
+              min={1}
+              step={1}
+              value={discountValue}
+              onChange={(e) => {
+                setDiscountValue(Number(e.target.value));
+                setPreview(null);
+              }}
+            />
+          </label>
+        )}
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            checked={automatic}
+            onChange={(e) => {
+              setAutomatic(e.target.checked);
+              if (e.target.checked) {
+                setMinimum(0);
+                setLimit('');
+              }
+            }}
+          />
+          Apply automatically to website prices (no code entry)
+        </label>
+        <label>
+          Priority (higher wins; code breaks ties)
           <input
             className="commerce-input"
             type="number"
-            min={1}
-            max={50}
-            step={1}
-            value={percent}
-            onChange={(e) => {
-              setPercent(Number(e.target.value));
-              setPreview(null);
-            }}
+            min={0}
+            max={10000}
+            value={priority}
+            onChange={(e) => setPriority(Number(e.target.value))}
           />
         </label>
-        <div className="operations-esim-search">
-          {[5, 10, 15, 20, 25, 30, 35, 40, 45, 50].map((n) => (
-            <button
-              type="button"
-              className="button small"
-              key={n}
-              onClick={() => {
-                setPercent(n);
+        <label>
+          Minimum order value in USD cents (code discounts only)
+          <input
+            className="commerce-input"
+            type="number"
+            min={0}
+            disabled={automatic}
+            value={minimum}
+            onChange={(e) => setMinimum(Number(e.target.value))}
+          />
+        </label>
+        <label>
+          Link to campaign
+          <select
+            className="commerce-input"
+            value={campaignId}
+            onChange={(e) => setCampaignId(e.target.value)}
+          >
+            <option value="">Independent promotion</option>
+            {campaigns.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div hidden={discountKind !== 'percent'}>
+          <label>
+            Discount % (1–50)
+            <input
+              className="commerce-input"
+              type="number"
+              min={1}
+              max={50}
+              step={1}
+              value={percent}
+              onChange={(e) => {
+                setPercent(Number(e.target.value));
                 setPreview(null);
               }}
-            >
-              {n}%
-            </button>
-          ))}
+            />
+          </label>
+          <div className="operations-esim-search">
+            {[5, 10, 15, 20, 25, 30, 35, 40, 45, 50].map((n) => (
+              <button
+                type="button"
+                className="button small"
+                key={n}
+                onClick={() => {
+                  setPercent(n);
+                  setPreview(null);
+                }}
+              >
+                {n}%
+              </button>
+            ))}
+          </div>
         </div>
         <label>
           Starts at (UTC)
@@ -412,6 +748,22 @@ export function PromotionsPanel({ uid }: { uid: string }) {
             ))}
           </select>
         </label>
+        <label>
+          Product categories / tags to set (comma-separated)
+          <input
+            className="commerce-input"
+            value={productTags}
+            onChange={(e) => setProductTags(e.target.value)}
+          />
+        </label>
+        <button
+          type="button"
+          className="button"
+          disabled={busy || !packageId}
+          onClick={() => void saveTags()}
+        >
+          Save product tags
+        </button>
         <button
           className="button"
           disabled={!packageId || percent < 1 || percent > 50}
@@ -469,9 +821,7 @@ export function PromotionsPanel({ uid }: { uid: string }) {
           <button
             className="button"
             onClick={() => {
-              setEditing(false);
-              setCode('');
-              setPreview(null);
+              resetEditor();
             }}
           >
             New code

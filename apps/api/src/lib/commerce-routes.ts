@@ -1,3 +1,4 @@
+import { BuyAgainService } from './buy-again.js';
 import { LOCALES } from '../../../../packages/shared/src/i18n/locales.ts';
 import { promoCode } from './promotions.js';
 import type { UserProfiles } from './user-profiles.js';
@@ -39,6 +40,43 @@ export function registerCommerceRoutes(
   const id = z.string().regex(/^purchase_[a-f0-9]{48}$/),
     unit = z.string().regex(/^order_[a-f0-9]{48}$/);
   app.post(
+    '/v2/buy-again/options',
+    { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } },
+    async (req) => {
+      if (process.env.BUY_AGAIN_ENABLED !== 'true')
+        throw new CommerceError('Buy Again is not enabled.', 503);
+      const p = await user(req.headers.authorization, true);
+      const input = z.object({ orderId: unit }).strict().parse(req.body);
+      return new BuyAgainService(database()).options(p!.uid, input.orderId);
+    },
+  );
+  app.post(
+    '/v2/buy-again/quote',
+    { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } },
+    async (req) => {
+      if (process.env.BUY_AGAIN_ENABLED !== 'true')
+        throw new CommerceError('Buy Again is not enabled.', 503);
+      const p = await user(req.headers.authorization, true);
+      const input = z
+        .object({ orderId: unit, profileOrderId: unit.optional(), currency: currencySchema })
+        .strict()
+        .parse(req.body);
+      const result = await new BuyAgainService(database()).quote(
+        p!.uid,
+        input.orderId,
+        input.profileOrderId,
+      );
+      const quote = await commerce().quote(
+        [{ planId: result.productId, quantity: 1 }],
+        input.currency,
+      );
+      await database()
+        .doc('buyAgainQuotes/' + result.id)
+        .update({ sellingPrice: quote.totalCents, currency: quote.currency });
+      return { ...result, quote };
+    },
+  );
+  app.post(
     '/v2/quote',
     { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } },
     async (req) => {
@@ -71,6 +109,7 @@ export function registerCommerceRoutes(
           promotionCode: promoCode.optional(),
           expectedTotalCents: z.number().int().positive(),
           endorselyReferral: z.uuid().optional(),
+          repeatQuote: z.uuid().optional(),
         })
         .strict()
         .parse(req.body);

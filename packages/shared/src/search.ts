@@ -2,6 +2,7 @@ import type { Country, DataAllowance, DataFilter, Plan } from './index.ts';
 
 export type PlanSummary = Pick<
   Plan,
+  | 'promotionPrice'
   | 'id'
   | 'name'
   | 'countries'
@@ -64,6 +65,7 @@ export function filterDestinations(available: Country[], input: string): Country
 }
 export function planSummary(plan: Plan): PlanSummary {
   return {
+    ...(plan.promotionPrice ? { promotionPrice: plan.promotionPrice } : {}),
     id: plan.id,
     name: plan.name,
     countries: [...plan.countries],

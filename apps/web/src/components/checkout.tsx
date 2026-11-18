@@ -492,6 +492,7 @@ function CheckoutForIdentity() {
             legal: CHECKOUT_LEGAL_ACCEPTANCE,
             requestId: request.current,
             expectedTotalCents: quote.totalCents,
+            ...(params.get('repeatQuote') ? { repeatQuote: params.get('repeatQuote') } : {}),
             endorselyReferral: endorselyReferral(),
             locale,
             ...(promotionCode ? { promotionCode } : {}),
@@ -738,14 +739,16 @@ function CheckoutForIdentity() {
               </details>
               {quoteReady && quote?.promotion && (
                 <p role="status" className="checkout-promotion">
-                  {p('promotionApplied', {
-                    code: isolate(quote.promotion.code),
-                    percent: quote.promotion.discountPercent,
-                    discount: isolate(money(quote.discountCents ?? 0, currency)),
-                    original: isolate(
-                      money(quote.originalRetailCents ?? quote.totalCents, currency),
-                    ),
-                  })}
+                  {quote.promotion.discount && quote.promotion.discount.kind !== 'percent'
+                    ? `${isolate(quote.promotion.code)} · −${isolate(money(quote.discountCents ?? 0, currency))}`
+                    : p('promotionApplied', {
+                        code: isolate(quote.promotion.code),
+                        percent: quote.promotion.discountPercent,
+                        discount: isolate(money(quote.discountCents ?? 0, currency)),
+                        original: isolate(
+                          money(quote.originalRetailCents ?? quote.totalCents, currency),
+                        ),
+                      })}
                 </p>
               )}
               <label className="checkbox-label">

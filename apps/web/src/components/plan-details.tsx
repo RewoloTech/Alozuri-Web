@@ -1,4 +1,5 @@
 'use client';
+import { PromotionPrice } from './promotion-price';
 import { usePlanCopy } from '@/lib/use-plan-copy';
 import { LinkedMessage, MESSAGE_LINKS } from './linked-message';
 import { StoreApiError } from '@/lib/api-error';
@@ -14,7 +15,7 @@ import Link from '@/components/localized-link';
 import { useLocale, useTranslations } from 'next-intl';
 import { destinationName } from '@alozuri/shared/i18n/destinations';
 import { useDispatch, useSelector } from 'react-redux';
-import { money, type Plan } from '@alozuri/shared';
+import { type Plan } from '@alozuri/shared';
 import { demoPlans } from '@alozuri/shared/demo';
 import { useCurrency } from './currency-provider';
 import { api, demoMode } from '@/lib/api';
@@ -223,11 +224,17 @@ export function PlanDetails({
         <aside className="surface purchase-summary" dir={copy.dir}>
           <span className="eyebrow">{plan.demo ? info('sample') : info('summary')}</span>
           <h2 dir="ltr">
-            {(!ready || plan.currency === currency) && !loading && !error
-              ? money(plan.priceCents, plan.currency)
-              : error
-                ? t('unavailable')
-                : t('loadingPrice')}{' '}
+            {(!ready || plan.currency === currency) && !loading && !error ? (
+              <PromotionPrice
+                amount={plan.priceCents}
+                currency={plan.currency}
+                promotion={plan.promotionPrice}
+              />
+            ) : error ? (
+              t('unavailable')
+            ) : (
+              t('loadingPrice')
+            )}{' '}
             <small>{ready ? currency : plan.currency}</small>
           </h2>
           <p>

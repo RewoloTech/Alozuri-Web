@@ -1,3 +1,4 @@
+import { registerMarketing } from './marketing.js';
 import { LOCALES } from '../../../../packages/shared/src/i18n/locales.ts';
 import { localizationPreview } from './localization-preview.js';
 import { recordSupplierCredit } from './supplier-credit.js';
@@ -168,6 +169,27 @@ export function registerOperations(
       throw new OperationsError('Administrator access required.', 403);
     return p;
   }
+  app.get('/v1/operations/orders/:id/topup', async (req) => {
+    await requireAdmin(req.headers.authorization);
+    const { id } = z
+      .object({ id: z.string().regex(/^order_[a-f0-9]{48}$/) })
+      .strict()
+      .parse(req.params);
+    const doc = await database()
+      .doc('orders/' + id)
+      .get();
+    if (!doc.exists || doc.get('repeatDecision.method') !== 'TOPUP')
+      throw new OperationsError('Top-up order not found.', 404);
+    return {
+      id,
+      status: doc.get('status'),
+      state: doc.get('topupState') ?? null,
+      supplierTransactionId: doc.get('supplierTransactionId') ?? null,
+      receipt: doc.get('topupReceipt') ?? null,
+      profileOrderId: doc.get('repeatDecision.profileOrderId'),
+      reconciliationRequired: doc.get('topupAttempted') === true && !doc.get('topupReceipt'),
+    };
+  });
   app.post('/v1/operations/orders/:id/supplier-credit', async (req) => {
     const actor = await requireAdmin(req.headers.authorization);
     const { id } = z
@@ -186,9 +208,8 @@ export function registerOperations(
       .parse(request.query);
     return localizationPreview(input.locale);
   });
-  registerPromotionRoutes(app, async (header) => {
-    await requireAdmin(header);
-  });
+  registerMarketing(app, requireAdmin);
+  registerPromotionRoutes(app, requireAdmin);
   app.get('/v1/operations/access', async (req) => {
     await requireAdmin(req.headers.authorization);
     z.object({}).strict().parse(req.query);

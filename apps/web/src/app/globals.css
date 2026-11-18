@@ -4438,3 +4438,106 @@ html:is(:lang(hi), :lang(th)) :is(h1, h2, h3, h4) {
   line-height: 1.35;
   letter-spacing: normal;
 }
+
+.marketing-announcement {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 40px;
+  padding: 8px 52px;
+  gap: 16px;
+  font-size: 14px;
+}
+.marketing-copy {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+}
+.marketing-copy p,
+.marketing-copy .text-link {
+  color: inherit;
+}
+.marketing-announcement .text-link {
+  text-decoration: underline;
+}
+.marketing-dismiss {
+  position: absolute;
+  right: 4px;
+  top: 0;
+  min-width: 44px;
+  min-height: 40px;
+  color: inherit;
+}
+.marketing-page-banner {
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+  margin-block: 24px;
+}
+.marketing-page-banner .marketing-copy {
+  align-items: flex-start;
+  flex-direction: column;
+  padding: 28px;
+}
+.marketing-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 400px;
+  object-fit: cover;
+}
+.promotion-price {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+.promotion-price del {
+  color: var(--muted);
+  font-size: 0.85em;
+  font-weight: 400;
+}
+.promotion-price small {
+  color: var(--blue);
+  font-size: 0.75em;
+}
+@media (min-width: 601px) {
+  .marketing-mobile-only {
+    display: none;
+  }
+}
+@media (max-width: 600px) {
+  .marketing-desktop-only {
+    display: none;
+  }
+  .marketing-announcement {
+    padding: 8px 44px 8px 16px;
+    justify-content: flex-start;
+  }
+  .marketing-copy {
+    justify-content: flex-start;
+  }
+  .marketing-page-banner .marketing-copy {
+    padding: 20px;
+  }
+}
+.marketing-page-banner .button {
+  color: var(--ink);
+}
+
+.operations-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 185px), 1fr));
+  gap: 12px;
+}
+.operations-summary > .surface {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.operations-summary strong {
+  font-size: 1.5rem;
+}

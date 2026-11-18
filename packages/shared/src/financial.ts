@@ -1,6 +1,11 @@
 import type { EsimUsage } from './esim-usage.ts';
 export type OperationsRow = {
-  promotion?: { id: string; code: string; discountPercent: number };
+  promotion?: {
+    id: string;
+    code: string;
+    discountPercent: number;
+    discount?: { kind: string; value: number };
+  };
   checkoutEstimate?: {
     currency: 'USD' | 'GBP' | 'EUR';
     revenueMinor: number;

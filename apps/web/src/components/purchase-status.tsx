@@ -1,4 +1,5 @@
 'use client';
+import { BuyAgain } from './buy-again';
 import { useLocale, useTranslations } from 'next-intl';
 import { usePlanCopy } from '@/lib/use-plan-copy';
 import { useStatusCopy } from '@/lib/use-status-copy';
@@ -43,7 +44,13 @@ export type Purchase = {
   subtotalCents?: number;
   taxCents?: number;
   legal?: ContractLegal;
-  allocations: { id: string; status: string; plan: Plan }[];
+  allocations: {
+    id: string;
+    status: string;
+    plan: Plan;
+    fulfillmentMethod?: 'TOPUP';
+    topupState?: string;
+  }[];
 };
 export function PurchaseStatus() {
   const id = useSearchParams().get('order') || '',
@@ -271,6 +278,12 @@ function PrivatePurchase({ id }: { id: string }) {
                 <p role="status">{t('preparingNotice')}</p>
               ) : null}
             </div>
+            {user &&
+              !order.test &&
+              process.env.NEXT_PUBLIC_BUY_AGAIN_ENABLED === 'true' &&
+              order.allocations
+                .filter((a) => a.status === 'ready')
+                .map((a) => <BuyAgain key={'repeat-' + a.id} orderId={a.id} />)}
             {order.allocations.map((a) => (
               <article className="surface stack" key={a.id}>
                 <h2>{copy.title(a.plan)}</h2>
@@ -278,7 +291,14 @@ function PrivatePurchase({ id }: { id: string }) {
                 {a.status === 'ready' && !order.test ? (
                   <>
                     <EsimUsagePanel purchaseId={id} unitId={a.id} accessToken={access} />
-                    <InstallationDetails orderId={a.id} purchaseId={id} accessToken={access} />
+                    {a.fulfillmentMethod === 'TOPUP' ? (
+                      <p>
+                        Top-up successful. Your existing eSIM has been recharged. No new QR code or
+                        installation is needed.
+                      </p>
+                    ) : (
+                      <InstallationDetails orderId={a.id} purchaseId={id} accessToken={access} />
+                    )}
                   </>
                 ) : a.status === 'provision_error' ? (
                   <p>{t('deliveryIssue')}</p>
@@ -407,6 +427,11 @@ function AccountPurchases({ view }: { view: PurchaseView }) {
                   {t('viewOrder')}
                 </Link>
               </div>
+              {process.env.NEXT_PUBLIC_BUY_AGAIN_ENABLED === 'true' &&
+                !order.test &&
+                (order.allocations ?? [])
+                  .filter((unit) => unit.status === 'ready')
+                  .map((unit) => <BuyAgain key={'again-' + unit.id} orderId={unit.id} />)}
               {view === 'orders' ? null : order.test ? (
                 <p className="fine-print">{t('testNoUsage')}</p>
               ) : (
@@ -416,7 +441,7 @@ function AccountPurchases({ view }: { view: PurchaseView }) {
                     {unit.status === 'ready' ? (
                       <>
                         <EsimUsagePanel purchaseId={order.id} unitId={unit.id} />
-                        {view === 'esims' && (
+                        {view === 'esims' && unit.fulfillmentMethod !== 'TOPUP' && (
                           <InstallationDetails purchaseId={order.id} orderId={unit.id} />
                         )}
                       </>

@@ -7,6 +7,15 @@ const cents = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const timestamp = z.iso.datetime({ offset: true });
 // Parse stored values at the trust boundary; object schemas strip non-public fields.
 export const planSchema = z.object({
+  tags: z.array(z.string().max(100)).max(50).optional(),
+  promotionPrice: z
+    .object({
+      originalPriceCents: cents,
+      discountPercent: z.number().min(0).max(50),
+      campaign: z.string().max(100),
+      expiresAt: z.iso.datetime(),
+    })
+    .optional(),
   id: documentId,
   name: text,
   countries: z

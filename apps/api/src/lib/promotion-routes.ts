@@ -1,3 +1,5 @@
+import { discountConfig, discountedUnit } from './promotion-policy.js';
+import { priceExchange } from './exchange-rates.js';
 import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
 import { database } from './firebase.js';
@@ -7,8 +9,10 @@ import { PRICING_POLICY } from './pricing.js';
 import { OperationsError } from './operations-error.js';
 export function contributionPreview(retail: number, supplierUnits: number, percent: number) {
   z.number().int().positive().safe().parse(supplierUnits);
-  const discountMinor = discountUnit(retail, percent),
-    finalMinor = retail - discountMinor;
+  return contributionAtPrice(retail, supplierUnits, retail - discountUnit(retail, percent));
+}
+export function contributionAtPrice(retail: number, supplierUnits: number, finalMinor: number) {
+  const discountMinor = retail - finalMinor;
   const supplierMinor = Number((BigInt(supplierUnits) + 99n) / 100n);
   const policy = PRICING_POLICY.fees[2];
   const estimatedFeeMinor =
@@ -38,7 +42,7 @@ export function contributionPreview(retail: number, supplierUnits: number, perce
 }
 export function registerPromotionRoutes(
   app: FastifyInstance,
-  authorize: (header: string | undefined) => Promise<void>,
+  authorize: (header: string | undefined) => Promise<{ uid: string } | void>,
 ) {
   app.get('/v1/operations/promotions', async (req) => {
     await authorize(req.headers.authorization);
@@ -61,24 +65,47 @@ export function registerPromotionRoutes(
       method,
       url: '/v1/operations/promotions',
       handler: async (req) => {
-        await authorize(req.headers.authorization);
-        await new Promotions(database()).save(req.body, method === 'POST');
+        const actor = await authorize(req.headers.authorization);
+        await new Promotions(database()).save(req.body, method === 'POST', actor?.uid);
         return { saved: true };
       },
     });
   app.patch('/v1/operations/promotions/:code/status', async (req) => {
-    await authorize(req.headers.authorization);
+    const actor = await authorize(req.headers.authorization);
     const params = z.object({ code: promoCode }).strict().parse(req.params);
     const input = z.object({ active: z.boolean() }).strict().parse(req.body);
-    await new Promotions(database()).setActive(params.code, input.active);
+    await new Promotions(database()).setActive(params.code, input.active, actor?.uid);
     return { saved: true };
   });
   app.delete('/v1/operations/promotions/:code', async (req) => {
-    await authorize(req.headers.authorization);
+    const actor = await authorize(req.headers.authorization);
     const params = z.object({ code: promoCode }).strict().parse(req.params);
     z.object({}).strict().parse(req.query);
-    await new Promotions(database()).deleteUnused(params.code);
+    await new Promotions(database()).deleteUnused(params.code, actor?.uid);
     return { deleted: true };
+  });
+  app.put('/v1/operations/promotions/products/:id/tags', async (req) => {
+    const actor = await authorize(req.headers.authorization);
+    const { id } = z.object({ id: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/) }).parse(req.params);
+    const { tags } = z
+      .object({ tags: z.array(z.string().trim().min(1).max(100)).max(50) })
+      .strict()
+      .parse(req.body);
+    await database().runTransaction(async (t) => {
+      const ref = database().doc('packages/' + id),
+        product = await t.get(ref);
+      if (!product.exists) throw new OperationsError('Product not found.', 404);
+      t.set(database().doc('marketingState/current'), { revision: crypto.randomUUID() });
+      t.update(ref, { tags });
+      t.create(database().collection('marketingAudit').doc(), {
+        actor: actor?.uid ?? 'verified-admin',
+        action: 'product_tags',
+        target: id,
+        tags,
+        at: new Date().toISOString(),
+      });
+    });
+    return { saved: true };
   });
   app.get('/v1/operations/promotions/packages', async (req) => {
     await authorize(req.headers.authorization);
@@ -101,6 +128,7 @@ export function registerPromotionRoutes(
       .object({
         packageId: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/),
         discountPercent: z.number().int().min(1).max(50),
+        discount: discountConfig.optional(),
       })
       .strict()
       .parse(req.body);
@@ -118,6 +146,16 @@ export function registerPromotionRoutes(
       throw new OperationsError('Choose an active live catalogue package.');
     const retail = z.number().int().positive().max(99999999).parse(doc.get('priceCents'));
     const cost = z.number().int().positive().safe().parse(doc.get('wholesaleUnits'));
-    return contributionPreview(retail, cost, input.discountPercent);
+    return input.discount
+      ? contributionAtPrice(
+          retail,
+          cost,
+          discountedUnit(
+            retail,
+            { code: 'PREVIEW', discountPercent: input.discountPercent, discount: input.discount },
+            priceExchange('USD'),
+          ),
+        )
+      : contributionPreview(retail, cost, input.discountPercent);
   });
 }

@@ -596,6 +596,12 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
   const savedPromotions: import('zod').infer<
     typeof import('../../apps/api/src/lib/promotions').promotionInput
   >[] = [];
+  const campaignRows: import('zod').infer<
+    typeof import('../../apps/api/src/lib/marketing-policy').campaignSchema
+  >[] = [];
+  const bannerRows: import('zod').infer<
+    typeof import('../../apps/api/src/lib/marketing-policy').bannerSchema
+  >[] = [];
   await page.route('http://127.0.0.1:8189/v1/operations/**', async (route) => {
     const request = route.request();
     const headers = {
@@ -613,6 +619,39 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
         json: { error: 'Administrator access required.' },
       });
     const url = new URL(request.url());
+    if (url.pathname === '/v1/operations/marketing')
+      return route.fulfill({
+        headers,
+        json: {
+          campaigns: campaignRows,
+          banners: bannerRows,
+          promotions: [],
+          overview: {
+            marginWarnings: 0,
+            activePromotions: 0,
+            scheduledPromotions: 0,
+            announcements: bannerRows.filter((b) => b.active).length,
+            homepageBanners: 0,
+            upcomingExpirations: [],
+          },
+          performance: {
+            since: new Date().toISOString(),
+            truncated: false,
+            excludedRecords: 0,
+            rows: [],
+          },
+        },
+      });
+    if (url.pathname === '/v1/operations/marketing/campaigns' && request.method() === 'PUT') {
+      const { campaignSchema } = await import('../../apps/api/src/lib/marketing-policy');
+      campaignRows.push(campaignSchema.parse(request.postDataJSON()));
+      return route.fulfill({ headers, json: { saved: true } });
+    }
+    if (url.pathname === '/v1/operations/marketing/banners' && request.method() === 'PUT') {
+      const { bannerSchema } = await import('../../apps/api/src/lib/marketing-policy');
+      bannerRows.push(bannerSchema.parse(request.postDataJSON()));
+      return route.fulfill({ headers, json: { saved: true } });
+    }
     if (url.pathname.endsWith('/localization/preview')) {
       const { isLocale } = await import('../../packages/shared/src/i18n/locales');
       const { localizationPreview } = await import('../../apps/api/src/lib/localization-preview');
@@ -1206,11 +1245,11 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
     await expect(page.getByRole('heading', { name: 'Total Sales', exact: true })).toBeVisible();
     await page.getByRole('tab', { name: 'Financial Overview', exact: true }).focus();
     await page.keyboard.press('End');
-    await expect(page.getByRole('tab', { name: 'Promotions', exact: true })).toHaveAttribute(
+    await expect(page.getByRole('tab', { name: 'Marketing', exact: true })).toHaveAttribute(
       'aria-selected',
       'true',
     );
-    const promotionsPanel = page.getByRole('tabpanel', { name: 'Promotions', exact: true });
+    const promotionsPanel = page.getByRole('tabpanel', { name: 'Marketing', exact: true });
     await expect(promotionsPanel.getByText('No promotions found.', { exact: true })).toBeVisible();
     await expect(
       promotionsPanel.getByRole('button', { name: 'Save promotion', exact: true }),
@@ -1292,7 +1331,35 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
       .getByRole('combobox', { name: 'Status', exact: true })
       .selectOption('true');
     await expect(promotionsPanel.getByText('No promotions found.', { exact: true })).toBeVisible();
-    await page.getByRole('tab', { name: 'Promotions', exact: true }).focus();
+    await promotionsPanel.getByRole('button', { name: 'Campaign Management', exact: true }).click();
+    await promotionsPanel.getByLabel('Campaign ID', { exact: true }).fill('browser-campaign');
+    await promotionsPanel.getByLabel('Campaign name', { exact: true }).fill('Summer travel');
+    await promotionsPanel.getByLabel('Active (subject to schedule)', { exact: true }).check();
+    await promotionsPanel.getByRole('button', { name: 'Save campaign', exact: true }).click();
+    await expect(promotionsPanel.getByText('Summer travel · paused', { exact: false })).toHaveCount(
+      0,
+    );
+    await expect.poll(() => campaignRows.length).toBe(1);
+    await promotionsPanel.getByRole('button', { name: 'Website Banners', exact: true }).click();
+    await promotionsPanel.getByLabel('Banner ID', { exact: true }).fill('browser-announcement');
+    await promotionsPanel.getByLabel('Internal name', { exact: true }).fill('Summer announcement');
+    await promotionsPanel
+      .getByLabel('Heading / announcement message', { exact: true })
+      .fill('Explore the world');
+    await promotionsPanel.getByLabel('CTA label', { exact: true }).fill('Explore');
+    await promotionsPanel.getByLabel('CTA destination URL', { exact: true }).fill('/destinations');
+    await promotionsPanel.getByRole('button', { name: 'Save banner', exact: true }).click();
+    await expect.poll(() => bannerRows.length).toBe(1);
+    expect(bannerRows[0].translations.en?.heading).toBe('Explore the world');
+    for (const width of [375, 390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      if (width === 390 || width === 1440)
+        await promotionsPanel.screenshot({ path: `/tmp/alozuri-marketing-admin-${width}.png` });
+    }
+    await page.getByRole('tab', { name: 'Marketing', exact: true }).focus();
     await page.keyboard.press('ArrowRight');
     await expect(
       page.getByRole('tab', { name: 'Financial Overview', exact: true }),
@@ -1474,5 +1541,63 @@ test('account language yields to manual English through real login, logout and c
     await deleteApp(app);
     if (previous === undefined) delete process.env.FIREBASE_AUTH_EMULATOR_HOST;
     else process.env.FIREBASE_AUTH_EMULATOR_HOST = previous;
+  }
+});
+
+test('Buy Again checks owned profiles, requires multiple-profile choice and preserves the existing checkout route', async ({
+  page,
+}) => {
+  await setup(page);
+  await signup(page);
+  let profileCount = 1;
+  const requests: Record<string, unknown>[] = [];
+  await page.route('**/v2/buy-again/**', async (route) => {
+    const headers = {
+      'Access-Control-Allow-Origin': 'http://localhost:3100',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    };
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
+    expect(route.request().headers().authorization).toMatch(/^Bearer /);
+    const options = route.request().url().endsWith('/options');
+    if (!options) requests.push(route.request().postDataJSON());
+    await route.fulfill({
+      headers,
+      json: options
+        ? {
+            profiles: Array.from({ length: profileCount }, (_, i) => ({
+              id: 'profile-' + i,
+              maskedIccid: '•••• 3019',
+              packageName: 'France 1 GB',
+              purchasedAt: '2026-11-01',
+              expiresAt: '2030-01-01',
+            })),
+          }
+        : { id: '00000000-0000-4000-8000-000000000000', productId: plan.id },
+    });
+  });
+  for (profileCount of [0, 1, 2]) {
+    await page.goto('/e2e-fixtures/buy-again');
+    await page.getByRole('button', { name: 'Buy Again', exact: true }).click();
+    const next = page.getByRole('button', { name: 'Continue to checkout', exact: true });
+    await expect(next).toBeVisible();
+    if (profileCount === 2) {
+      await expect(next).toBeDisabled();
+      await page.getByRole('radio').first().check();
+    }
+    await expect(next).toBeEnabled();
+    for (const width of [375, 390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 950 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      if (profileCount === 2 && [390, 1440].includes(width))
+        await page
+          .locator('#repeat-fixture')
+          .screenshot({ path: `/tmp/alozuri-buy-again-${width}.png` });
+    }
+    await next.click();
+    await expect(page).toHaveURL(new RegExp('/checkout\\?buy=' + plan.id + '&repeatQuote='));
+    expect(requests.at(-1)?.profileOrderId).toBe(profileCount ? 'profile-0' : undefined);
   }
 });

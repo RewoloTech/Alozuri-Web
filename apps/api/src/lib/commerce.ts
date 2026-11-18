@@ -1,3 +1,5 @@
+import { matchesPromotion } from './promotion-policy.js';
+import { BuyAgainService, repeatDecisionSchema, repeatProductIdentity } from './buy-again.js';
 import type { ErrorCode } from '../../../../packages/shared/src/i18n/errors.ts';
 import {
   LOCALES,
@@ -89,6 +91,7 @@ export const itemsSchema = z
   });
 const snapshotSchema = z.object({
   plan: planSchema,
+  automaticPromotion: promotionSnapshot.optional(),
   originalPriceCents: z.number().int().positive().optional(),
   baseSellingPriceUsdCents: z.number().int().positive().optional(),
   pricingVersion: z.string().optional(),
@@ -108,6 +111,8 @@ const snapshotSchema = z.object({
 const purchaseSchema = z
   .object({
     locale: z.enum(LOCALES).default('en'),
+    automaticPromotionIds: z.array(z.string()).optional(),
+    repeatDecision: repeatDecisionSchema.optional(),
     uid: z.string().nullable(),
     email: z.email(),
     items: z.array(snapshotSchema).min(1).max(10),
@@ -150,7 +155,10 @@ const purchaseSchema = z
             line.originalPriceCents !== undefined &&
             line.plan.priceCents ===
               line.originalPriceCents -
-                discountUnit(line.originalPriceCents, p.promotion!.discountPercent),
+                (p.promotion!.priceCuts?.[line.plan.id]
+                  ? p.promotion!.priceCuts[line.plan.id].original -
+                    p.promotion!.priceCuts[line.plan.id].final
+                  : discountUnit(line.originalPriceCents, p.promotion!.discountPercent)),
         ) &&
         p.items.reduce((sum, line) => sum + (line.originalPriceCents ?? 0) * line.quantity, 0) ===
           p.originalRetailCents),
@@ -162,7 +170,34 @@ const purchaseSchema = z
       p.items.reduce((n, i) => n + BigInt(i.plan.priceCents) * BigInt(i.quantity), 0n) ===
         BigInt(p.totalCents),
     'Stored payment amount or currency mismatch.',
-  );
+  )
+  .refine((p) => {
+    if (!p.items.some((line) => line.automaticPromotion)) return true;
+    return (
+      !p.promotion &&
+      p.originalRetailCents !== undefined &&
+      p.discountCents !== undefined &&
+      p.originalRetailCents === p.totalCents + p.discountCents &&
+      p.items.reduce(
+        (n, line) => n + (line.originalPriceCents ?? line.plan.priceCents) * line.quantity,
+        0,
+      ) === p.originalRetailCents &&
+      p.items.every((line) => {
+        if (!line.automaticPromotion)
+          return (
+            line.originalPriceCents === undefined ||
+            line.originalPriceCents === line.plan.priceCents
+          );
+        const cut = line.automaticPromotion.priceCuts?.[line.plan.id];
+        return (
+          !!cut &&
+          cut.original === line.originalPriceCents &&
+          cut.final === line.plan.priceCents &&
+          cut.final < cut.original
+        );
+      })
+    );
+  }, 'Invalid automatic promotion snapshot.');
 type Purchase = z.infer<typeof purchaseSchema>;
 export type Quote = {
   originalRetailCents?: number;
@@ -257,19 +292,51 @@ export class CommerceService {
   private async priced(items: CartItem[], currency: Currency, code?: string, own?: string) {
     const fx = priceExchange(currency, currency === 'USD' ? undefined : await this.rates.current());
     const result = await priceCart(items, this.loadPlan, currency, fx);
-    if (!code) return result;
     const service = new Promotions(this.db);
-    await service.releaseExpired(code, this.stripe);
-    const promotion = await service.validate(code, own);
+    const subtotalUsd = result.snapshots.reduce(
+      (n, l) => n + (l.baseSellingPriceUsdCents ?? l.plan.priceCents) * l.quantity,
+      0,
+    );
+    const automatic = code ? [] : await service.automatic();
+    if (!code && !automatic.length) return result;
+    const explicit = code
+      ? await (async () => {
+          await service.releaseExpired(code, this.stripe);
+          return service.applicable(
+            code,
+            result.snapshots.map((l) => l.plan),
+            subtotalUsd,
+            own,
+          );
+        })()
+      : null;
+    const promotion = explicit?.snapshot;
     const originalRetailCents = result.quote.totalCents;
+    const cuts: Record<string, { original: number; final: number }> = {};
+    let applied = false;
     for (const line of result.snapshots) {
+      const config = explicit?.config ?? automatic.find((p) => matchesPromotion(p, line.plan));
       line.originalPriceCents = line.plan.priceCents;
-      line.plan = {
-        ...line.plan,
-        priceCents:
-          line.plan.priceCents - discountUnit(line.plan.priceCents, promotion.discountPercent),
-      };
+      if (config && matchesPromotion(config, line.plan)) {
+        const original = line.plan.priceCents;
+        line.plan = service.apply(line.plan, line.wholesaleUnits, config, fx);
+        cuts[line.plan.id] = { original, final: line.plan.priceCents };
+        applied = true;
+        if (!explicit)
+          line.automaticPromotion = {
+            id: config.code,
+            code: config.code,
+            discountPercent: config.discountPercent,
+            ...(config.campaignId ? { campaignId: config.campaignId } : {}),
+            ...(config.discount ? { discount: config.discount } : {}),
+            configHash: (await import('./promotion-policy.js')).promotionConfigHash(config),
+            priceCuts: { [line.plan.id]: cuts[line.plan.id] },
+          };
+      } else cuts[line.plan.id] = { original: line.plan.priceCents, final: line.plan.priceCents };
     }
+    if (!applied) return result;
+    if (promotion && (explicit?.config.scope || explicit?.config.discount))
+      promotion.priceCuts = cuts;
     const totalCents = result.snapshots.reduce((n, l) => n + l.plan.priceCents * l.quantity, 0);
     if (result.snapshots.some((line) => line.plan.priceCents < MINIMUM_CHARGE_MINOR[currency]))
       throw new CommerceError(
@@ -279,7 +346,7 @@ export class CommerceService {
       ...result.quote,
       originalRetailCents,
       discountCents: originalRetailCents - totalCents,
-      promotion,
+      ...(promotion ? { promotion } : {}),
       totalCents,
       subtotalCents: totalCents,
       items: result.snapshots.map((l) => ({ plan: l.plan, quantity: l.quantity })),
@@ -316,6 +383,7 @@ export class CommerceService {
       expectedTotalCents: number;
       promotionCode?: string;
       endorselyReferral?: string;
+      repeatQuote?: string;
     },
     user: Principal | null,
   ) {
@@ -326,11 +394,28 @@ export class CommerceService {
       input.email.toLowerCase() !== input.emailConfirmation.toLowerCase()
     )
       throw new CommerceError('Email addresses do not match.');
+    const repeatDecision = input.repeatQuote
+      ? await new BuyAgainService(this.db).decision(
+          user?.verified ? user.uid : '',
+          input.repeatQuote,
+        )
+      : undefined;
+    if (
+      repeatDecision &&
+      (process.env.BUY_AGAIN_ENABLED !== 'true' ||
+        !user?.verified ||
+        input.items.length !== 1 ||
+        input.items[0].quantity !== 1 ||
+        input.items[0].planId !== repeatDecision.productId)
+    )
+      throw new CommerceError('Buy Again checkout changed.', 409);
     const locale = requirePublishedLocale(input.locale ?? 'en');
     const acceptance = legalSnapshot(input.legal, new Date().toISOString(), locale);
     const email = input.email.toLowerCase(),
       owner = user?.verified ? user.uid : 'guest',
-      id = 'purchase_' + hash(this.mode + ':' + owner + ':' + input.requestId).slice(0, 48),
+      id =
+        'purchase_' +
+        hash(this.mode + ':' + owner + ':' + (input.repeatQuote ?? input.requestId)).slice(0, 48),
       ref = this.db.collection('purchases').doc(id),
       accessToken = this.token(id);
     const { quote, snapshots } = await this.priced(
@@ -339,6 +424,20 @@ export class CommerceService {
       input.promotionCode,
       id,
     );
+    if (repeatDecision) {
+      if (repeatProductIdentity(snapshots[0].plan) !== repeatDecision.productIdentity)
+        throw new CommerceError('The product changed. Buy Again requires review.', 409);
+      if (
+        repeatDecision.method === 'TOPUP' &&
+        repeatDecision.supplierCost > snapshots[0].wholesaleUnits
+      )
+        throw new CommerceError('Supplier price changed. Check Buy Again options again.', 409);
+      repeatDecision.newSupplierCost = snapshots[0].wholesaleUnits;
+      if (repeatDecision.method === 'TOPUP') {
+        snapshots[0].supplierCode = repeatDecision.supplierCode;
+        snapshots[0].wholesaleUnits = repeatDecision.supplierCost;
+      }
+    }
     await this.capacity?.(snapshots);
     if (input.expectedTotalCents !== quote.totalCents)
       throw new CommerceError(
@@ -353,14 +452,26 @@ export class CommerceService {
       : null;
     const proposed = {
       locale,
+      ...(repeatDecision ? { repeatDecision } : {}),
       uid: user?.verified ? user.uid : null,
       email,
       items: snapshots,
+      ...(snapshots.some((line) => line.automaticPromotion)
+        ? {
+            automaticPromotionIds: [
+              ...new Set(
+                snapshots.flatMap((line) =>
+                  line.automaticPromotion ? [line.automaticPromotion.id] : [],
+                ),
+              ),
+            ],
+          }
+        : {}),
       currency: input.currency,
       totalCents: quote.totalCents,
-      ...(quote.promotion
+      ...(quote.discountCents !== undefined
         ? {
-            promotion: quote.promotion,
+            ...(quote.promotion ? { promotion: quote.promotion } : {}),
             discountCents: quote.discountCents,
             originalRetailCents: quote.originalRetailCents,
           }
@@ -427,6 +538,7 @@ export class CommerceService {
           );
         return { purchase: p, hasLocaleMetadata: doc.get('locale') !== undefined };
       }
+      await new Promotions(this.db).validateAutomatic(t, snapshots);
       if (quote.promotion) await new Promotions(this.db).reserve(t, id, quote.promotion);
       const purchased = purchaseSchema.parse(proposed);
       const financial = financialSchema.parse(
@@ -633,6 +745,7 @@ export class CommerceService {
         intent.amount_received === p.totalCents &&
         !p.paidAt
       ) {
+        await new Promotions(this.db).settleAutomatic(t, p.items, p.currency);
         if (p.promotion)
           await new Promotions(this.db).settle(
             t,
@@ -653,6 +766,7 @@ export class CommerceService {
               childRef = this.db.collection('orders').doc(childId);
             t.create(childRef, {
               locale: p.locale,
+              ...(p.repeatDecision ? { repeatDecision: p.repeatDecision } : {}),
               uid: purchaseOwnerUid(id, p.uid),
               plan: line.plan,
               amountCents: line.plan.priceCents,
@@ -733,6 +847,9 @@ export class CommerceService {
     const allocations = units.docs.map((d) => ({
       id: d.id,
       status: String(d.get('status')),
+      ...(d.get('repeatDecision.method') === 'TOPUP'
+        ? { fulfillmentMethod: 'TOPUP', topupState: d.get('topupState') ?? null }
+        : {}),
       plan: planSchema.parse(d.get('plan')),
     }));
     return {

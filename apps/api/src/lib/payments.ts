@@ -1,3 +1,4 @@
+import { resolveCanonicalProducts } from './canonical-products.js';
 import { pricingHistoryMetadata } from './pricing-history.js';
 import { initialFinancial } from './financial-calculations.js';
 import { STRIPE_APP_INFO } from './stripe-attribution.js';
@@ -260,21 +261,27 @@ export async function currentCheckoutPlan(
   const publicPlan = data && cataloguePlan(data);
   if (
     !publicPlan ||
+    (data?.providerId && data.providerId !== 'esim-access') ||
     publicPlan.demo ||
     typeof data?.supplierCode !== 'string' ||
     typeof data.wholesaleUnits !== 'number'
   )
     throw new CheckoutError('Plan unavailable. Search again.');
   const source = await supplier.packages({ locationCode: publicPlan.countries[0] });
-  const candidate = source
+  const adapted = source
     .map((p) => adaptPackage(p, new Date().toISOString()))
-    .find((p) => p?.id === id);
+    .filter((p): p is StoredPlan => p !== null);
+  const candidate = resolveCanonicalProducts('esim-access', adapted, [{ id, data: data! }]).find(
+    (p) => p.id === id,
+  );
   if (!candidate) {
     await ref.set({ active: false, pricingStatus: 'review_required' }, { merge: true });
     throw new CheckoutError('This package is no longer available. Search again.');
   }
   const fresh = await database().runTransaction(async (t) => {
     const current = await t.get(ref);
+    if (decisionHash(current.get('productOffers')) !== decisionHash(data.productOffers))
+      throw new CheckoutError('Supplier mapping changed. Review the package again.');
     const priced = pricePackage(candidate, current.data());
     if (
       current.get('supplierComparison') &&
@@ -303,18 +310,16 @@ export async function currentCheckoutPlan(
         after = pricingDecision(priced);
       if (decisionHash(before) !== decisionHash(after))
         t.set(
-          ref
-            .collection('pricingHistory')
-            .doc(
-              decisionHash({
-                before,
-                after,
-                date: priced.catalogueDate,
-                fromVersion: current.updateTime
-                  ? [current.updateTime.seconds, current.updateTime.nanoseconds]
-                  : null,
-              }),
-            ),
+          ref.collection('pricingHistory').doc(
+            decisionHash({
+              before,
+              after,
+              date: priced.catalogueDate,
+              fromVersion: current.updateTime
+                ? [current.updateTime.seconds, current.updateTime.nanoseconds]
+                : null,
+            }),
+          ),
           {
             before,
             after,

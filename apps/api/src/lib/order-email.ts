@@ -131,10 +131,12 @@ export function confirmationEmail(
           isolate(money(order.originalRetailCents ?? order.totalCents)),
         ),
         labelled(
-          tr('promotion', {
-            code: isolate(order.promotion.code),
-            percent: order.promotion.discountPercent,
-          }),
+          order.promotion.discount && order.promotion.discount.kind !== 'percent'
+            ? isolate(order.promotion.code)
+            : tr('promotion', {
+                code: isolate(order.promotion.code),
+                percent: order.promotion.discountPercent,
+              }),
           '-' + isolate(money(order.discountCents ?? 0)),
         ),
       ]
