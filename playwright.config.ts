@@ -17,6 +17,8 @@ export default defineConfig({
     env: {
       CURRENCY_GEO_PROVIDER: 'cloudflare',
       NEXT_PUBLIC_DEMO_MODE: 'false',
+      NEXT_PUBLIC_BUY_AGAIN_ENABLED:
+        process.env.E2E_BUY_AGAIN_INTEGRATION === 'true' ? 'true' : 'false',
       NEXT_PUBLIC_API_URL: process.env.E2E_API_URL || 'http://127.0.0.1:8189',
       NEXT_PUBLIC_PAYMENT_MODE: 'test',
       NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:

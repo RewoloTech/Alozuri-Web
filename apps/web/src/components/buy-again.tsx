@@ -3,7 +3,7 @@ import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { useCurrency } from './currency-provider';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations, useFormatter } from 'next-intl';
 import { localePath, isLocale } from '@alozuri/shared/i18n';
 type Profile = {
   id: string;
@@ -14,6 +14,12 @@ type Profile = {
   packageType?: 'fixed' | 'daily' | 'unlimited';
 };
 export function BuyAgain({ orderId }: { orderId: string }) {
+  const t = useTranslations('buyAgain');
+  const format = useFormatter();
+  const date = (value: string) =>
+    Number.isFinite(Date.parse(value))
+      ? format.dateTime(new Date(value), { dateStyle: 'medium', timeZone: 'UTC' })
+      : '—';
   const [profiles, setProfiles] = useState<Profile[] | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState(false),
@@ -42,7 +48,7 @@ export function BuyAgain({ orderId }: { orderId: string }) {
             : 'new',
       );
     } catch {
-      setError('We could not check your existing eSIM. Please try again.');
+      setError(t('checkError'));
     } finally {
       pending.current = false;
       setBusy(false);
@@ -74,7 +80,7 @@ export function BuyAgain({ orderId }: { orderId: string }) {
           result.id,
       );
     } catch {
-      setError('Checkout could not be prepared. Check availability and try again.');
+      setError(t('checkoutError'));
       pending.current = false;
       setBusy(false);
     }
@@ -83,18 +89,14 @@ export function BuyAgain({ orderId }: { orderId: string }) {
     <section className="surface stack" aria-busy={busy}>
       {profiles === null ? (
         <button className="button" disabled={busy} onClick={() => void check()}>
-          {busy ? 'Checking existing eSIM and top-up availability…' : 'Buy Again'}
+          {busy ? t('checking') : t('title')}
         </button>
       ) : (
         <>
-          <h3>{selected && selected !== 'new' ? 'Top up existing eSIM' : 'Buy again'}</h3>
-          <p>
-            {profiles.length
-              ? 'Choose an existing eSIM to recharge, or buy a new one.'
-              : 'Your previous eSIM is no longer eligible for a top-up. A new eSIM will be issued.'}
-          </p>
+          <h3>{t(selected && selected !== 'new' ? 'topup' : 'title')}</h3>
+          <p>{profiles.length ? t('chooseIntro') : t('newIntro')}</p>
           <fieldset disabled={busy}>
-            <legend>Choose your eSIM</legend>
+            <legend>{t('choose')}</legend>
             {profiles.map((profile) => (
               <label className="checkbox-label" key={profile.id}>
                 <input
@@ -103,8 +105,14 @@ export function BuyAgain({ orderId }: { orderId: string }) {
                   checked={selected === profile.id}
                   onChange={() => setSelected(profile.id)}
                 />
-                {profile.packageName} · {profile.maskedIccid} · Purchased {profile.purchasedAt} ·
-                Expires {profile.expiresAt}
+                <span>
+                  {profile.packageName} ·{' '}
+                  <bdi style={{ whiteSpace: 'nowrap' }}>{profile.maskedIccid}</bdi> ·{' '}
+                  {t('profileDates', {
+                    purchased: date(profile.purchasedAt),
+                    expires: date(profile.expiresAt),
+                  })}
+                </span>
               </label>
             ))}
             <label className="checkbox-label">
@@ -114,15 +122,15 @@ export function BuyAgain({ orderId }: { orderId: string }) {
                 checked={selected === 'new'}
                 onChange={() => setSelected('new')}
               />
-              Buy a new eSIM
+              {t('newEsim')}
             </label>
           </fieldset>
           {selected && selected !== 'new' && (
             <p>
-              Add this package to your existing eSIM. No new QR code is required.
+              {t('topupHint')}{' '}
               {['daily', 'unlimited'].includes(
                 profiles.find((profile) => profile.id === selected)?.packageType ?? '',
-              ) && ' Daily extensions increase validity, not the daily high-speed allowance.'}
+              ) && t('dailyHint')}
             </p>
           )}
           <button
@@ -131,7 +139,7 @@ export function BuyAgain({ orderId }: { orderId: string }) {
             disabled={busy || !selected}
             onClick={() => void checkout()}
           >
-            {busy ? 'Preparing checkout…' : 'Continue to checkout'}
+            {busy ? t('preparing') : t('continue')}
           </button>
         </>
       )}

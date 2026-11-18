@@ -112,6 +112,8 @@ export class BuyAgainService {
       throw new BuyAgainError('Package mismatch.');
     const record = await this.db.doc('orderActivations/' + profileId).get();
     if (record.get('uid') !== uid || record.get('topupLockOrderId')) return null;
+    const purchased = topupPackageSchema.safeParse(order.get('originalSupplierPackage'));
+    if (!purchased.success || purchased.data.packageCode !== order.get('supplierCode')) return null;
     const activation = activationSchema.parse(record.data());
     const raw = await this.supplier.packages({ packageCode: order.get('supplierCode') });
     const packages = raw
@@ -119,7 +121,12 @@ export class BuyAgainService {
       .filter((p) => p.success)
       .map((p) => p.data!);
     const original = packages.find((p) => p.packageCode === order.get('supplierCode'));
-    if (!original) return null;
+    if (
+      !original ||
+      !compatibleTopup(purchased.data, original) ||
+      original.supportTopUpType !== purchased.data.supportTopUpType
+    )
+      return null;
     const plan = source.get('plan');
     if (
       original.duration !== (plan.dataType === 'daily' ? 1 : plan.days) ||
@@ -267,6 +274,7 @@ export class BuyAgainService {
       t.update(profileRef, { topupLockOrderId: orderId });
       t.update(orderRef, {
         topupAttempted: true,
+        supplierAttempted: true,
         supplierTransactionId: transactionId,
         topupState: 'TOPUP_PENDING_RECONCILIATION',
         status: 'fulfilling',

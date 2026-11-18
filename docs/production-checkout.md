@@ -30,7 +30,7 @@ The worker records provider acceptance separately from confirmed delivery, using
 
 Checkout no longer supplies `receipt_email` to Stripe, which otherwise forces an additional receipt even when automatic receipts are off. Disable Stripe Dashboard **Customer emails → Successful payments** at the production cutover; billing email remains available for the payment method. This is an account setting, not changed by this code. See [Stripe receipts](https://docs.stripe.com/receipts). Already-open PaymentIntents retain their existing settings.
 
-Deployment must update the API worker and publish `/images/alozuri-email-logo.png` on the storefront. Confirm the Resend domain and API-key permissions, run a controlled real mailbox test, and check Gmail, Outlook and Apple Mail before claiming live client rendering. Automated tests decode the generated QR PNGs and scaled browser previews; these do not establish rendering in real mailbox clients. See [Resend inline image requirements](https://resend.com/changelog/embed-images-using-cid). Do not overlap old and new worker revisions during the cutover. Unattempted legacy notifications can join the single-email queue; already-sent or ambiguous legacy messages are retired without an automatic resend. Review `legacy_send_review_required` records against provider history manually. Never clear an uncertain send's timestamp/hash or change its key just to retry it.
+Deployment must update the API worker and publish `/images/alozuri-email-logo-padded-v2.png` on the storefront. Confirm the Resend domain and API-key permissions, run a controlled real mailbox test, and check Gmail, Outlook and Apple Mail before claiming live client rendering. Automated tests decode the generated QR PNGs and scaled browser previews; these do not establish rendering in real mailbox clients. See [Resend inline image requirements](https://resend.com/changelog/embed-images-using-cid). Do not overlap old and new worker revisions during the cutover. Unattempted legacy notifications can join the single-email queue; already-sent or ambiguous legacy messages are retired without an automatic resend. Review `legacy_send_review_required` records against provider history manually. Never clear an uncertain send's timestamp/hash or change its key just to retry it.
 
 The implementation preserves existing accepted legal content; it does not establish a new legal or VAT policy. Business/legal review of the underlying content and tax configuration remains applicable.
 
@@ -201,3 +201,18 @@ Verify affiliate conversion attribution in Endorsely using a Stripe test payment
 before relying on reporting. PaymentIntent metadata support in the connected
 Endorsely integration has not been verified; the supplied installation example
 only documents Checkout Sessions. This adds attribution, not fulfilment authority.
+
+The email logo now uses a versioned PNG with opaque white gutters baked into the
+image: 36 source pixels on each side and 15 above/below. It renders at 162×60,
+providing 18 displayed pixels of horizontal breathing room without img padding
+or a CSS background. Original brand pixels are copied unchanged. Rebuild it
+with `node apps/api/scripts/generate-email-logo.mjs`. Keep the original image for
+older messages and existing site metadata. Publish the new storefront asset
+**before** deploying the API mailer/worker template. Newly generated emails use
+the new URL; already received messages retain their original HTML/image URL.
+
+Pixel tests verify the white border and exact preservation of the original logo.
+Browser previews also remove every logo inline style on a simulated dark
+background to verify that spacing remains inside the PNG. This is not native
+Gmail/iOS dark-mode testing; a new real mailbox email still needs visual checking
+after deployment. No customer email was sent as part of this change.

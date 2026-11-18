@@ -1,6 +1,25 @@
 // DRAFT: requires native-speaker review; legal labels are not legal documents.
 import type { Messages } from './messages.ts';
 export const messages = {
+  buyAgain: {
+    success: '充值成功，无需重新安装。',
+    title: '再次购买',
+    topup: '为现有 eSIM 充值',
+    checking: '正在检查可用充值套餐…',
+    checkError: '无法检查您的 eSIM。请重试。',
+    checkoutError: '无法准备付款。请重试。',
+    chooseIntro: '选择现有 eSIM 进行充值，或购买新的 eSIM。',
+    newIntro: '未找到符合条件的现有 eSIM。我们将提供新的 eSIM。',
+    choose: '选择您的 eSIM',
+    profileDates: '购买日期：{purchased} · 到期日期：{expires}',
+    newEsim: '购买新的 eSIM',
+    topupHint: '将此套餐添加到现有 eSIM，无需新的二维码。',
+    dailyHint: '每日套餐续期仅延长有效期，不会增加每日高速流量。',
+    preparing: '正在准备付款…',
+    continue: '继续付款',
+    receipt:
+      '充值成功。{plan} 已添加到尾号为 {last4} 的 eSIM，无需重新安装。确认到期时间：{expiry}。',
+  },
   photoUi: {
     JP: '日本京都的传统街道',
     IT: '意大利五渔村海岸边色彩鲜艳的建筑',

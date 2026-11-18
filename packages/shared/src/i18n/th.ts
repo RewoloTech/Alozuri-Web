@@ -1,6 +1,25 @@
 import type { Messages } from './messages.ts';
 // Complete customer catalogue; independent professional/native review is not claimed.
 export const messages = {
+  buyAgain: {
+    success: 'เติมแพ็กเกจสำเร็จ ไม่ต้องติดตั้งใหม่',
+    title: 'ซื้ออีกครั้ง',
+    topup: 'เติมแพ็กเกจให้ eSIM เดิม',
+    checking: 'กำลังตรวจสอบแพ็กเกจเติม…',
+    checkError: 'ตรวจสอบ eSIM ไม่สำเร็จ โปรดลองอีกครั้ง',
+    checkoutError: 'เตรียมการชำระเงินไม่สำเร็จ โปรดลองอีกครั้ง',
+    chooseIntro: 'เลือก eSIM เดิมเพื่อเติมแพ็กเกจ หรือซื้อ eSIM ใหม่',
+    newIntro: 'ไม่พบ eSIM เดิมที่เข้าเกณฑ์ ระบบจะออก eSIM ใหม่ให้',
+    choose: 'เลือก eSIM ของคุณ',
+    profileDates: 'ซื้อเมื่อ {purchased} · หมดอายุ {expires}',
+    newEsim: 'ซื้อ eSIM ใหม่',
+    topupHint: 'เพิ่มแพ็กเกจนี้ลงใน eSIM เดิม ไม่ต้องใช้คิวอาร์โค้ดใหม่',
+    dailyHint: 'การต่อแพ็กเกจรายวันจะเพิ่มอายุการใช้งาน ไม่ได้เพิ่มโควตาข้อมูลความเร็วสูงต่อวัน',
+    preparing: 'กำลังเตรียมการชำระเงิน…',
+    continue: 'ดำเนินการชำระเงิน',
+    receipt:
+      'เติมแพ็กเกจสำเร็จ เพิ่ม {plan} ลงใน eSIM ที่ลงท้ายด้วย {last4} แล้ว ไม่ต้องติดตั้งใหม่ วันหมดอายุที่ยืนยันแล้ว: {expiry}',
+  },
   photoUi: {
     JP: 'ถนนแบบดั้งเดิมในเกียวโต ประเทศญี่ปุ่น',
     IT: 'อาคารสีสันสดใสริมชายฝั่งในชิงเคว เทร์เร ประเทศอิตาลี',

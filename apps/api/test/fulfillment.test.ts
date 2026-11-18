@@ -386,7 +386,7 @@ test('new Alozuri refunds retain the original brand reference and retry key with
   assert.equal(f.refundRequests.length, 1);
 });
 
-test('Buy Again new-profile timeout never blindly repeats a supplier purchase', async () => {
+test('Buy Again new-profile timeout reconciles the same immutable supplier transaction without a second purchase', async () => {
   const f = fixture();
   f.order.repeatDecision = {
     method: 'NEW_ESIM',
@@ -401,13 +401,21 @@ test('Buy Again new-profile timeout never blindly repeats a supplier purchase', 
     expiresAt: Date.now() + 600000,
   };
   let calls = 0;
-  f.supplier.order = async () => {
+  const accepted = new Map<string, { code: string; amount: number }>();
+  f.supplier.order = async (transactionId, code, amount) => {
     calls++;
-    throw new Error('Synthetic timeout after submission');
+    const previous = accepted.get(transactionId);
+    if (previous) {
+      assert.deepEqual(previous, { code, amount });
+      return 'original-supplier-order';
+    }
+    accepted.set(transactionId, { code, amount });
+    throw new Error('Synthetic timeout after the supplier accepted this transaction');
   };
   await f.service.run();
   await f.service.run();
-  assert.equal(calls, 1);
+  assert.equal(calls, 2);
+  assert.equal(accepted.size, 1);
   assert.equal(f.order.supplierAttempted, true);
-  assert.equal(f.getSaved(), undefined);
+  assert.deepEqual(f.getSaved(), activation);
 });

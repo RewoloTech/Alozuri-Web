@@ -42,9 +42,9 @@ test('actual order email templates render in all languages at mobile and desktop
 }) => {
   test.setTimeout(180_000);
   await page.route('https://**/*', (route) => route.abort());
-  await page.route('https://alozuri.com/images/alozuri-email-logo.png', (route) =>
+  await page.route('https://alozuri.com/images/alozuri-email-logo-padded-v2.png', (route) =>
     route.fulfill({
-      path: 'apps/web/public/images/alozuri-email-logo.png',
+      path: 'apps/web/public/images/alozuri-email-logo-padded-v2.png',
       contentType: 'image/png',
     }),
   );

@@ -1,6 +1,25 @@
 // DRAFT: requires native-speaker review; legal labels are not legal documents.
 import type { Messages } from './messages.ts';
 export const messages = {
+  buyAgain: {
+    success: '충전이 완료되었습니다. 다시 설치할 필요가 없습니다.',
+    title: '다시 구매',
+    topup: '기존 eSIM 충전',
+    checking: '충전 가능 여부 확인 중…',
+    checkError: 'eSIM을 확인하지 못했습니다. 다시 시도해 주세요.',
+    checkoutError: '결제를 준비하지 못했습니다. 다시 시도해 주세요.',
+    chooseIntro: '충전할 기존 eSIM을 선택하거나 새 eSIM을 구매하세요.',
+    newIntro: '충전 가능한 기존 eSIM이 없습니다. 새 eSIM이 발급됩니다.',
+    choose: 'eSIM 선택',
+    profileDates: '구매일: {purchased} · 만료일: {expires}',
+    newEsim: '새 eSIM 구매',
+    topupHint: '이 요금제를 기존 eSIM에 추가합니다. 새 QR 코드는 필요하지 않습니다.',
+    dailyHint: '일일 요금제 연장은 유효 기간만 늘리며 일일 고속 데이터 제공량은 늘리지 않습니다.',
+    preparing: '결제 준비 중…',
+    continue: '결제 진행',
+    receipt:
+      '충전이 완료되었습니다. 끝자리가 {last4}인 eSIM에 {plan}이 추가되었습니다. 다시 설치할 필요가 없습니다. 확인된 만료일: {expiry}.',
+  },
   photoUi: {
     JP: '일본 교토의 전통 거리',
     IT: '이탈리아 친퀘테레 해안의 알록달록한 건물들',

@@ -1,6 +1,26 @@
 // DRAFT: requires native-speaker review; legal labels are not legal documents.
 import type { Messages } from './messages.ts';
 export const messages = {
+  buyAgain: {
+    success: 'Opwaarderen gelukt. Opnieuw installeren is niet nodig.',
+    title: 'Opnieuw kopen',
+    topup: 'Bestaande eSIM opwaarderen',
+    checking: 'Beschikbare opwaarderingen controleren…',
+    checkError: 'We konden je eSIM niet controleren. Probeer het opnieuw.',
+    checkoutError: 'We konden de betaling niet voorbereiden. Probeer het opnieuw.',
+    chooseIntro: 'Kies een bestaande eSIM om op te waarderen of koop een nieuwe.',
+    newIntro: 'Geen geschikte bestaande eSIM gevonden. Je ontvangt een nieuwe eSIM.',
+    choose: 'Kies je eSIM',
+    profileDates: 'Gekocht op {purchased} · Verloopt op {expires}',
+    newEsim: 'Een nieuwe eSIM kopen',
+    topupHint: 'Voeg dit pakket toe aan je bestaande eSIM. Een nieuwe QR-code is niet nodig.',
+    dailyHint:
+      'Dagverlengingen verlengen de geldigheid, niet de dagelijkse hoeveelheid data op hoge snelheid.',
+    preparing: 'Betaling voorbereiden…',
+    continue: 'Doorgaan naar betalen',
+    receipt:
+      'Opwaarderen gelukt. {plan} is toegevoegd aan je eSIM die eindigt op {last4}. Opnieuw installeren is niet nodig. Bevestigde vervaldatum: {expiry}.',
+  },
   photoUi: {
     JP: 'Traditionele straten in Kyoto, Japan',
     IT: 'Kleurrijke huizen aan de kust van Cinque Terre, Italië',

@@ -1,6 +1,26 @@
 import type { Messages } from './messages.ts';
 // Complete customer catalogue; independent professional/native review is not claimed.
 export const messages = {
+  buyAgain: {
+    success: 'Nạp thêm thành công. Không cần cài đặt lại.',
+    title: 'Mua lại',
+    topup: 'Nạp thêm cho eSIM hiện có',
+    checking: 'Đang kiểm tra khả năng nạp thêm…',
+    checkError: 'Không thể kiểm tra eSIM. Vui lòng thử lại.',
+    checkoutError: 'Không thể chuẩn bị thanh toán. Vui lòng thử lại.',
+    chooseIntro: 'Chọn eSIM hiện có để nạp thêm hoặc mua eSIM mới.',
+    newIntro: 'Không tìm thấy eSIM hiện có đủ điều kiện. Bạn sẽ được cấp eSIM mới.',
+    choose: 'Chọn eSIM của bạn',
+    profileDates: 'Ngày mua: {purchased} · Hết hạn: {expires}',
+    newEsim: 'Mua eSIM mới',
+    topupHint: 'Thêm gói này vào eSIM hiện có. Không cần mã QR mới.',
+    dailyHint:
+      'Gia hạn gói theo ngày chỉ kéo dài hiệu lực, không tăng dung lượng tốc độ cao mỗi ngày.',
+    preparing: 'Đang chuẩn bị thanh toán…',
+    continue: 'Tiếp tục thanh toán',
+    receipt:
+      'Nạp thêm thành công. {plan} đã được thêm vào eSIM có số cuối {last4}. Không cần cài đặt lại. Hạn sử dụng đã xác nhận: {expiry}.',
+  },
   photoUi: {
     JP: 'Những con phố truyền thống ở Kyoto, Nhật Bản',
     IT: 'Những tòa nhà ven biển đầy màu sắc ở Cinque Terre, Ý',

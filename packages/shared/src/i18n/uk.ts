@@ -1,6 +1,26 @@
 import type { Messages } from './messages.ts';
 // Complete customer catalogue; independent professional/native review is not claimed.
 export const messages = {
+  buyAgain: {
+    success: 'Поповнення успішне. Повторне встановлення не потрібне.',
+    title: 'Купити знову',
+    topup: 'Поповнити наявну eSIM',
+    checking: 'Перевіряємо доступність поповнення…',
+    checkError: 'Не вдалося перевірити eSIM. Спробуйте ще раз.',
+    checkoutError: 'Не вдалося підготувати оплату. Спробуйте ще раз.',
+    chooseIntro: 'Виберіть наявну eSIM для поповнення або придбайте нову.',
+    newIntro: 'Придатної наявної eSIM не знайдено. Буде видано нову eSIM.',
+    choose: 'Виберіть eSIM',
+    profileDates: 'Придбано: {purchased} · Діє до: {expires}',
+    newEsim: 'Придбати нову eSIM',
+    topupHint: 'Додайте цей пакет до наявної eSIM. Новий QR-код не потрібен.',
+    dailyHint:
+      'Продовження денного тарифу збільшує строк дії, а не добовий обсяг швидкісного трафіку.',
+    preparing: 'Готуємо оплату…',
+    continue: 'Перейти до оплати',
+    receipt:
+      'Поповнення успішне. {plan} додано до eSIM з останніми цифрами {last4}. Повторне встановлення не потрібне. Підтверджений строк дії: {expiry}.',
+  },
   photoUi: {
     JP: 'Традиційні вулиці в Кіото, Японія',
     IT: 'Кольорові прибережні будівлі в Чінкве-Терре, Італія',

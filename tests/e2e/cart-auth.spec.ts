@@ -1581,6 +1581,7 @@ test('account language yields to manual English through real login, logout and c
 test('Buy Again checks owned profiles, requires multiple-profile choice and preserves the existing checkout route', async ({
   page,
 }) => {
+  test.setTimeout(90000);
   await setup(page);
   await signup(page);
   let profileCount = 1;
@@ -1634,6 +1635,25 @@ test('Buy Again checks owned profiles, requires multiple-profile choice and pres
     await expect(page).toHaveURL(new RegExp('/checkout\\?buy=' + plan.id + '&repeatQuote='));
     expect(requests.at(-1)?.profileOrderId).toBe(profileCount ? 'profile-0' : undefined);
   }
+  for (const locale of ['ro', 'ar'] as const) {
+    const messages = await loadMessages(locale);
+    await page.goto('/' + locale + '/e2e-fixtures/buy-again');
+    await page.getByRole('button', { name: messages.buyAgain.title, exact: true }).click();
+    await page.getByRole('radio').first().check();
+    await expect(page.getByRole('heading', { name: messages.buyAgain.topup })).toBeVisible();
+    for (const width of [375, 390, 768, 1440]) {
+      await page.setViewportSize({ width, height: 950 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true,
+      );
+      if (width === 390)
+        await page
+          .locator('#repeat-fixture')
+          .screenshot({ path: `/tmp/alozuri-buy-again-${locale}-${width}.png` });
+    }
+    await page.getByRole('button', { name: messages.buyAgain.continue, exact: true }).click();
+    await expect(page).toHaveURL(new RegExp('/' + locale + '/checkout\\?buy='));
+  }
 });
 
 for (const width of [390, 1440])
@@ -1658,4 +1678,152 @@ for (const width of [390, 1440])
       true,
     );
     await page.screenshot({ path: `/tmp/alozuri-discount-account-${width}.png`, fullPage: true });
+  });
+
+for (const width of [390, 1440])
+  test(`Buy Again completes real application checkout, signed webhook, supplier transport and receipt at ${width}px`, async ({
+    page,
+  }) => {
+    test.skip(
+      process.env.E2E_BUY_AGAIN_INTEGRATION !== 'true',
+      'Requires both isolated Firebase emulators.',
+    );
+    test.setTimeout(120000);
+    await page.setViewportSize({ width, height: 950 });
+    const state = await setup(page);
+    await signup(page);
+    const identity = [...state.profiles.values()][0];
+    expect(identity?.emailVerified).toBe(true);
+    const { buyAgainCommerce } = await import('../helpers/buy-again-commerce');
+    const backend = await buyAgainCommerce(plan, identity.uid, 'order_' + 'b'.repeat(48));
+    try {
+      await page.route('http://127.0.0.1:8189/**', async (route) => {
+        const url = new URL(route.request().url());
+        if (
+          !url.pathname.startsWith('/v2/buy-again/') &&
+          !['/v2/quote', '/v2/checkout'].includes(url.pathname) &&
+          !url.pathname.startsWith('/v2/orders/purchase_')
+        )
+          return route.fallback();
+        const response = await backend.api.inject({
+          method: z.enum(['GET', 'POST', 'OPTIONS']).parse(route.request().method()),
+          url: url.pathname + url.search,
+          headers: route.request().headers(),
+          ...(route.request().postData() ? { payload: route.request().postData()! } : {}),
+        });
+        await route.fulfill({
+          status: response.statusCode,
+          body: response.body,
+          headers: {
+            'Content-Type': 'application/json',
+            'Access-Control-Allow-Origin': 'http://localhost:3100',
+            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+            'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+          },
+        });
+      });
+      let paymentFailure: string | null = null;
+      let paymentSettled = false;
+      await page.exposeFunction('finishControlledTopup', async () => {
+        try {
+          await backend.pay();
+        } catch (error) {
+          paymentFailure =
+            error instanceof Error ? error.message : 'Unknown controlled payment failure';
+          throw error;
+        } finally {
+          paymentSettled = true;
+        }
+      });
+      await page.addInitScript(() => {
+        let attempts = 0;
+        const stripe = {
+          _registerWrapper: () => {},
+          registerAppInfo: () => {},
+          createToken: () => {},
+          createPaymentMethod: () => {},
+          confirmCardPayment: () => {},
+          elements: () => ({
+            create: (type: string) => {
+              let node: HTMLElement | undefined;
+              return {
+                on: (event: string, callback: (value: unknown) => void) => {
+                  if (event === 'ready')
+                    setTimeout(
+                      () =>
+                        callback(
+                          type === 'expressCheckout' ? { availablePaymentMethods: null } : {},
+                        ),
+                      0,
+                    );
+                },
+                off: () => {},
+                update: () => {},
+                destroy: () => {
+                  if (node) node.innerHTML = '';
+                },
+                mount: (target: HTMLElement) => {
+                  node = target;
+                  if (type === 'payment') {
+                    const input = document.createElement('input');
+                    input.setAttribute('aria-label', 'Controlled card form');
+                    target.append(input);
+                  }
+                },
+              };
+            },
+            submit: async () => ({}),
+          }),
+          confirmPayment: async () => {
+            if (++attempts === 1) return { error: { code: 'card_declined' } };
+            const finish = Reflect.get(window, 'finishControlledTopup');
+            if (typeof finish !== 'function') throw Error('Missing controlled payment binding');
+            await finish();
+            return { paymentIntent: { status: 'succeeded' } };
+          },
+        };
+        Object.assign(window, { Stripe: Object.assign(() => stripe, { version: 'endive' }) });
+      });
+      await page.goto('/account/orders');
+      await page.getByRole('button', { name: 'Buy Again', exact: true }).click();
+      await expect(page.getByRole('heading', { name: 'Top up existing eSIM' })).toBeVisible();
+      await page.getByRole('button', { name: 'Continue to checkout', exact: true }).click();
+      await expect(page).toHaveURL(/\/checkout\?buy=.*&repeatQuote=/);
+      await page.getByRole('checkbox').check();
+      await page.getByRole('button', { name: 'Continue to payment', exact: true }).click();
+      await expect(page.getByRole('textbox', { name: 'Controlled card form' })).toBeVisible();
+      const pay = page.getByRole('button', { name: /^Pay / });
+      await pay.click();
+      await expect(page.getByRole('alert').filter({ hasText: /declined/i })).toBeVisible();
+      expect(backend.supplierCalls()).toBe(0);
+      expect(backend.emails).toHaveLength(0);
+      await pay.click();
+      await expect
+        .poll(() => ({ finished: paymentSettled, error: paymentFailure }), { timeout: 60000 })
+        .toEqual({ finished: true, error: null });
+      await expect(page).toHaveURL(/\/checkout\/success\?order=purchase_/);
+      await expect(page.getByText('Payment: Paid', { exact: true })).toBeVisible();
+      await expect(
+        page.getByText('Top-up successful. No new installation is needed.', { exact: true }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole('link', { name: 'Shopping cart, 1 item', exact: true }),
+      ).toBeVisible();
+      expect(backend.creates()).toBe(1);
+      expect(backend.supplierCalls()).toBe(1);
+      expect(backend.emails).toHaveLength(1);
+      for (const size of [375, 390, 768, 1440]) {
+        await page.setViewportSize({ width: size, height: 950 });
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+          true,
+        );
+        if (size === width)
+          await page.screenshot({
+            path: `/tmp/alozuri-topup-complete-${width}.png`,
+            fullPage: true,
+          });
+      }
+    } finally {
+      await backend.close();
+    }
   });

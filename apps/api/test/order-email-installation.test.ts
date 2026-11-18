@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import jsQR from 'jsqr';
+import { LOCALES } from '../../../packages/shared/src/i18n/locales.ts';
+import { transactionCopy } from '../../../packages/shared/src/i18n/transaction-copy.ts';
+import { CHECKOUT_LEGAL_ACCEPTANCE } from '../../../packages/shared/src/legal.ts';
+import { legalSnapshot } from '../src/lib/legal.ts';
 import { PNG } from 'pngjs';
 import {
   sampleConfirmation,
@@ -142,10 +146,33 @@ test('top-up receipt uses existing confirmation without QR attachments or new in
   const email = await installationConfirmationEmail(order, url, units);
   assert.equal(email.attachments?.length ?? 0, 0);
   assert.ok(email.text.includes('Top-up successful'));
-  assert.ok(email.text.includes('no new installation is needed'));
+  assert.ok(email.text.toLowerCase().includes('no new installation is needed'));
   for (const unit of units) {
     assert.ok(!email.text.includes(unit.activation.iccid));
     assert.ok(!email.text.includes(unit.activation.ac));
     assert.ok(!email.html.includes(unit.activation.ac));
+  }
+});
+test('all customer languages render top-up receipts without new-installation instructions or credentials', async () => {
+  for (const locale of LOCALES) {
+    const order = sampleConfirmation();
+    order.locale = locale;
+    order.legal = legalSnapshot(CHECKOUT_LEGAL_ACCEPTANCE, order.createdAt, locale);
+    const units = sampleInstallations(order).map((unit) => ({
+      ...unit,
+      topupReceipt: { expiresAt: '2030-01-01T00:00:00Z' },
+    }));
+    const email = await installationConfirmationEmail(order, url, units);
+    const { t } = transactionCopy(locale);
+    assert.ok(email.text.includes(t('buyAgain.topupHint')), locale);
+    assert.ok(!email.text.includes(t('display.installIntro')), locale);
+    assert.ok(!email.text.includes('{last4}') && !email.text.includes('{expiry}'), locale);
+    assert.equal(email.attachments?.length ?? 0, 0);
+    for (const unit of units) {
+      assert.ok(email.text.includes(unit.activation.iccid.slice(-4)), locale);
+      assert.ok(!email.text.includes(unit.activation.iccid), locale);
+      assert.ok(!email.html.includes(unit.activation.ac), locale);
+    }
+    if (locale !== 'en') assert.ok(!email.text.includes('Top-up successful.'), locale);
   }
 });

@@ -23,6 +23,11 @@ env:
   - variable: NEXT_PUBLIC_PAYMENT_MODE
     value: live
 
+  # Build-time flag. Deploy the matching API with BUY_AGAIN_ENABLED=true first.
+  # For the initial email-logo asset publication, override this to false; see docs/buy-again.md.
+  - variable: NEXT_PUBLIC_BUY_AGAIN_ENABLED
+    value: 'true'
+
   # Public browser configuration for the Alozuri Firebase web app.
   - variable: NEXT_PUBLIC_FIREBASE_API_KEY
     value: 'AIzaSyA2V-oXF0NZhveO0JkyVN0uF3PtoL7eQaw'

@@ -40,7 +40,8 @@
     "test:seo": "node --import tsx --test tests/unit/seo.test.ts && node --import tsx tests/seo-production.mts && playwright test tests/e2e/seo.spec.ts",
     "test:meta": "node --import tsx --test tests/unit/meta-events.test.ts && playwright test tests/e2e/shopping.spec.ts --grep Meta",
     "test:i18n": "node --import tsx --test tests/unit/i18n.test.ts tests/unit/language-release.test.ts tests/unit/supplier-copy.test.ts",
-    "i18n:check-release": "node --import tsx scripts/check-language-release.mts"
+    "i18n:check-release": "node --import tsx scripts/check-language-release.mts",
+    "test:buy-again": "firebase emulators:exec --only auth,firestore --project demo-alozuri --config infra/buy-again-emulator.json \"node --import tsx --test --test-concurrency=1 apps/api/test/buy-again.firestore.mts && E2E_CART_AUTH_EMULATOR=true E2E_BUY_AGAIN_INTEGRATION=true playwright test tests/e2e/cart-auth.spec.ts --grep 'Buy Again'\""
   },
   "devDependencies": {
     "@playwright/test": "^1.65.0",

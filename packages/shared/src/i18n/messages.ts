@@ -1,5 +1,24 @@
 /** Canonical source keys. Values are plain text/ICU, never executable HTML. */
 export const englishMessages = {
+  buyAgain: {
+    success: 'Top-up successful. No new installation is needed.',
+    title: 'Buy Again',
+    topup: 'Top up existing eSIM',
+    checking: 'Checking top-up availability…',
+    checkError: 'We could not check your eSIM. Please try again.',
+    checkoutError: 'Checkout could not be prepared. Please try again.',
+    chooseIntro: 'Choose an existing eSIM to top up, or buy a new one.',
+    newIntro: 'No eligible existing eSIM was found. A new eSIM will be issued.',
+    choose: 'Choose your eSIM',
+    profileDates: 'Purchased {purchased} · Expires {expires}',
+    newEsim: 'Buy a new eSIM',
+    topupHint: 'Add this package to your existing eSIM. No new QR code is needed.',
+    dailyHint: 'Daily extensions increase validity, not the daily high-speed allowance.',
+    preparing: 'Preparing checkout…',
+    continue: 'Continue to checkout',
+    receipt:
+      'Top-up successful. {plan} was added to your eSIM ending {last4}. No new installation is needed. Confirmed expiry: {expiry}.',
+  },
   photoUi: {
     JP: 'Traditional streets in Kyoto, Japan',
     IT: 'Colourful coastal buildings in Cinque Terre, Italy',

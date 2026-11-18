@@ -370,8 +370,9 @@ export class FulfillmentService {
     }
     const transactionId = 'az_' + createHash('sha256').update(order.id).digest('hex').slice(0, 40);
     if (!order.supplierOrderNo) {
-      if (order.repeatDecision && order.supplierAttempted)
-        throw new Error('Buy Again supplier order outcome requires reconciliation.');
+      // The order endpoint explicitly deduplicates transactionId. Buy Again's
+      // NEW_ESIM path reuses the existing immutable request and reconciliation
+      // behavior. This guarantee does not apply to the separate top-up endpoint.
       await this.store.update(order, { status: 'fulfilling', supplierAttempted: true });
       let orderNo: string;
       try {

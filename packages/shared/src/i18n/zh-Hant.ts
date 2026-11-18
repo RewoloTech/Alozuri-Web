@@ -1,6 +1,25 @@
 import type { Messages } from './messages.ts';
 // Traditional Chinese terminology adapted for Taiwan/Hong Kong; independent native review is not claimed.
 export const messages = {
+  buyAgain: {
+    success: '儲值成功，無需重新安裝。',
+    title: '再次購買',
+    topup: '為現有 eSIM 儲值',
+    checking: '正在檢查可用儲值方案…',
+    checkError: '無法檢查您的 eSIM，請重試。',
+    checkoutError: '無法準備付款，請重試。',
+    chooseIntro: '選擇現有 eSIM 進行儲值，或購買新的 eSIM。',
+    newIntro: '找不到符合資格的現有 eSIM，將提供新的 eSIM。',
+    choose: '選擇您的 eSIM',
+    profileDates: '購買日期：{purchased} · 到期日期：{expires}',
+    newEsim: '購買新的 eSIM',
+    topupHint: '將此方案加入現有 eSIM，無需新的 QR 碼。',
+    dailyHint: '每日方案續期僅延長有效期，不會增加每日高速流量。',
+    preparing: '正在準備付款…',
+    continue: '繼續付款',
+    receipt:
+      '儲值成功。{plan} 已加入尾號為 {last4} 的 eSIM，無需重新安裝。確認到期時間：{expiry}。',
+  },
   photoUi: {
     JP: '日本京都的傳統街道',
     IT: '義大利五漁村海岸色彩繽紛的建築',

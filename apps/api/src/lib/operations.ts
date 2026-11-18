@@ -1,4 +1,5 @@
 import { registerMarketing } from './marketing.js';
+import { TopupReconciliation } from './topup-reconciliation.js';
 import { LOCALES } from '../../../../packages/shared/src/i18n/locales.ts';
 import { localizationPreview } from './localization-preview.js';
 import { recordSupplierCredit } from './supplier-credit.js';
@@ -155,6 +156,7 @@ export function registerOperations(
   reports: Pick<OperationsReports, 'report'> | null,
   pricing: Pick<PricingHistoryReports, 'report'> | null = null,
   esims: Pick<OperationsEsims, 'lookup' | 'details' | 'search'> | null = null,
+  topups: Pick<TopupReconciliation, 'confirm'> | null = null,
 ) {
   async function requireAdmin(header: string | undefined) {
     if (!header?.startsWith('Bearer '))
@@ -189,6 +191,14 @@ export function registerOperations(
       profileOrderId: doc.get('repeatDecision.profileOrderId'),
       reconciliationRequired: doc.get('topupAttempted') === true && !doc.get('topupReceipt'),
     };
+  });
+  app.post('/v1/operations/orders/:id/topup/reconcile', async (req) => {
+    const actor = await requireAdmin(req.headers.authorization);
+    const { id } = z
+      .object({ id: z.string().regex(/^order_[a-f0-9]{48}$/) })
+      .strict()
+      .parse(req.params);
+    return (topups ?? new TopupReconciliation(database())).confirm(id, req.body, actor.uid);
   });
   app.post('/v1/operations/orders/:id/supplier-credit', async (req) => {
     const actor = await requireAdmin(req.headers.authorization);

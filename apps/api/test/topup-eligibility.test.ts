@@ -3,9 +3,11 @@ import assert from 'node:assert/strict';
 import {
   topupEligibility,
   compatibleTopup,
+  topupPackageSnapshot,
   type TopupPackage,
   type TopupProfile,
 } from '../src/lib/topup-eligibility.ts';
+import { demoPlans } from '../../../packages/shared/src/demo.ts';
 const original: TopupPackage = {
   packageCode: 'BASE',
   name: 'Fixed data',
@@ -40,6 +42,43 @@ const input = {
   days: 7,
   now: Date.parse('2026-11-18T00:00:00Z'),
 };
+test('purchase snapshots preserve supplier terms and never infer missing historical speed or FUP', () => {
+  const plan = {
+    ...demoPlans[0],
+    active: true,
+    supplierCode: original.packageCode,
+    wholesaleUnits: original.price,
+    supplierComparison: {
+      key: 'verified',
+      fup: '512kbps',
+      fupKbps: 512,
+      topupType: 2,
+      attributes: {
+        dataType: 1,
+        duration: 15,
+        durationUnit: 'DAY',
+        location: 'FR,CH',
+        speed: '4G',
+      },
+    },
+  };
+  const snapshot = topupPackageSnapshot(plan);
+  assert.equal(snapshot?.speed, '4G');
+  assert.equal(snapshot?.fupPolicy, '512kbps');
+  assert.equal(snapshot?.volume, plan.dataGb * 1024 ** 3);
+  assert.equal(snapshot?.packageCode, original.packageCode);
+  assert.equal(topupPackageSnapshot({ ...plan, supplierComparison: undefined }), undefined);
+  assert.equal(
+    topupPackageSnapshot({
+      ...plan,
+      supplierComparison: {
+        ...plan.supplierComparison,
+        attributes: { ...plan.supplierComparison.attributes, speed: undefined },
+      },
+    }),
+    undefined,
+  );
+});
 test('fixed top-up selects a real supplier slug and ignores disabled operational status', () => {
   assert.deepEqual(topupEligibility(input), {
     eligible: true,
@@ -47,6 +86,24 @@ test('fixed top-up selects a real supplier slug and ignores disabled operational
     packageCode: 'verified-slug',
     price: 10000,
   });
+});
+test('profile-specific refill with no further top-up capability matches the original package', () => {
+  const refill = { ...candidate, supportTopUpType: 1 };
+  assert.equal(compatibleTopup(original, refill), true);
+  assert.deepEqual(topupEligibility({ ...input, candidates: [refill] }), {
+    eligible: true,
+    expiresAt: '2027-01-01T00:00:00.000Z',
+    packageCode: 'verified-slug',
+    price: 10000,
+  });
+  assert.equal(
+    topupEligibility({
+      ...input,
+      original: { ...original, supportTopUpType: 1 },
+      candidates: [refill],
+    }).eligible,
+    false,
+  );
 });
 for (const status of ['GOT_RESOURCE', 'IN_USE', 'USED_UP'])
   test(status + ' can be eligible', () =>

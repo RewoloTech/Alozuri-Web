@@ -1,6 +1,26 @@
 import type { Messages } from './messages.ts';
 // Complete customer catalogue; independent professional/native review is not claimed.
 export const messages = {
+  buyAgain: {
+    success: 'Yükleme başarılı. Yeniden kurulum gerekmez.',
+    title: 'Tekrar satın al',
+    topup: 'Mevcut eSIM’e yükleme yap',
+    checking: 'Yükleme seçenekleri kontrol ediliyor…',
+    checkError: 'eSIM’iniz kontrol edilemedi. Tekrar deneyin.',
+    checkoutError: 'Ödeme hazırlanamadı. Tekrar deneyin.',
+    chooseIntro: 'Yükleme için mevcut bir eSIM seçin veya yeni bir eSIM satın alın.',
+    newIntro: 'Uygun mevcut eSIM bulunamadı. Yeni bir eSIM verilecek.',
+    choose: 'eSIM’inizi seçin',
+    profileDates: 'Satın alma: {purchased} · Bitiş: {expires}',
+    newEsim: 'Yeni eSIM satın al',
+    topupHint: 'Bu paketi mevcut eSIM’inize ekleyin. Yeni bir QR kodu gerekmez.',
+    dailyHint:
+      'Günlük uzatmalar geçerlilik süresini artırır, günlük yüksek hızlı veri kotasını artırmaz.',
+    preparing: 'Ödeme hazırlanıyor…',
+    continue: 'Ödemeye devam et',
+    receipt:
+      'Yükleme başarılı. {plan}, sonu {last4} olan eSIM’inize eklendi. Yeniden kurulum gerekmez. Onaylanan bitiş tarihi: {expiry}.',
+  },
   photoUi: {
     JP: 'Kyoto, Japonya’daki geleneksel sokaklar',
     IT: 'Cinque Terre, İtalya’daki renkli kıyı binaları',

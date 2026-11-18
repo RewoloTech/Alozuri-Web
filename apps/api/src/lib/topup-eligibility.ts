@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { StoredPlan } from '../../../../packages/shared/src/index.ts';
 
 const identifier = z.string().min(1).max(200);
 export const topupPackageSchema = z.object({
@@ -17,6 +18,22 @@ export const topupPackageSchema = z.object({
   fupPolicy: z.string().nullish(),
 });
 export type TopupPackage = z.infer<typeof topupPackageSchema>;
+/** Preserve verified supplier characteristics at purchase time. Historical
+ * products without this evidence remain eligible for a NEW eSIM, not a top-up. */
+export function topupPackageSnapshot(plan: StoredPlan): TopupPackage | undefined {
+  if (!plan.supplierComparison) return undefined;
+  const parsed = topupPackageSchema.safeParse({
+    ...plan.supplierComparison.attributes,
+    packageCode: plan.supplierCode,
+    name: plan.supplierName ?? plan.name,
+    price: plan.wholesaleUnits,
+    currencyCode: plan.currency,
+    volume: plan.dataGb * 1024 ** 3,
+    supportTopUpType: plan.supplierComparison.topupType,
+    fupPolicy: plan.supplierComparison.fup,
+  });
+  return parsed.success ? parsed.data : undefined;
+}
 export const topupProfileSchema = z.object({
   esimTranNo: identifier,
   orderNo: identifier,
@@ -50,8 +67,7 @@ export function compatibleTopup(original: TopupPackage, candidate: TopupPackage)
     original.duration === candidate.duration &&
     original.durationUnit === candidate.durationUnit &&
     original.speed === candidate.speed &&
-    (original.fupPolicy ?? '') === (candidate.fupPolicy ?? '') &&
-    candidate.supportTopUpType === original.supportTopUpType
+    (original.fupPolicy ?? '') === (candidate.fupPolicy ?? '')
   );
 }
 export function topupEligibility(input: {
@@ -103,6 +119,9 @@ export function topupEligibility(input: {
     };
   }
   if (original.dataType !== 1) return { eligible: false, reason: 'unsupported_variant' };
+  // This list comes from the supplier's profile-specific TOPUP catalogue. A refill
+  // can report supportTopUpType=1: that describes the refill's own capability,
+  // not whether it may be applied to the original, top-up-capable eSIM.
   const candidates = input.candidates.filter((p) => compatibleTopup(original, p));
   // Ambiguous variants are not silently chosen; a supplier mapping is needed.
   if (candidates.length !== 1) return { eligible: false, reason: 'compatible_package_unverified' };

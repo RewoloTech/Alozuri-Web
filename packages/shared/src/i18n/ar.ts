@@ -1,6 +1,25 @@
 // DRAFT: requires native-speaker review; legal labels are not legal documents.
 import type { Messages } from './messages.ts';
 export const messages = {
+  buyAgain: {
+    success: 'تم الشحن بنجاح. لا يلزم التثبيت مجددًا.',
+    title: 'الشراء مرة أخرى',
+    topup: 'شحن شريحة eSIM الحالية',
+    checking: 'جارٍ التحقق من توفر الشحن…',
+    checkError: 'تعذّر التحقق من شريحة eSIM. يُرجى المحاولة مجددًا.',
+    checkoutError: 'تعذّر تجهيز الدفع. يُرجى المحاولة مجددًا.',
+    chooseIntro: 'اختر شريحة eSIM حالية لشحنها أو اشترِ شريحة جديدة.',
+    newIntro: 'لم يتم العثور على شريحة eSIM حالية مؤهلة. سيتم إصدار شريحة جديدة.',
+    choose: 'اختر شريحة eSIM',
+    profileDates: 'تاريخ الشراء: {purchased} · تنتهي في: {expires}',
+    newEsim: 'شراء شريحة eSIM جديدة',
+    topupHint: 'أضف هذه الباقة إلى شريحة eSIM الحالية. لا تحتاج إلى رمز QR جديد.',
+    dailyHint: 'تزيد التمديدات اليومية مدة الصلاحية ولا تزيد حصة البيانات اليومية عالية السرعة.',
+    preparing: 'جارٍ تجهيز الدفع…',
+    continue: 'المتابعة إلى الدفع',
+    receipt:
+      'تم الشحن بنجاح. أُضيفت {plan} إلى شريحة eSIM المنتهية بالأرقام {last4}. لا يلزم تثبيتها مجددًا. تاريخ الانتهاء المؤكد: {expiry}.',
+  },
   photoUi: {
     JP: 'شوارع تقليدية في كيوتو باليابان',
     IT: 'مبانٍ ساحلية ملونة في تشينكوي تيري بإيطاليا',

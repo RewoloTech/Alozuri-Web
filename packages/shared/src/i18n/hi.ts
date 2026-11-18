@@ -1,6 +1,25 @@
 import type { Messages } from './messages.ts';
 // Complete customer catalogue; independent professional/native review is not claimed.
 export const messages = {
+  buyAgain: {
+    success: 'रिचार्ज सफल हुआ। दोबारा इंस्टॉल करने की ज़रूरत नहीं है।',
+    title: 'फिर से खरीदें',
+    topup: 'मौजूदा eSIM रिचार्ज करें',
+    checking: 'रिचार्ज की उपलब्धता जाँची जा रही है…',
+    checkError: 'आपकी eSIM जाँची नहीं जा सकी। फिर से कोशिश करें।',
+    checkoutError: 'भुगतान तैयार नहीं हो सका। फिर से कोशिश करें।',
+    chooseIntro: 'रिचार्ज के लिए मौजूदा eSIM चुनें या नई eSIM खरीदें।',
+    newIntro: 'कोई योग्य मौजूदा eSIM नहीं मिली। नई eSIM जारी की जाएगी।',
+    choose: 'अपनी eSIM चुनें',
+    profileDates: 'खरीद की तारीख: {purchased} · समाप्ति: {expires}',
+    newEsim: 'नई eSIM खरीदें',
+    topupHint: 'इस पैकेज को अपनी मौजूदा eSIM में जोड़ें। नए QR कोड की ज़रूरत नहीं है।',
+    dailyHint: 'दैनिक एक्सटेंशन वैधता बढ़ाते हैं, रोज़ का हाई-स्पीड डेटा नहीं।',
+    preparing: 'भुगतान तैयार किया जा रहा है…',
+    continue: 'भुगतान के लिए आगे बढ़ें',
+    receipt:
+      'रिचार्ज सफल हुआ। {last4} पर समाप्त होने वाली आपकी eSIM में {plan} जोड़ दिया गया है। दोबारा इंस्टॉल करने की ज़रूरत नहीं है। पुष्टि की गई समाप्ति: {expiry}।',
+  },
   photoUi: {
     JP: 'क्योटो, जापान की पारंपरिक सड़कें',
     IT: 'सिंक्वे टेरे, इटली की रंगीन तटीय इमारतें',

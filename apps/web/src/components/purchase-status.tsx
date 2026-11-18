@@ -59,6 +59,7 @@ export function PurchaseStatus() {
 }
 function PrivatePurchase({ id }: { id: string }) {
   const t = useTranslations('orderUi');
+  const repeat = useTranslations('buyAgain');
   const site = useTranslations('site');
   const emailCopy = useTranslations('emails');
   const payment = useTranslations('paymentUi');
@@ -292,10 +293,7 @@ function PrivatePurchase({ id }: { id: string }) {
                   <>
                     <EsimUsagePanel purchaseId={id} unitId={a.id} accessToken={access} />
                     {a.fulfillmentMethod === 'TOPUP' ? (
-                      <p>
-                        Top-up successful. Your existing eSIM has been recharged. No new QR code or
-                        installation is needed.
-                      </p>
+                      <p>{repeat('success')}</p>
                     ) : (
                       <InstallationDetails orderId={a.id} purchaseId={id} accessToken={access} />
                     )}
@@ -468,7 +466,11 @@ function AccountUsage({ orders }: { orders: Purchase[] }) {
   const copy = usePlanCopy();
   const units = orders
     .filter((order) => !order.test)
-    .flatMap((order) => (order.allocations ?? []).map((unit) => ({ order, unit })));
+    .flatMap((order) =>
+      (order.allocations ?? [])
+        .filter((unit) => unit.fulfillmentMethod !== 'TOPUP')
+        .map((unit) => ({ order, unit })),
+    );
   return units.length ? (
     <div className="stack" dir={copy.dir}>
       {units.map(({ order, unit }) => (

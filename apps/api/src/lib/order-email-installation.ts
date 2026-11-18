@@ -15,7 +15,15 @@ export const emailInstallationSchema = z.object({
   unitId: z.string().regex(/^order_[a-f0-9]{48}$/),
   planId: z.string().min(1).max(100),
   activation: activationSchema,
-  topupReceipt: z.object({ expiresAt: z.string() }).optional(),
+  topupReceipt: z
+    .object({
+      expiresAt: z
+        .string()
+        .refine(
+          (value) => /(?:Z|[+-]\d{2}:?\d{2})$/.test(value) && Number.isFinite(Date.parse(value)),
+        ),
+    })
+    .optional(),
 });
 export type EmailInstallation = z.infer<typeof emailInstallationSchema>;
 const e = escapeEmailHtml;
@@ -27,7 +35,10 @@ export async function installationConfirmationEmail(
   const order = confirmationOrderSchema.parse(input);
   const locale = transactionLocale(order);
   const { t, plan: copy, dir } = transactionCopy(locale);
-  const instructions = t('display.installIntro');
+  const instructions =
+    inputUnits.length > 0 && inputUnits.every((unit) => unit.topupReceipt)
+      ? t('buyAgain.topupHint')
+      : t('display.installIntro');
   const keepProfile = t('display.installWarning');
   const units = z
     .array(emailInstallationSchema)
@@ -58,7 +69,16 @@ export async function installationConfirmationEmail(
     const { plan } = item;
     const title = `eSIM ${index + 1} — ${copy.title(plan)}`;
     if (unit.topupReceipt) {
-      const message = `Top-up successful. ${copy.title(plan)} was added to your existing eSIM ending ${unit.activation.iccid.slice(-4)}. Your existing QR code remains valid; no new installation is needed. Confirmed expiry: ${unit.topupReceipt.expiresAt}.`;
+      const message = t('buyAgain.receipt', {
+        plan: copy.title(plan),
+        last4: unit.activation.iccid.slice(-4),
+        expiry:
+          new Intl.DateTimeFormat(locale, {
+            dateStyle: 'medium',
+            timeStyle: 'short',
+            timeZone: 'UTC',
+          }).format(new Date(unit.topupReceipt.expiresAt)) + ' UTC',
+      });
       html.push(`<p>${e(message)}</p>`);
       text.push(message);
       continue;

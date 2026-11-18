@@ -1,7 +1,8 @@
 # Buy Again / top-up implementation and release gate
 
-Status: **disabled by default; not approved for production activation**.
-No live supplier purchase or top-up was performed.
+Status: **implementation updated for owner-managed deployment and manual live testing**.
+Production flags have not been changed by this task. No live Stripe charge or
+supplier purchase/top-up was performed. The owner will deploy and test manually.
 
 ## Existing architecture reused
 
@@ -43,8 +44,10 @@ marker before contacting the supplier. Success increments its counter and stores
 a sanitized receipt exactly once. A shared lock/counter keyed by the hashed
 supplier esimTranNo also protects against duplicate local profile records. Unknown results retain their lock and original
 transaction ID indefinitely: worker retries never submit another mutation.
-Unknown new-profile purchase results also retain their mutation marker and never
-blindly repeat the supplier order. An expiry after quoting can switch to NEW_ESIM only before any mutation and only
+New-profile purchases use the existing order endpoint's documented transaction-ID
+deduplication: retries reconcile the exact same immutable request and transaction,
+never generate another ID. This guarantee is not assumed for top-up requests.
+An expiry after quoting can switch to NEW_ESIM only before any mutation and only
 when the same supplier product characteristics and bounded original cost are
 revalidated. Otherwise the paid order remains recoverable for manual review.
 
@@ -54,6 +57,9 @@ Daily extensions use the original daily SKU, the purchased number of days
 ## Data and security
 
 Existing `purchases` and `orders` gain an optional `repeatDecision` snapshot.
+New purchase items and child orders also freeze `originalSupplierPackage` from
+verified catalogue attributes, including speed/FUP. Profiles without this evidence
+offer NEW_ESIM instead of inferring their original terms from today's catalogue.
 `orderActivations` gains `topUpCount`, `topUpHistoryKnown`, and a persistent
 `topupLockOrderId` during mutation. Future newly fulfilled profiles initialize
 known-zero history. Historical profiles without verified history are not assumed
@@ -80,34 +86,86 @@ recovery exposes delayed/attention orders. A timeout or uncertain response must
 be investigated against supplier records using the stored transaction ID.
 Do not clear the marker/lock or issue a replacement while the outcome is unknown.
 
-**Release blockers / incomplete acceptance criteria:**
+`POST /v1/operations/orders/:id/topup/reconcile` records a **supplier-confirmed
+successful receipt**. It requires a verified administrator, the original transaction
+ID, full matching ICCID, supplier top-up reference, confirmed expiry, a request UUID
+and a supplier evidence reference. The administrator must obtain confirmation for
+that specific transaction from eSIM Access first; a changed balance or expiry alone
+does not establish success. The server independently corroborates the physical
+profile/expiry, ownership, original supplier order, payment records and persistent
+locks. It writes an immutable operator audit, increments once and resumes the existing
+receipt/financial worker atomically. Replays retry queue dispatch without another
+supplier mutation. Active worker leases must finish before settlement.
 
-- An authoritative, tested reconciliation workflow for uncertain supplier outcomes
-  is not implemented. The documented profile lookup does not establish whether a
-  particular timed-out transaction succeeded. Inspection is available; resolution
-  requires supplier evidence and a separately reviewed administrative operation.
-- Full browser + Stripe + webhook + supplier-mock + email Buy Again journeys have
-  not yet been implemented as one end-to-end test. Existing checkout regressions,
-  eligibility tests, UI component tests and Firestore concurrency tests cover
-  separate boundaries, not every acceptance criterion.
-- Original historical speed/FUP metadata and any out-of-band supplier top-ups need
-  reconciliation before enabling top-ups for old profiles. Never backfill zero
-  without evidence. The implementation compares SKU, coverage, volume, duration,
-  data type, FUP and speed for supplier candidates and freezes quote identity.
-- New customer-facing Buy Again and top-up email text needs translation and
-  locale review before this multilingual storefront exposes the feature.
-- Cross-instance limiter load/crash testing, monitoring/alert configuration,
-  operator reconciliation tests and a controlled live supplier verification are
-  still required. No automatic refunds are initiated for uncertain top-ups.
+Example body (synthetic values; send only over authenticated HTTPS):
+
+```json
+{
+  "requestId": "00000000-0000-4000-8000-000000000001",
+  "supplierConfirmed": true,
+  "evidenceReference": "eSIM Access support ticket confirming this transaction",
+  "receipt": {
+    "transactionId": "tu_original_transaction_id",
+    "iccid": "8900000000000000019",
+    "expiredTime": "2030-02-01T00:00:00Z",
+    "topUpEsimTranNo": "confirmed_supplier_topup_reference"
+  }
+}
+```
+
+Never invent a receipt, reset a counter, release an unresolved lock, or refund and
+buy a replacement while a supplier outcome is unknown. If supplier evidence does
+not confirm success, retain the reconciliation state and resolve it with supplier
+support and the existing payment/Operations process. No automatic uncertain-top-up
+refund is introduced.
+
+## Monitoring and remaining live verification
+
+- Use existing delayed/attention order work inventory and the protected top-up
+  inspection endpoint to investigate paid orders that do not become ready. Inspect
+  `topupState`, the original supplier transaction, retained lock and operator audit.
+  Existing queue redrive/recovery remains available; it never resends a pending top-up.
+- Customer text and top-up receipts now use all 21 locale catalogues; top-up-only
+  emails omit new-installation instructions and QR attachments. Translation tests
+  do not replace native-speaker editorial review.
+- Shared Firestore permit tests cover concurrent callers, cooldown, expired crash
+  leases, network failures and changed lock ownership. Supplier/database outages
+  still fail closed; production throughput and alert delivery need observation.
+- The owner will perform the live payment/supplier/receipt test. Automated browser
+  tests use controlled Stripe/supplier transports and isolated Firebase emulators.
+  No native wallet or real eSIM activation is claimed by these tests.
 
 ## Configuration and rollout
 
-Keep `BUY_AGAIN_ENABLED=false` on the API and
-`NEXT_PUBLIC_BUY_AGAIN_ENABLED=false` on the website until the blockers above
-are resolved. Existing Secret Manager credentials are reused; no new secret or
-payment integration is needed. After release approval, deploy API/worker first,
-then rebuild/deploy the frontend with its feature flag. Do not enable the website
-flag against an older backend. No deployment was performed during implementation.
+Existing Secret Manager credentials are reused; neither feature flag is a secret.
+The owner has chosen to perform deployment and the live test manually.
+
+1. Publish the new email-logo asset on the frontend with the public feature flag
+   temporarily **false**. Verify `/images/alozuri-email-logo-padded-v2.png` returns
+   HTTP 200 before releasing the updated mailer. This avoids breaking existing emails.
+2. Deploy the updated API/worker to `alozuri-api` in `europe-west4`, project `alozuri`.
+   In Cloud Run **Containers → Variables and secrets**, add the ordinary environment
+   variable `BUY_AGAIN_ENABLED=true`. Preserve existing credentials and worker settings.
+3. Rebuild/deploy the frontend with `NEXT_PUBLIC_BUY_AGAIN_ENABLED=true`. This value
+   is now prepared in `apps/web/apphosting.yaml`; a runtime-only change is insufficient.
+   Remove the temporary false override. Keep both API and website versions aligned.
+4. Sign in with a verified Alozuri account and open **My account → Orders** or
+   **My eSIMs**. Ready live orders show **Buy Again**; mobile and desktop share the
+   same component. Activation is not required before checking supplier eligibility.
+5. Select the UK 1 GB / 7-day package for the manual test. Older orders lacking
+   original supplier terms intentionally issue a new eSIM. New verified purchases
+   preserve those terms, allowing the next Buy Again to select an eligible existing
+   eSIM. Review the checkout's actual retail amount; supplier cost is not retail price.
+6. After a successful top-up, confirm one Stripe payment, one supplier transaction,
+   an incremented counter and a receipt with no new installation QR. In account usage,
+   the refill is not counted as a second physical eSIM. Perform this test through
+   Alozuri checkout, rather than topping up directly in the supplier portal;
+   out-of-band supplier changes require counter/history reconciliation before
+   further automatic top-ups.
+
+API and frontend `.env.example` defaults remain false for unconfigured environments.
+An attempted frontend deployment stopped with a Google Cloud permission error before
+upload/build/rollout. No production deployment or flag change was completed by this task.
 
 ## Validation commands
 
@@ -115,13 +173,14 @@ flag against an older backend. No deployment was performed during implementation
 - `npm run test:jest`
 - `npm run test:firestore` (includes `buy-again.firestore.mts`; Java 21 required)
 - `npm run test:e2e`
+- `npm run test:buy-again` (both isolated emulators; Java 21 required)
 - `npm run lint`, `npm run typecheck`, `npm run typecheck:tests`, `npm run build`
 
 All supplier mutations in tests use controlled mocks. Test-mode payments never
 trigger the live supplier worker. An explicitly authorized real test eSIM is
 required for any future live supplier verification.
 
-## Recorded local verification
+## Earlier local verification (before this update)
 
 - `npm run test:unit`: 38 shared + 244 API + 18 language tests passed.
 - `npm run test:jest`: 31 passed.
@@ -137,10 +196,9 @@ required for any future live supplier verification.
 - Lint, application/test TypeScript checks, formatting, whitespace and the web/API
   production build passed. A temporary Java 21 runtime was used for Firestore.
 
-These results do not establish supplier-side production correctness or satisfy
-all acceptance criteria. Full payment/fulfilment browser coverage and operational
-reconciliation remain release blockers. No live Stripe charge, live supplier
-purchase/top-up, deployment or production data migration was performed.
+These earlier results did not establish supplier-side production correctness.
+The update below adds the previously missing browser journey and manual recovery.
+No live Stripe charge, supplier purchase/top-up or production data migration was performed.
 
 ## Supplier references reviewed
 
@@ -187,3 +245,35 @@ Modified:
 - `package.json`
 - `scripts/run-e2e-server.mjs`
 - `tests/e2e/cart-auth.spec.ts`
+
+## 2026-11-18 verification update
+
+- Read-only production preflight found a ready, unexpired UK 1 GB / 7-day test
+  profile and a supplier-specific refill at US$0.57 wholesale. Retail checkout
+  remains server-priced. The preflight made no purchase and wrote no production data.
+- Corrected matching: a profile-specific refill may report supportTopUpType=1 even
+  when its original eSIM supports top-up. Original capability is still enforced;
+  coverage, allowance, duration, type, speed and FUP must match.
+- Added frozen supplier terms for new purchases; historical unknown terms fail
+  closed to NEW_ESIM, with no fabricated backfill.
+- Added audited, administrator-only confirmed-success recovery, including queue
+  redrive, duplicate/concurrent settlement, refunded-payment and ownership tests.
+- Added a browser journey from the actual account Orders button through payment
+  decline/retry, real application services, signed duplicate webhooks, concurrent
+  workers, controlled supplier HTTP and a single QR-free receipt. Firebase databases
+  and authentication are isolated emulators; the Stripe SDK uses a controlled HTTP
+  transport. This is not a live Stripe/supplier transaction.
+- Added all 21 locale catalogues for Buy Again and top-up receipts; Romanian and
+  Arabic browser checks cover selection and checkout navigation at responsive widths.
+- Unit: 38 shared + 258 API + 18 language tests passed. Jest: 35 passed.
+- Broad Firestore regression: 162 passed. Formatting, lint, application/test
+  TypeScript checks and production build passed. `npm run test:buy-again` passed
+  16 focused database/recovery/limiter tests and 3 browser scenarios, including
+  the actual account Orders entry, Romanian/Arabic selection, 375/390/768/1440px
+  overflow checks, payment retry, duplicate webhooks and exactly one refill/receipt.
+  Mobile, desktop and right-to-left screenshots were reviewed.
+
+Deployment and the real paid test are explicitly reserved for the owner. The
+public build flag is prepared as true in apphosting.yaml; set the API flag and
+follow the asset/API/frontend deployment order above. Neither production flag
+was changed by this task.

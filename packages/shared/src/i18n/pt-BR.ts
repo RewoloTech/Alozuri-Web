@@ -1,6 +1,26 @@
 // DRAFT: requires native-speaker review; legal labels are not legal documents.
 import type { Messages } from './messages.ts';
 export const messages = {
+  buyAgain: {
+    success: 'Recarga concluída. Não é necessária uma nova instalação.',
+    title: 'Comprar novamente',
+    topup: 'Recarregar o eSIM existente',
+    checking: 'Verificando recargas disponíveis…',
+    checkError: 'Não foi possível verificar seu eSIM. Tente novamente.',
+    checkoutError: 'Não foi possível preparar o pagamento. Tente novamente.',
+    chooseIntro: 'Escolha um eSIM existente para recarregar ou compre um novo.',
+    newIntro: 'Nenhum eSIM existente elegível foi encontrado. Um novo eSIM será emitido.',
+    choose: 'Escolha seu eSIM',
+    profileDates: 'Comprado em {purchased} · Expira em {expires}',
+    newEsim: 'Comprar um novo eSIM',
+    topupHint: 'Adicione este pacote ao seu eSIM existente. Não é necessário um novo código QR.',
+    dailyHint:
+      'As extensões diárias aumentam a validade, não a franquia diária de alta velocidade.',
+    preparing: 'Preparando o pagamento…',
+    continue: 'Continuar para o pagamento',
+    receipt:
+      'Recarga concluída. {plan} foi adicionado ao seu eSIM terminado em {last4}. Não é necessária uma nova instalação. Expiração confirmada: {expiry}.',
+  },
   photoUi: {
     JP: 'Ruas tradicionais de Kyoto, no Japão',
     IT: 'Casas coloridas à beira-mar em Cinque Terre, na Itália',

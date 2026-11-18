@@ -1,6 +1,26 @@
 // DRAFT: requires native-speaker review; legal labels are not legal documents.
 import type { Messages } from './messages.ts';
 export const messages = {
+  buyAgain: {
+    success: 'Reîncărcare reușită. Nu este necesară o instalare nouă.',
+    title: 'Cumpără din nou',
+    topup: 'Reîncarcă eSIM-ul existent',
+    checking: 'Verificăm disponibilitatea reîncărcării…',
+    checkError: 'Nu am putut verifica eSIM-ul. Încearcă din nou.',
+    checkoutError: 'Nu am putut pregăti plata. Încearcă din nou.',
+    chooseIntro: 'Alege un eSIM existent pentru reîncărcare sau cumpără unul nou.',
+    newIntro: 'Nu am găsit un eSIM existent eligibil. Vei primi un eSIM nou.',
+    choose: 'Alege eSIM-ul',
+    profileDates: 'Cumpărat la {purchased} · Expiră la {expires}',
+    newEsim: 'Cumpără un eSIM nou',
+    topupHint: 'Adaugă acest pachet la eSIM-ul existent. Nu ai nevoie de un cod QR nou.',
+    dailyHint:
+      'Extensiile zilnice prelungesc valabilitatea, nu măresc traficul zilnic la viteză mare.',
+    preparing: 'Pregătim plata…',
+    continue: 'Continuă către plată',
+    receipt:
+      'Reîncărcare reușită. {plan} a fost adăugat la eSIM-ul cu terminația {last4}. Nu este necesară o instalare nouă. Expirare confirmată: {expiry}.',
+  },
   photoUi: {
     JP: 'Străzi tradiționale din Kyoto, Japonia',
     IT: 'Clădiri colorate pe coasta Cinque Terre, Italia',

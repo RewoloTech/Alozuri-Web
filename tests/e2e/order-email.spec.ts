@@ -9,16 +9,18 @@ test('complete order email preserves the full accepted contract and stays readab
   const order = sampleConfirmation();
   const secureUrl = `https://alozuri.com/checkout/success?order=${order.id}#access=synthetic-private-test`;
   const email = confirmationEmail(order, secureUrl, 'email-v2-ready');
-  await page.route('https://alozuri.com/images/alozuri-email-logo.png', async (route) =>
+  await page.route('https://alozuri.com/images/alozuri-email-logo-padded-v2.png', async (route) =>
     route.fulfill({
       contentType: 'image/png',
-      body: await readFile('apps/web/public/images/alozuri-email-logo.png'),
+      body: await readFile('apps/web/public/images/alozuri-email-logo-padded-v2.png'),
     }),
   );
   await page.setContent(email.html);
   const logo = page.getByRole('img', { name: 'Alozuri', exact: true });
-  await expect(logo).toHaveCSS('padding-left', '16px');
-  await expect(logo).toHaveCSS('padding-right', '16px');
+  await expect(logo).toHaveCSS('padding-left', '0px');
+  await expect(logo).toHaveCSS('padding-right', '0px');
+  await expect(logo).toHaveAttribute('width', '162');
+  await expect(logo).toHaveAttribute('height', '60');
   await expect(logo).toHaveCSS('border-radius', '12px');
   await expect(page.getByText('Your eSIM is ready.', { exact: false })).toBeVisible();
   await expect(
@@ -82,10 +84,10 @@ test('ready email shows scannable QR codes and manual installation inside the ex
       `cid:${image.content_id}`,
       `data:${image.content_type};base64,${image.content}`,
     );
-  await page.route('https://alozuri.com/images/alozuri-email-logo.png', async (route) =>
+  await page.route('https://alozuri.com/images/alozuri-email-logo-padded-v2.png', async (route) =>
     route.fulfill({
       contentType: 'image/png',
-      body: await readFile('apps/web/public/images/alozuri-email-logo.png'),
+      body: await readFile('apps/web/public/images/alozuri-email-logo-padded-v2.png'),
     }),
   );
   await page.setContent(preview);
@@ -129,4 +131,50 @@ test('ready email shows scannable QR codes and manual installation inside the ex
         .screenshot({ path: `/tmp/alozuri-inline-email-install-${width}.png` });
   }
   await writeFile('/tmp/alozuri-inline-email-preview.html', preview);
+});
+
+test('logo gutters survive removal of img CSS on a simulated dark email background', async ({
+  page,
+}) => {
+  const email = confirmationEmail(
+    sampleConfirmation(),
+    'https://alozuri.com/checkout/success',
+    'email-v2-ready',
+  );
+  await page.route('https://alozuri.com/images/alozuri-email-logo-padded-v2.png', (route) =>
+    route.fulfill({
+      contentType: 'image/png',
+      path: 'apps/web/public/images/alozuri-email-logo-padded-v2.png',
+    }),
+  );
+  await page.setContent(email.html);
+  await page.evaluate(() => {
+    document.body.style.background = '#202124';
+    document.body.style.color = '#fff';
+    document.querySelectorAll('table,td,div').forEach((el) => {
+      if (el instanceof HTMLElement) el.style.backgroundColor = '#111111';
+    });
+    document.querySelector('img[alt="Alozuri"]')?.removeAttribute('style');
+  });
+  const logo = page.getByRole('img', { name: 'Alozuri', exact: true });
+  await expect
+    .poll(() =>
+      logo.evaluate(
+        (img: HTMLImageElement) =>
+          img.complete && img.naturalWidth === 324 && img.naturalHeight === 120,
+      ),
+    )
+    .toBe(true);
+  await expect(logo).toHaveCSS('padding-left', '0px');
+  await expect(logo).toHaveCSS('padding-right', '0px');
+  for (const width of [375, 390, 768, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(logo).toBeVisible();
+    expect((await logo.boundingBox())!.width).toBe(162);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    if (width === 390 || width === 1440)
+      await page.screenshot({ path: `/tmp/alozuri-email-logo-dark-${width}.png` });
+  }
 });

@@ -1,6 +1,26 @@
 import type { Messages } from './messages.ts';
 // Complete customer catalogue; independent professional/native review is not claimed.
 export const messages = {
+  buyAgain: {
+    success: 'Isi ulang berhasil. Tidak perlu menginstal ulang.',
+    title: 'Beli lagi',
+    topup: 'Isi ulang eSIM yang ada',
+    checking: 'Memeriksa ketersediaan isi ulang…',
+    checkError: 'eSIM Anda tidak dapat diperiksa. Silakan coba lagi.',
+    checkoutError: 'Pembayaran tidak dapat disiapkan. Silakan coba lagi.',
+    chooseIntro: 'Pilih eSIM yang ada untuk diisi ulang atau beli eSIM baru.',
+    newIntro: 'Tidak ditemukan eSIM yang memenuhi syarat. eSIM baru akan diterbitkan.',
+    choose: 'Pilih eSIM Anda',
+    profileDates: 'Dibeli: {purchased} · Kedaluwarsa: {expires}',
+    newEsim: 'Beli eSIM baru',
+    topupHint: 'Tambahkan paket ini ke eSIM yang ada. Tidak perlu kode QR baru.',
+    dailyHint:
+      'Perpanjangan harian menambah masa berlaku, bukan kuota data berkecepatan tinggi per hari.',
+    preparing: 'Menyiapkan pembayaran…',
+    continue: 'Lanjut ke pembayaran',
+    receipt:
+      'Isi ulang berhasil. {plan} telah ditambahkan ke eSIM berakhiran {last4}. Tidak perlu menginstal ulang. Kedaluwarsa terkonfirmasi: {expiry}.',
+  },
   photoUi: {
     JP: 'Jalan-jalan tradisional di Kyoto, Jepang',
     IT: 'Bangunan pesisir yang berwarna-warni di Cinque Terre, Italia',

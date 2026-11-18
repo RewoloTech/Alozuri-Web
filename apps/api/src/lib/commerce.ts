@@ -1,5 +1,6 @@
 import { matchesPromotion } from './promotion-policy.js';
 import { BuyAgainService, repeatDecisionSchema, repeatProductIdentity } from './buy-again.js';
+import { topupPackageSchema, topupPackageSnapshot } from './topup-eligibility.js';
 import type { ErrorCode } from '../../../../packages/shared/src/i18n/errors.ts';
 import {
   LOCALES,
@@ -91,6 +92,7 @@ export const itemsSchema = z
   });
 const snapshotSchema = z.object({
   plan: planSchema,
+  originalSupplierPackage: topupPackageSchema.optional(),
   automaticPromotion: promotionSnapshot.optional(),
   originalPriceCents: z.number().int().positive().optional(),
   baseSellingPriceUsdCents: z.number().int().positive().optional(),
@@ -235,7 +237,9 @@ export async function priceCart(
       p.wholesaleUnits <= 0
     )
       throw new CommerceError('A plan is unavailable. Update your cart.');
+    const originalSupplierPackage = topupPackageSnapshot(p);
     snapshots.push({
+      ...(originalSupplierPackage ? { originalSupplierPackage } : {}),
       plan: convertedPlan(planSchema.parse(p), currency, exchange),
       baseSellingPriceUsdCents: p.priceCents,
       pricingVersion: p.pricingVersion,
@@ -769,6 +773,9 @@ export class CommerceService {
             t.create(childRef, {
               locale: p.locale,
               ...(p.repeatDecision ? { repeatDecision: p.repeatDecision } : {}),
+              ...(line.originalSupplierPackage
+                ? { originalSupplierPackage: line.originalSupplierPackage }
+                : {}),
               uid: purchaseOwnerUid(id, p.uid),
               plan: line.plan,
               amountCents: line.plan.priceCents,
