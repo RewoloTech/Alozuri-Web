@@ -165,3 +165,16 @@ and publish/unpublish access are covered by the seven Firestore integration test
 Additional MIME-boundary regression tests exercise the real download helper:
 default PDF-only downloads, explicit PNG/JPEG/WebP previews, and rejection of
 HTML, SVG, PDF and arbitrary binary content in image mode. All 44 Jest tests pass.
+
+Final live verification: administrator login, Marketing overview and authenticated
+draft preview pass on the deployed website. Layout checks pass at 375, 390, 768
+and 1440px with no horizontal overflow; native file inputs were constrained to the
+editor width. Screenshots were reviewed. Temporary test users, profile/cart
+records and images were removed. API health and public Marketing return HTTP 200.
+
+Marketing is enabled on API revision alozuri-api-00043-r8q with
+MARKETING_ASSET_BUCKET=alozuri.firebasestorage.app. Frontend build
+alozuri-build-2026-11-18-007 contains the preview and mobile fixes. Client Storage
+rules are deployed, public access prevention is enforced, and service-account
+object access is scoped to marketing/. No customer purchase or supplier order
+was made during these checks.
