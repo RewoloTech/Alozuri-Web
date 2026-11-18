@@ -161,3 +161,7 @@ The helper now has an explicit image mode (PNG/JPEG/WebP only); default contract
 PDF validation is retained. Preview tests assert the authenticated image mode and
 blob URL cleanup. Updated Jest total: 36 passed. PNG, JPEG and WebP round trips
 and publish/unpublish access are covered by the seven Firestore integration tests.
+
+Additional MIME-boundary regression tests exercise the real download helper:
+default PDF-only downloads, explicit PNG/JPEG/WebP previews, and rejection of
+HTML, SVG, PDF and arbitrary binary content in image mode. All 44 Jest tests pass.
