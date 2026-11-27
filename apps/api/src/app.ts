@@ -8,6 +8,7 @@ import { PricingHistoryReports } from './lib/pricing-history.js';
 import { OperationsReports, OperationsError, registerOperations } from './lib/operations.js';
 import { configuredFinancialLedger, type FinancialLedger } from './lib/financial-ledger.js';
 import { UserProfiles, ProfileError } from './lib/user-profiles.js';
+import { partnerFeed, partnerFeedQuery } from './lib/partner-feed.js';
 import { registerProfileRoutes } from './lib/profile-routes.js';
 import { OrderWorker } from './lib/order-worker.js';
 import {
@@ -457,6 +458,18 @@ export async function createApp(
       .filter((p) => !p.demo)
       .map((p) => ({ id: p.id, syncedAt: p.syncedAt })),
   }));
+  app.get('/v1/catalogue/feed', async (request, reply) => {
+    const { format } = partnerFeedQuery.parse(request.query);
+    reply.header('Cache-Control', 'no-store');
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('X-Robots-Tag', 'noindex');
+    if (demo) return reply.code(503).send({ error: 'Live catalogue required.' });
+    try {
+      return partnerFeed(await displayPlans('USD'), format);
+    } catch {
+      return reply.code(503).send({ error: 'Current retail catalogue unavailable.' });
+    }
+  });
   app.get('/v1/countries', async () => {
     const codes = [...new Set((await repository.plans()).flatMap((p) => p.countries))];
     return {
