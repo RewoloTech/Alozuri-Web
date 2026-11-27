@@ -1,4 +1,5 @@
 import { applyPricing } from './lib/pricing-management.js';
+import { partnerFeed, partnerFeedQuery } from './lib/partner-feed.js';
 import { Promotions } from './lib/promotions.js';
 import { BuyAgainError } from './lib/buy-again.js';
 import { LocaleUnavailableError } from '../../../packages/shared/src/i18n/locales.ts';
@@ -457,6 +458,18 @@ export async function createApp(
       .filter((p) => !p.demo)
       .map((p) => ({ id: p.id, syncedAt: p.syncedAt })),
   }));
+  app.get('/v1/catalogue/feed', async (request, reply) => {
+    const { format } = partnerFeedQuery.parse(request.query);
+    reply.header('Cache-Control', 'no-store');
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('X-Robots-Tag', 'noindex');
+    if (demo) return reply.code(503).send({ error: 'Live catalogue required.' });
+    try {
+      return partnerFeed(await displayPlans('USD'), format);
+    } catch {
+      return reply.code(503).send({ error: 'Current retail catalogue unavailable.' });
+    }
+  });
   app.get('/v1/countries', async () => {
     const codes = [...new Set((await repository.plans()).flatMap((p) => p.countries))];
     return {

@@ -317,7 +317,7 @@ export function MarketingPanel({ uid }: { uid: string }) {
         </p>
       )}
       {tab === tabs[0] ? (
-        <PromotionsPanel uid={uid} />
+        <PromotionsPanel key={uid} uid={uid} />
       ) : tab === tabs[1] ? (
         <>
           <h3>Website Banners</h3>

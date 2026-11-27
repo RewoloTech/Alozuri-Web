@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { OperationsReport } from '@alozuri/shared/financial';
 import { api } from '@/lib/api';
+import { StoreApiError } from '@/lib/api-error';
 type Promotion = {
   name?: string;
   scope?: { kind: string; values: string[]; excludedProducts: string[] };
@@ -31,6 +32,8 @@ type Preview = {
   warning: string;
   feeBasis: string;
 };
+type PackageMatches = { rows: { id: string; name: string }[]; hasMore: boolean };
+const defaultDiscountPercent = 10;
 const usd = (n: number) =>
   new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'USD' }).format(n / 100);
 export function PromotionsPanel({ uid }: { uid: string }) {
@@ -47,7 +50,7 @@ export function PromotionsPanel({ uid }: { uid: string }) {
     [cursor, setCursor] = useState<string | undefined>(),
     [next, setNext] = useState<string | null>(null);
   const [code, setCode] = useState(''),
-    [percent, setPercent] = useState(10),
+    [percent, setPercent] = useState(defaultDiscountPercent),
     [active, setActive] = useState(true),
     [start, setStart] = useState(''),
     [end, setEnd] = useState(''),
@@ -78,15 +81,40 @@ export function PromotionsPanel({ uid }: { uid: string }) {
       .then((r) => setCampaigns(r.campaigns ?? []))
       .catch(() => setCampaigns([]));
   }, [uid]);
-  const [packageSearch, setPackageSearch] = useState(''),
-    [packages, setPackages] = useState<{ id: string; name: string }[]>([]),
-    [packageId, setPackageId] = useState(''),
-    [preview, setPreview] = useState<Preview | null>(null);
+  const [packageSearch, setPackageSearch] = useState('');
+  const [packageMatches, setPackageMatches] = useState<PackageMatches | null>(null);
+  const [packageId, setPackageId] = useState('');
+  const [packageBusy, setPackageBusy] = useState(false);
+  const [packageError, setPackageError] = useState('');
+  const [preview, setPreview] = useState<Preview | null>(null);
+  const [previewBusy, setPreviewBusy] = useState(false);
+  const [previewError, setPreviewError] = useState('');
+  const packageRequest = useRef<AbortController | null>(null);
+  const previewRequest = useRef<AbortController | null>(null);
+  const packages = packageMatches?.rows ?? [];
+  const selectedPackage = packages.find((p) => p.id === packageId);
+  const validPercent = Number.isInteger(percent) && percent >= 1 && percent <= 50;
+  const validAmount =
+    Number.isInteger(discountValue) && discountValue >= 1 && discountValue <= 99999999;
+  const validDiscount = discountKind === 'percent' ? validPercent : validAmount;
+  const discountPercent = validPercent ? percent : defaultDiscountPercent;
+  const discount = {
+    kind: discountKind,
+    value: discountKind === 'percent' ? percent : discountValue,
+  };
+  const canPreview = Boolean(selectedPackage) && validDiscount && !previewBusy;
+
+  function clearPreview() {
+    previewRequest.current?.abort();
+    setPreview(null);
+    setPreviewBusy(false);
+    setPreviewError('');
+  }
   function resetEditor() {
     setEditing(false);
     setCode('');
-    setPreview(null);
-    setPercent(10);
+    clearPreview();
+    setPercent(defaultDiscountPercent);
     setActive(true);
     setStart('');
     setEnd('');
@@ -103,10 +131,12 @@ export function PromotionsPanel({ uid }: { uid: string }) {
     setMinimum(0);
     setCampaignId('');
   }
-  const selection = useRef('');
   useEffect(() => {
-    selection.current = JSON.stringify([packageId, percent, discountKind, discountValue]);
-  }, [packageId, percent, discountKind, discountValue]);
+    return () => {
+      packageRequest.current?.abort();
+      previewRequest.current?.abort();
+    };
+  }, [uid]);
   useEffect(() => {
     const controller = new AbortController();
     let live = true;
@@ -169,29 +199,63 @@ export function PromotionsPanel({ uid }: { uid: string }) {
       setBusy(false);
     }
   }
-  async function check() {
-    setError('');
-    setPreview(null);
+  async function findPackages() {
+    if (packageBusy) return;
+    const controller = new AbortController();
+    packageRequest.current = controller;
+    setPackageBusy(true);
+    setPackageError('');
+    setPackageMatches(null);
+    setPackageId('');
+    clearPreview();
     try {
-      const requested = selection.current;
+      const result = await api<PackageMatches>(
+        '/v1/operations/promotions/packages?' + new URLSearchParams({ q: packageSearch.trim() }),
+        { signal: controller.signal },
+        uid,
+      );
+      if (!controller.signal.aborted) setPackageMatches(result);
+    } catch {
+      if (!controller.signal.aborted) setPackageError('Could not find packages. Try again.');
+    } finally {
+      if (!controller.signal.aborted) setPackageBusy(false);
+    }
+  }
+  async function check() {
+    if (!canPreview) return;
+    clearPreview();
+    const controller = new AbortController();
+    previewRequest.current = controller;
+    setPreviewBusy(true);
+    try {
       const result = await api<Preview>(
         '/v1/operations/promotions/preview',
         {
           method: 'POST',
+          signal: controller.signal,
           body: JSON.stringify({
             packageId,
-            discountPercent: percent,
-            discount: {
-              kind: discountKind,
-              value: discountKind === 'percent' ? percent : discountValue,
-            },
+            discountPercent,
+            discount,
           }),
         },
         uid,
       );
-      if (selection.current === requested) setPreview(result);
+      if (!controller.signal.aborted) setPreview(result);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Preview failed');
+      if (controller.signal.aborted) return;
+      if (e instanceof StoreApiError && e.code === 'PROMO_CODE_NOT_APPLICABLE')
+        setPreviewError('Set a discount that reduces the selected package price by up to 50%.');
+      else if (e instanceof StoreApiError && e.code === 'PLAN_UNAVAILABLE')
+        setPreviewError(
+          'This package can no longer be previewed. Search again to choose an eligible package.',
+        );
+      else
+        setPreviewError(
+          e instanceof Error ? e.message : 'Could not estimate profitability. Try again.',
+        );
+    } finally {
+      if (!controller.signal.aborted) setPreviewBusy(false);
     }
   }
   async function save() {
@@ -199,8 +263,10 @@ export function PromotionsPanel({ uid }: { uid: string }) {
     const missing: string[] = [];
     if (!/^[A-Z0-9_-]{3,32}$/.test(code.trim()))
       missing.push('Enter a code of 3–32 letters, numbers, hyphens or underscores.');
-    if (!Number.isInteger(percent) || percent < 1 || percent > 50)
+    if (discountKind === 'percent' && !validPercent)
       missing.push('Choose a whole-number discount between 1% and 50%.');
+    if (discountKind !== 'percent' && !validAmount)
+      missing.push('Enter a whole-number amount from 1 to 99,999,999 USD cents.');
     const starts = Date.parse(start + 'Z'),
       expires = Date.parse(end + 'Z');
     if (!Number.isFinite(starts)) missing.push('Set the start date and time (UTC).');
@@ -233,15 +299,12 @@ export function PromotionsPanel({ uid }: { uid: string }) {
                 .map((s) => s.trim())
                 .filter(Boolean),
             },
-            discount: {
-              kind: discountKind,
-              value: discountKind === 'percent' ? percent : discountValue,
-            },
+            discount,
             automatic,
             priority,
             minimumOrderUsdCents: minimum,
             ...(campaignId ? { campaignId } : {}),
-            discountPercent: percent,
+            discountPercent,
             active,
             startsAt: new Date(start + 'Z').toISOString(),
             expiresAt: new Date(end + 'Z').toISOString(),
@@ -254,7 +317,7 @@ export function PromotionsPanel({ uid }: { uid: string }) {
       setAttempt((n) => n + 1);
       setCode('');
       setEditing(false);
-      setPreview(null);
+      clearPreview();
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : 'Save failed');
     } finally {
@@ -283,7 +346,7 @@ export function PromotionsPanel({ uid }: { uid: string }) {
         if (remove) {
           setEditing(false);
           setCode('');
-          setPreview(null);
+          clearPreview();
         } else setActive(!p.active);
       }
       setActionMessage(`${p.code} ${remove ? 'deleted' : p.active ? 'deactivated' : 'activated'}.`);
@@ -393,7 +456,7 @@ export function PromotionsPanel({ uid }: { uid: string }) {
                   setEnd(p.expiresAt.slice(0, 16));
                   setLimit(p.maxUses?.toString() ?? '');
                   setEditing(true);
-                  setPreview(null);
+                  clearPreview();
                 }}
               >
                 Edit code
@@ -418,7 +481,7 @@ export function PromotionsPanel({ uid }: { uid: string }) {
           </button>
         </div>
       </div>
-      <div className="surface">
+      <div className="surface" onChange={() => setSaveError('')}>
         <h3>{editing ? 'Edit promotion' : 'Create promotion'}</h3>
         <label>
           Code
@@ -565,7 +628,7 @@ export function PromotionsPanel({ uid }: { uid: string }) {
             value={discountKind}
             onChange={(e) => {
               setDiscountKind(e.target.value);
-              setPreview(null);
+              clearPreview();
             }}
           >
             <option value="percent">Percentage</option>
@@ -580,11 +643,12 @@ export function PromotionsPanel({ uid }: { uid: string }) {
               className="commerce-input"
               type="number"
               min={1}
+              max={99999999}
               step={1}
               value={discountValue}
               onChange={(e) => {
                 setDiscountValue(Number(e.target.value));
-                setPreview(null);
+                clearPreview();
               }}
             />
           </label>
@@ -652,7 +716,7 @@ export function PromotionsPanel({ uid }: { uid: string }) {
               value={percent}
               onChange={(e) => {
                 setPercent(Number(e.target.value));
-                setPreview(null);
+                clearPreview();
               }}
             />
           </label>
@@ -664,7 +728,7 @@ export function PromotionsPanel({ uid }: { uid: string }) {
                 key={n}
                 onClick={() => {
                   setPercent(n);
-                  setPreview(null);
+                  clearPreview();
                 }}
               >
                 {n}%
@@ -704,50 +768,116 @@ export function PromotionsPanel({ uid }: { uid: string }) {
           <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} />
           Active
         </label>
-        <h3>Check a package’s estimated profitability</h3>
-        <label>
-          Package name prefix
-          <input
-            className="commerce-input"
-            value={packageSearch}
-            onChange={(e) => setPackageSearch(e.target.value)}
-          />
-        </label>
-        <button
-          className="button"
-          onClick={async () => {
-            try {
-              const r = await api<{ rows: { id: string; name: string }[] }>(
-                '/v1/operations/promotions/packages?q=' + encodeURIComponent(packageSearch),
-                {},
-                uid,
-              );
-              setPackages(r.rows);
-            } catch {
-              setError('Package search failed.');
-            }
-          }}
-        >
-          Find packages
-        </button>
-        <label>
-          Package
-          <select
-            className="commerce-input"
-            value={packageId}
-            onChange={(e) => {
-              setPackageId(e.target.value);
-              setPreview(null);
+        <section aria-labelledby="promotion-profitability-heading">
+          <h3 id="promotion-profitability-heading">Check a package’s estimated profitability</h3>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              void findPackages();
             }}
           >
-            <option value="">Choose a package</option>
-            {packages.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </label>
+            <label>
+              Package search
+              <input
+                className="commerce-input"
+                type="search"
+                maxLength={100}
+                placeholder="e.g. Global 1 GB 7 days"
+                value={packageSearch}
+                onChange={(e) => setPackageSearch(e.target.value)}
+              />
+            </label>
+            <button type="submit" className="button" disabled={packageBusy}>
+              Find packages
+            </button>
+          </form>
+          <div role="status">
+            {packageBusy && <p>Searching packages…</p>}
+            {packageMatches &&
+              (packages.length === 0 ? (
+                <p>No eligible packages found. Try a shorter search.</p>
+              ) : (
+                <p>
+                  {packageMatches.hasMore
+                    ? `Showing ${packages.length} matches. Add details such as data or validity to narrow your search.`
+                    : `${packages.length} ${packages.length === 1 ? 'package' : 'packages'} found.`}
+                </p>
+              ))}
+          </div>
+          {packageError && (
+            <p className="error-message" role="alert">
+              {packageError}
+            </p>
+          )}
+          <label>
+            Package
+            <select
+              className="commerce-input"
+              value={packageId}
+              disabled={packages.length === 0}
+              onChange={(e) => {
+                setPackageId(e.target.value);
+                clearPreview();
+              }}
+            >
+              <option value="">Choose a package</option>
+              {packages.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            className="button"
+            disabled={!canPreview}
+            onClick={() => void check()}
+          >
+            Preview impact
+          </button>
+          {previewBusy && <p role="status">Estimating profitability…</p>}
+          {previewError && (
+            <p className="error-message" role="alert">
+              {previewError}
+            </p>
+          )}
+          {preview && (
+            <div
+              className={preview.warning === 'normal' ? 'notice' : 'error-message'}
+              role="status"
+            >
+              <strong>
+                {preview.warning === 'critical'
+                  ? 'Critical: zero or negative contribution'
+                  : preview.warning === 'low'
+                    ? 'Low margin: below 20%'
+                    : preview.warning === 'reduced'
+                      ? 'Reduced profitability: below 25%'
+                      : 'Normal profitability'}
+              </strong>
+              <p>Estimate for {selectedPackage?.name}.</p>
+              <dl className="spec-list">
+                {[
+                  ['Original price', preview.originalMinor],
+                  ['Discount', preview.discountMinor],
+                  ['Final price', preview.finalMinor],
+                  ['Supplier cost (rounded up)', preview.supplierMinor],
+                  ['Estimated Stripe fees', preview.estimatedFeeMinor],
+                  ['Estimated contribution', preview.contributionMinor],
+                ].map(([label, n]) => (
+                  <div key={String(label)}>
+                    <dt>{label}</dt>
+                    <dd>{usd(Number(n))}</dd>
+                  </div>
+                ))}
+              </dl>
+              <p>
+                Contribution margin {(preview.marginBps / 100).toFixed(2)}% · {preview.feeBasis}
+              </p>
+            </div>
+          )}
+        </section>
         <label>
           Product categories / tags to set (comma-separated)
           <input
@@ -764,45 +894,6 @@ export function PromotionsPanel({ uid }: { uid: string }) {
         >
           Save product tags
         </button>
-        <button
-          className="button"
-          disabled={!packageId || percent < 1 || percent > 50}
-          onClick={check}
-        >
-          Preview impact
-        </button>
-        {preview && (
-          <div className={preview.warning === 'normal' ? 'notice' : 'error-message'} role="status">
-            <strong>
-              {preview.warning === 'critical'
-                ? 'Critical: zero or negative contribution'
-                : preview.warning === 'low'
-                  ? 'Low margin: below 20%'
-                  : preview.warning === 'reduced'
-                    ? 'Reduced profitability: below 25%'
-                    : 'Normal profitability'}
-            </strong>
-            <p>Estimate for the selected package only; margins vary by plan.</p>
-            <dl className="spec-list">
-              {[
-                ['Original price', preview.originalMinor],
-                ['Discount', preview.discountMinor],
-                ['Final price', preview.finalMinor],
-                ['Supplier cost (rounded up)', preview.supplierMinor],
-                ['Estimated Stripe fees', preview.estimatedFeeMinor],
-                ['Estimated contribution', preview.contributionMinor],
-              ].map(([label, n]) => (
-                <div key={String(label)}>
-                  <dt>{label}</dt>
-                  <dd>{usd(Number(n))}</dd>
-                </div>
-              ))}
-            </dl>
-            <p>
-              Contribution margin {(preview.marginBps / 100).toFixed(2)}% · {preview.feeBasis}
-            </p>
-          </div>
-        )}
         <button
           className="button primary"
           disabled={busy || Boolean(actionBusy)}

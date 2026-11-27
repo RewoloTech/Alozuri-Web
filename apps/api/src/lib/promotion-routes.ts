@@ -4,9 +4,37 @@ import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
 import { database } from './firebase.js';
 import { Promotions, promoCode, discountUnit } from './promotions.js';
-import { currentCatalogueDate, validPackagePricing } from './package-pricing.js';
+import { catalogueDate, currentCatalogueDate, validPackagePricing } from './package-pricing.js';
 import { PRICING_POLICY } from './pricing.js';
 import { OperationsError } from './operations-error.js';
+import { documentId } from './validation.js';
+
+const previewPrice = z.number().int().positive().max(99999999);
+const previewCost = z.number().int().positive().safe();
+const packageSearchLimit = 20;
+
+function packageSearchWords(text: string) {
+  const normalized = text.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase();
+  // Treat supplier spellings like 1GB and 7Days the same as 1 GB and 7 days.
+  const words = normalized.match(/\d+(?:\.\d+)?(?:\s*(?:[gmt]b|days?)\b)?|\p{L}+/gu) ?? [];
+  return words.map((word) => word.replace(/\s+/g, '').replace(/^(\d+)days$/, '$1day'));
+}
+
+function packagePreviewPricing(data: Record<string, unknown> | undefined, now = Date.now()) {
+  if (
+    !data ||
+    data.demo ||
+    data.active !== true ||
+    data.currency !== 'USD' ||
+    !currentCatalogueDate(data.catalogueDate, now) ||
+    !validPackagePricing(data)
+  )
+    return null;
+  const retail = previewPrice.safeParse(data.priceCents);
+  const cost = previewCost.safeParse(data.wholesaleUnits);
+  return retail.success && cost.success ? { retail: retail.data, cost: cost.data } : null;
+}
+
 export function contributionPreview(retail: number, supplierUnits: number, percent: number) {
   z.number().int().positive().safe().parse(supplierUnits);
   return contributionAtPrice(retail, supplierUnits, retail - discountUnit(retail, percent));
@@ -86,7 +114,7 @@ export function registerPromotionRoutes(
   });
   app.put('/v1/operations/promotions/products/:id/tags', async (req) => {
     const actor = await authorize(req.headers.authorization);
-    const { id } = z.object({ id: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/) }).parse(req.params);
+    const { id } = z.object({ id: documentId }).parse(req.params);
     const { tags } = z
       .object({ tags: z.array(z.string().trim().min(1).max(100)).max(50) })
       .strict()
@@ -109,24 +137,56 @@ export function registerPromotionRoutes(
   });
   app.get('/v1/operations/promotions/packages', async (req) => {
     await authorize(req.headers.authorization);
-    const q = z
-      .object({ q: z.string().trim().max(100).default('') })
+    const { q } = z
+      .object({ q: z.string().trim().max(100).toLowerCase().default('') })
       .strict()
       .parse(req.query);
-    let query = database().collection('packages').orderBy('name').limit(20);
-    if (q.q) query = query.startAt(q.q).endAt(q.q + '\uf8ff');
-    const docs = await query.select('name', 'active', 'currency', 'priceCents').get();
+    const now = Date.now();
+    const terms = packageSearchWords(q);
+    const phrase = terms.join(' ');
+    const docs = await database()
+      .collection('packages')
+      .where('catalogueDate', 'in', [catalogueDate(now), catalogueDate(now - 86400000)])
+      .get();
+    const matches = docs.docs.flatMap((doc) => {
+      const data = doc.data();
+      if (typeof data.name !== 'string' || !documentId.safeParse(doc.id).success) return [];
+      const words = q ? packageSearchWords(data.name) : [];
+      const idMatch = doc.id.toLowerCase() === q;
+      if (
+        q &&
+        !idMatch &&
+        (!terms.length || !terms.every((term) => words.some((word) => word.startsWith(term))))
+      )
+        return [];
+      if (!packagePreviewPricing(data, now)) return [];
+      const name = words.join(' ');
+      const rank =
+        idMatch || name === phrase
+          ? 0
+          : name.startsWith(phrase)
+            ? 1
+            : name.includes(phrase)
+              ? 2
+              : 3;
+      return [{ id: doc.id, name: data.name, rank }];
+    });
+    matches.sort(
+      (a, b) =>
+        a.rank - b.rank ||
+        a.name.localeCompare(b.name, 'en', { numeric: true }) ||
+        a.id.localeCompare(b.id),
+    );
     return {
-      rows: docs.docs
-        .filter((d) => d.get('active') === true && d.get('currency') === 'USD')
-        .map((d) => ({ id: d.id, name: d.get('name') })),
+      rows: matches.slice(0, packageSearchLimit).map(({ id, name }) => ({ id, name })),
+      hasMore: matches.length > packageSearchLimit,
     };
   });
   app.post('/v1/operations/promotions/preview', async (req) => {
     await authorize(req.headers.authorization);
     const input = z
       .object({
-        packageId: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/),
+        packageId: documentId,
         discountPercent: z.number().int().min(1).max(50),
         discount: discountConfig.optional(),
       })
@@ -135,27 +195,30 @@ export function registerPromotionRoutes(
     const doc = await database()
       .doc('packages/' + input.packageId)
       .get();
-    if (
-      !doc.exists ||
-      doc.get('demo') ||
-      doc.get('active') !== true ||
-      doc.get('currency') !== 'USD' ||
-      !validPackagePricing(doc.data() ?? {}) ||
-      !currentCatalogueDate(doc.get('catalogueDate'))
-    )
-      throw new OperationsError('Choose an active live catalogue package.');
-    const retail = z.number().int().positive().max(99999999).parse(doc.get('priceCents'));
-    const cost = z.number().int().positive().safe().parse(doc.get('wholesaleUnits'));
-    return input.discount
-      ? contributionAtPrice(
-          retail,
-          cost,
-          discountedUnit(
-            retail,
-            { code: 'PREVIEW', discountPercent: input.discountPercent, discount: input.discount },
-            priceExchange('USD'),
-          ),
-        )
-      : contributionPreview(retail, cost, input.discountPercent);
+    const pricing = packagePreviewPricing(doc.data());
+    if (!pricing)
+      throw new OperationsError(
+        'Choose an active live catalogue package.',
+        400,
+        'PLAN_UNAVAILABLE',
+      );
+    const { retail, cost } = pricing;
+    if (!input.discount) return contributionPreview(retail, cost, input.discountPercent);
+    const exchange = priceExchange('USD');
+    let finalMinor: number;
+    try {
+      finalMinor = discountedUnit(
+        retail,
+        { code: 'PREVIEW', discountPercent: input.discountPercent, discount: input.discount },
+        exchange,
+      );
+    } catch {
+      throw new OperationsError(
+        'The discount must reduce the selected package price by at most 50%.',
+        400,
+        'PROMO_CODE_NOT_APPLICABLE',
+      );
+    }
+    return contributionAtPrice(retail, cost, finalMinor);
   });
 }

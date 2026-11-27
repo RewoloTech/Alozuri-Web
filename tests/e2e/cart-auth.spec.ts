@@ -712,17 +712,27 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
         json: { saved: true, deleted: request.method() === 'DELETE' },
       });
     }
-    if (url.pathname.endsWith('/promotions/packages'))
+    if (url.pathname.endsWith('/promotions/packages')) {
+      const query = url.searchParams.get('q');
+      if (query === 'lookup failure')
+        return route.fulfill({ status: 503, headers, json: { error: 'Lookup unavailable.' } });
       return route.fulfill({
         headers,
-        json: { rows: [{ id: 'plan-uk', name: 'United Kingdom connection' }] },
+        json: {
+          rows:
+            query === 'global 1 gb'
+              ? [{ id: 'plan-global', name: 'Global (120+ areas) 1GB 7Days' }]
+              : [],
+          hasMore: false,
+        },
       });
+    }
     if (url.pathname.endsWith('/promotions/preview')) {
       const { contributionPreview } = await import('../../apps/api/src/lib/promotion-routes');
-      const percent = z
-        .object({ discountPercent: z.number() })
-        .parse(request.postDataJSON()).discountPercent;
-      return route.fulfill({ headers, json: contributionPreview(1000, 100000, percent) });
+      const { discountPercent } = z
+        .object({ packageId: z.literal('plan-global'), discountPercent: z.number() })
+        .parse(request.postDataJSON());
+      return route.fulfill({ headers, json: contributionPreview(1000, 100000, discountPercent) });
     }
     if (url.pathname.endsWith('/promotions')) {
       if (request.method() !== 'GET') {
@@ -1295,10 +1305,28 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
     await promotionsPanel.getByLabel('Starts at (UTC)').fill(period.from + 'T00:00');
     await promotionsPanel.getByLabel('Expires at (UTC)').fill(period.to + 'T23:59');
     await promotionsPanel.getByLabel('Maximum paid uses (optional)').fill('5');
-    await promotionsPanel.getByRole('button', { name: 'Find packages', exact: true }).click();
-    await promotionsPanel
-      .getByRole('combobox', { name: 'Package', exact: true })
-      .selectOption('plan-uk');
+    await expect(promotionsPanel.getByRole('alert')).toHaveCount(0);
+    const profitability = promotionsPanel.getByRole('region', {
+      name: 'Check a package’s estimated profitability',
+    });
+    const packageSearch = profitability.getByRole('searchbox', { name: 'Package search' });
+    const packageSelect = profitability.getByRole('combobox', { name: 'Package', exact: true });
+    const previewImpact = profitability.getByRole('button', {
+      name: 'Preview impact',
+      exact: true,
+    });
+    await expect(previewImpact).toBeDisabled();
+    await packageSearch.fill('lookup failure');
+    await packageSearch.press('Enter');
+    await expect(profitability.getByRole('alert')).toContainText('Could not find packages');
+    await packageSearch.fill('no matching package');
+    await packageSearch.press('Enter');
+    await expect(profitability.getByRole('status')).toContainText('No eligible packages found');
+    await expect(packageSelect).toBeDisabled();
+    await packageSearch.fill('global 1 gb');
+    await packageSearch.press('Enter');
+    await expect(profitability.getByRole('status')).toContainText('1 package found');
+    await packageSelect.selectOption('plan-global');
     await promotionsPanel.getByRole('button', { name: '35%', exact: true }).click();
     await expect(promotionsPanel.getByLabel('Discount % (1–50)')).toHaveValue('35');
     await promotionsPanel.getByRole('button', { name: '40%', exact: true }).click();
@@ -1307,10 +1335,18 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
     await expect(promotionsPanel.getByLabel('Discount % (1–50)')).toHaveValue('45');
     await promotionsPanel.getByRole('button', { name: '50%', exact: true }).click();
     await expect(promotionsPanel.getByLabel('Discount % (1–50)')).toHaveValue('50');
-    await promotionsPanel.getByRole('button', { name: 'Preview impact', exact: true }).click();
-    await expect(promotionsPanel.getByRole('status')).toContainText(
-      'Critical: zero or negative contribution',
-    );
+    await previewImpact.focus();
+    await page.keyboard.press('Enter');
+    await expect(profitability.getByText('Critical: zero or negative contribution')).toBeVisible();
+    await expect(
+      profitability.getByText('Estimate for Global (120+ areas) 1GB 7Days.'),
+    ).toBeVisible();
+    await expect(profitability.getByText('Contribution margin', { exact: false })).toBeVisible();
+    await promotionsPanel.getByLabel('Discount % (1–50)').fill('49');
+    await expect(profitability.getByText('Contribution margin', { exact: false })).toHaveCount(0);
+    await promotionsPanel.getByRole('button', { name: '50%', exact: true }).click();
+    await previewImpact.click();
+    await expect(profitability.getByText('Critical: zero or negative contribution')).toBeVisible();
     await expect(
       promotionsPanel.getByRole('button', { name: 'Save promotion', exact: true }),
     ).toBeEnabled();
@@ -1320,7 +1356,7 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
         true,
       );
       if (width === 390 || width === 1440)
-        await page.screenshot({ path: `/tmp/alozuri-promotions-${width}.png`, fullPage: true });
+        await profitability.screenshot({ path: `/tmp/alozuri-promotions-${width}.png` });
     }
     await promotionsPanel.getByRole('button', { name: 'Save promotion', exact: true }).click();
     await expect(
@@ -1329,7 +1365,8 @@ test('Operations uses normal login, admin-only navigation, date reports and revo
     expect(savedPromotions[0].startsAt).toBe(period.from + 'T00:00:00.000Z');
     await promotionsPanel.getByRole('button', { name: 'Edit code', exact: true }).click();
     await promotionsPanel.getByLabel('Active', { exact: true }).uncheck();
-    await promotionsPanel.getByRole('button', { name: 'Preview impact', exact: true }).click();
+    await previewImpact.click();
+    await expect(profitability.getByText('Critical: zero or negative contribution')).toBeVisible();
     await expect(
       promotionsPanel.getByRole('button', { name: 'Save promotion', exact: true }),
     ).toBeEnabled();

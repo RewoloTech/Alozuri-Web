@@ -1,0 +1,13 @@
+# Comparison partner catalogue feeds
+
+`GET /v1/catalogue/feed` exports the current USD retail catalogue using the same public retail plan source as storefront plan pages. It reads the existing daily catalogue synchronisation through the five-minute repository cache, so no separate cron job or static price copy is needed. Responses are not cached downstream. Unavailable, preview, demo, invalid, future-dated and older-than-36-hour products are not published; an empty/unavailable catalogue returns 503 rather than an authoritative empty replacement.
+
+The default `format=catalogue` includes stable public plan IDs, ISO-2 coverage, data type, fixed or daily allowance, validity, retail price as a decimal string, verified network text, fair-use policy, activation, public plan URL, source sync timestamp and a SHA-256 content revision. A content change changes the revision. Public brand/logo/contact metadata is included. Private provider identifiers, wholesale costs, credentials and customer data are excluded by explicit projection.
+
+`format=inbox` follows Inbox eSIM's documented brand/website/plans contract, with numeric price and GB fields. It deliberately includes only fixed single-country plans: daily/unlimited and regional plans need individual contract confirmation before publication. `format=rating` includes fixed plans (including regional ISO-2 coverage) because the published eSIMRating contract cannot express daily allowance without ambiguity. Do not label those narrower feeds as the full catalogue.
+
+The API origin is configured in `apps/web/apphosting.yaml`. Deployment and a successful public HTTP check are required before sending the new feed URL as live. The existing `/v1/packages?currency=USD` remains available as a public source for onboarding discussions, but uses the storefront schema rather than the partner contract. eSIMradar's push API requires a separate schema adapter, account credential and domain verification; its documented pull-feed registration is not implemented by the platform yet.
+
+Provider specifications reviewed in-browser on 27 November 2026: https://esimwatchdog.com/list-your-service/, https://inboxesim.com/compare/list-your-esim, https://esimrating.com/submit-provider, https://esimradar.com/developers.
+
+For verified daily reduced-speed plans, fairUsePolicy exposes capMb, resetPeriod (day) and speedAfter. It parses only the exact normalized supplier sentence, validates the cap against the plan allowance, and leaves unrecognized or contradictory policies unknown. structuredFairUseComplete reports whether every published non-fixed plan has such verified fields.

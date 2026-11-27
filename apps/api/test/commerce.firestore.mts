@@ -2770,6 +2770,79 @@ test('promotion API validates admin changes, price-preview catalogue provenance 
   }
 });
 
+test('profitability package search ranks flexible matches and limits eligible catalogue results', async () => {
+  const f = fixture();
+  const api = await createApp({
+    repository: { plans: async () => f.plans, orders: async () => [], order: async () => null },
+    commerce: f.service,
+    payments: null,
+    fulfillment: null,
+    verify: async (token) => ({ uid: token, verified: true, admin: token === 'admin' }),
+  });
+  const headers = { authorization: 'Bearer admin' };
+  const plan = f.plans[0];
+  const batch = db.batch();
+  const addPackage = (suffix: string, name: string, changes: Partial<StoredPlan> = {}) => {
+    const id = `profitability-search-${suffix}`;
+    batch.set(db.doc('packages/' + id), { ...plan, id, packageId: id, name, ...changes });
+    return id;
+  };
+  const global = addPackage('global', 'Global (120+ areas) 1GB 7Days');
+  const exactName = addPackage('exact', 'Global 1GB 7Days');
+  addPackage('larger', 'Global 11GB 7Days');
+  addPackage('demo', 'Global 1GB 7Days Demo', { demo: true });
+  addPackage('stale', 'Global 1GB 7Days Stale', { catalogueDate: '2020-01-01' });
+  addPackage('unverified', 'Global 1GB 7Days Unverified', { wholesaleUnits: 1 });
+  addPackage('other-currency', 'Global 1GB 7Days GBP', { currency: 'GBP' });
+  for (let i = 0; i < 22; i++) {
+    addPackage(`inactive-${i}`, `Global 1GB 7Days ${i}`, { active: false });
+    addPackage(`broad-${i}`, `Global 3GB ${i + 1}Days`);
+  }
+  try {
+    await batch.commit();
+    const search = (q: string, auth = headers) =>
+      api.inject({
+        url: '/v1/operations/promotions/packages?' + new URLSearchParams({ q }),
+        headers: auth,
+      });
+    assert.equal((await search('global', { authorization: 'Bearer customer' })).statusCode, 403);
+    const exact = await search('  gLoBaL 1 gb 7 days  ');
+    assert.equal(exact.statusCode, 200);
+    assert.deepEqual(exact.json(), {
+      rows: [
+        { id: exactName, name: 'Global 1GB 7Days' },
+        { id: global, name: 'Global (120+ areas) 1GB 7Days' },
+      ],
+      hasMore: false,
+    });
+    assert.equal((await search('7 DAYS glob 1GB')).json().rows.length, 2);
+    assert.deepEqual((await search(global.toUpperCase())).json().rows, [
+      { id: global, name: 'Global (120+ areas) 1GB 7Days' },
+    ]);
+    assert.deepEqual((await search('global 100GB')).json(), { rows: [], hasMore: false });
+    const broad = await search('global');
+    assert.equal(broad.json().rows.length, 20);
+    assert.equal(broad.json().hasMore, true);
+
+    const preview = (discount: { kind: 'fixed' | 'price'; value: number }) =>
+      api.inject({
+        method: 'POST',
+        url: '/v1/operations/promotions/preview',
+        headers,
+        payload: { packageId: global, discountPercent: 10, discount },
+      });
+    const estimate = await preview({ kind: 'fixed', value: 50 });
+    assert.equal(estimate.statusCode, 200);
+    assert.equal(estimate.json().finalMinor, plan.priceCents - 50);
+    assert.equal(estimate.json().supplierUnits, plan.wholesaleUnits);
+    const invalid = await preview({ kind: 'price', value: plan.priceCents });
+    assert.equal(invalid.statusCode, 400);
+    assert.match(invalid.json().error, /discount must reduce the selected package price/);
+  } finally {
+    await api.close();
+  }
+});
+
 test('refunding a promoted purchase keeps the historical paid redemption and original discount', async () => {
   const f = fixture(),
     promo = await promotionFixture(1);
