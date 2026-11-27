@@ -9,6 +9,7 @@ import { PricingHistoryReports } from './lib/pricing-history.js';
 import { OperationsReports, OperationsError, registerOperations } from './lib/operations.js';
 import { configuredFinancialLedger, type FinancialLedger } from './lib/financial-ledger.js';
 import { UserProfiles, ProfileError } from './lib/user-profiles.js';
+import { partnerFeed, partnerFeedQuery } from './lib/partner-feed.js';
 import { registerProfileRoutes } from './lib/profile-routes.js';
 import { OrderWorker } from './lib/order-worker.js';
 import {
