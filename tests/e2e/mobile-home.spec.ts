@@ -69,6 +69,25 @@ test('mobile hierarchy, navigation targets, footer columns and disclosures fit e
   await expect(page.locator('.country-field > .field-label')).toHaveCount(0);
   await expect(page.getByText('Coverage checked for every selected country')).toHaveCount(0);
   const footer = page.locator('.site-footer');
+  const instagram = footer.getByRole('link', { name: 'Instagram', exact: true });
+  const facebook = footer.getByRole('link', { name: 'Facebook', exact: true });
+  await expect(instagram).toHaveAttribute('href', 'https://www.instagram.com/alozuri/');
+  await expect(facebook).toHaveAttribute(
+    'href',
+    'https://www.facebook.com/profile.php?id=61596688371445',
+  );
+  await footer.locator('.brand').focus();
+  await page.keyboard.press('Tab');
+  await expect(instagram).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(facebook).toBeFocused();
+  for (const profile of [instagram, facebook]) {
+    const logo = profile.locator('img');
+    await expect(logo).toHaveAttribute('alt', '');
+    await expect
+      .poll(() => logo.evaluate((img) => (img as HTMLImageElement).naturalWidth))
+      .toBeGreaterThan(0);
+  }
   const hrefs = await footer
     .locator('.footer-links a')
     .evaluateAll((xs) => xs.map((x) => x.getAttribute('href')));
@@ -97,6 +116,11 @@ test('mobile hierarchy, navigation targets, footer columns and disclosures fit e
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true,
     );
+    for (const profile of [instagram, facebook]) {
+      const { width: linkWidth, height } = (await profile.boundingBox())!;
+      expect(linkWidth).toBeGreaterThanOrEqual(44);
+      expect(height).toBeGreaterThanOrEqual(44);
+    }
     if (width <= 1000) {
       await expect(page.locator('.nav-actions > .header-login')).toBeHidden();
       await page.getByRole('button', { name: 'Open menu', exact: true }).click();

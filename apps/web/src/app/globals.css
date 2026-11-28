@@ -1107,6 +1107,27 @@ h1 {
   line-height: 1.85;
   margin-top: 15px;
 }
+.footer-social-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 16px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.footer-social-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 44px;
+  font-size: 0.875rem;
+  color: var(--blue);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.footer-social-links a:focus-visible {
+  outline-color: var(--blue);
+}
 .footer-main .footer-links {
   display: flex;
   flex-direction: column;

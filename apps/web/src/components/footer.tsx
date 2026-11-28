@@ -1,4 +1,5 @@
 'use client';
+import Image from 'next/image';
 import Link from '@/components/localized-link';
 import { useTranslations, useLocale } from 'next-intl';
 import { localeDirection } from '@alozuri/shared/i18n';
@@ -7,6 +8,20 @@ import { BUSINESS } from '@alozuri/shared/legal';
 import { POLICIES } from '@alozuri/shared/policies';
 import { CookieSettingsButton } from './privacy-provider';
 import { Brand } from './header';
+
+const socialProfiles = [
+  {
+    name: 'Instagram',
+    href: 'https://www.instagram.com/alozuri/',
+    logo: '/social/instagram.svg',
+  },
+  {
+    name: 'Facebook',
+    href: 'https://www.facebook.com/profile.php?id=61596688371445',
+    logo: '/social/facebook.svg',
+  },
+];
+
 export function Footer() {
   const t = useTranslations('site');
   const legal = useTranslations('legal');
@@ -30,6 +45,16 @@ export function Footer() {
             {t('sloganA')}
             <br /> {t('sloganB')}
           </p>
+          <ul className="footer-social-links" role="list" dir={direction}>
+            {socialProfiles.map(({ name, href, logo }) => (
+              <li key={name}>
+                <a href={href}>
+                  <Image src={logo} width={18} height={18} alt="" />
+                  {name}
+                </a>
+              </li>
+            ))}
+          </ul>
         </div>
         <nav
           className="footer-links footer-explore"
